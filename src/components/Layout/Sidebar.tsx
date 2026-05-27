@@ -64,7 +64,7 @@ export function Sidebar({
           {desktopCollapsed ? null : (
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">
-                Dashboard
+                Dashboard-Unieuro
               </p>
             </div>
           )}

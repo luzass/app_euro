@@ -389,13 +389,16 @@ function ChartContainer({
         <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
         <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
       </div>
-      <div className="h-[320px]">{children}</div>
+      <div className="h-[280px] sm:h-[320px]">{children}</div>
     </section>
   )
 }
 
 export function TrafegoPagoSpike() {
   const { profile } = useProfile()
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window === 'undefined' ? 1440 : window.innerWidth,
+  )
   const [rows, setRows] = useState<CampaignRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -507,6 +510,15 @@ export function TrafegoPagoSpike() {
 
   useEffect(() => {
     void loadRows()
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth)
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   useEffect(() => {
@@ -870,6 +882,7 @@ export function TrafegoPagoSpike() {
   )
 
   const selectedStoredReport = storedReports[selectedReportType] ?? null
+  const isMobileViewport = viewportWidth < 640
   const selectedSessionReport =
     analysisState.content && analysisState.reportType === selectedReportType
       ? {
@@ -1346,7 +1359,7 @@ export function TrafegoPagoSpike() {
                         />
                       </div>
 
-                      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                      <div className="mt-3 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                         <span>{formatPercentBR(shareOfTop)} do topo do funil</span>
                         <span>{formatPercentBR(conversionFromPrevious)} de conversão</span>
                       </div>
@@ -1364,91 +1377,162 @@ export function TrafegoPagoSpike() {
                 </p>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-0 text-sm">
-                  <thead>
-                    <tr>
-                      {[
-                        'Data inicio',
-                        'Valor usado',
-                        'Impressoes',
-                        'Alcance',
-                        'Cliques',
-                        'LP Views',
-                        'Leads',
-                        'CPC',
-                        'CTR',
-                        'CPM',
-                        'Custo por lead',
-                      ].map((header) => (
-                        <th
-                          key={header}
-                          className="sticky top-0 whitespace-nowrap border-b border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-600"
-                        >
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...filteredRows]
-                      .sort((currentItem, nextItem) =>
-                        getDateKey(nextItem.data_inicio).localeCompare(
-                          getDateKey(currentItem.data_inicio),
-                        ),
-                      )
-                      .map((row) => {
-                        const valorUsado = toNumber(row.valor_usado)
-                        const impressoes = toNumber(row.impressoes)
-                        const cliques = toNumber(row.cliques_no_link)
-                        const lpViews = toNumber(row.lp_views)
-                        const leads = toNumber(row.lead)
-                        const cpc = cliques > 0 ? valorUsado / cliques : 0
-                        const ctr = impressoes > 0 ? (cliques / impressoes) * 100 : 0
-                        const cpm = impressoes > 0 ? (valorUsado / impressoes) * 1000 : 0
-                        const custoPorLead = leads > 0 ? valorUsado / leads : 0
+              {isMobileViewport ? (
+                <div className="space-y-3">
+                  {[...filteredRows]
+                    .sort((currentItem, nextItem) =>
+                      getDateKey(nextItem.data_inicio).localeCompare(
+                        getDateKey(currentItem.data_inicio),
+                      ),
+                    )
+                    .map((row) => {
+                      const valorUsado = toNumber(row.valor_usado)
+                      const impressoes = toNumber(row.impressoes)
+                      const cliques = toNumber(row.cliques_no_link)
+                      const lpViews = toNumber(row.lp_views)
+                      const leads = toNumber(row.lead)
+                      const cpc = cliques > 0 ? valorUsado / cliques : 0
+                      const ctr = impressoes > 0 ? (cliques / impressoes) * 100 : 0
+                      const cpm = impressoes > 0 ? (valorUsado / impressoes) * 1000 : 0
+                      const custoPorLead = leads > 0 ? valorUsado / leads : 0
 
-                        return (
-                          <tr key={String(row.id)} className="odd:bg-slate-50/70">
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatDateBR(row.data_inicio)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-900">
-                              {formatCurrencyBR(valorUsado)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatNumberBR(impressoes)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatNumberBR(toNumber(row.alcance))}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatNumberBR(cliques)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatNumberBR(lpViews)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatNumberBR(leads)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatCurrencyBR(cpc)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatPercentBR(ctr)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatCurrencyBR(cpm)}
-                            </td>
-                            <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
-                              {formatCurrencyBR(custoPorLead)}
-                            </td>
-                          </tr>
+                      return (
+                        <article
+                          key={String(row.id)}
+                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                Data
+                              </p>
+                              <p className="mt-1 text-base font-semibold text-slate-950">
+                                {formatDateBR(row.data_inicio)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                Investimento
+                              </p>
+                              <p className="mt-1 text-base font-semibold text-slate-950">
+                                {formatCurrencyBR(valorUsado)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            {[
+                              ['Impressoes', formatNumberBR(impressoes)],
+                              ['Alcance', formatNumberBR(toNumber(row.alcance))],
+                              ['Cliques', formatNumberBR(cliques)],
+                              ['LP Views', formatNumberBR(lpViews)],
+                              ['Leads', formatNumberBR(leads)],
+                              ['CPC', formatCurrencyBR(cpc)],
+                              ['CTR', formatPercentBR(ctr)],
+                              ['CPM', formatCurrencyBR(cpm)],
+                              ['Custo por lead', formatCurrencyBR(custoPorLead)],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-2xl bg-white px-3 py-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                  {label}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900">
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </article>
+                      )
+                    })}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr>
+                        {[
+                          'Data inicio',
+                          'Valor usado',
+                          'Impressoes',
+                          'Alcance',
+                          'Cliques',
+                          'LP Views',
+                          'Leads',
+                          'CPC',
+                          'CTR',
+                          'CPM',
+                          'Custo por lead',
+                        ].map((header) => (
+                          <th
+                            key={header}
+                            className="sticky top-0 whitespace-nowrap border-b border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-600"
+                          >
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...filteredRows]
+                        .sort((currentItem, nextItem) =>
+                          getDateKey(nextItem.data_inicio).localeCompare(
+                            getDateKey(currentItem.data_inicio),
+                          ),
                         )
-                      })}
-                  </tbody>
-                </table>
-              </div>
+                        .map((row) => {
+                          const valorUsado = toNumber(row.valor_usado)
+                          const impressoes = toNumber(row.impressoes)
+                          const cliques = toNumber(row.cliques_no_link)
+                          const lpViews = toNumber(row.lp_views)
+                          const leads = toNumber(row.lead)
+                          const cpc = cliques > 0 ? valorUsado / cliques : 0
+                          const ctr = impressoes > 0 ? (cliques / impressoes) * 100 : 0
+                          const cpm = impressoes > 0 ? (valorUsado / impressoes) * 1000 : 0
+                          const custoPorLead = leads > 0 ? valorUsado / leads : 0
+
+                          return (
+                            <tr key={String(row.id)} className="odd:bg-slate-50/70">
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatDateBR(row.data_inicio)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-900">
+                                {formatCurrencyBR(valorUsado)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatNumberBR(impressoes)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatNumberBR(toNumber(row.alcance))}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatNumberBR(cliques)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatNumberBR(lpViews)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatNumberBR(leads)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatCurrencyBR(cpc)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatPercentBR(ctr)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatCurrencyBR(cpm)}
+                              </td>
+                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                                {formatCurrencyBR(custoPorLead)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           </section>
 

@@ -422,18 +422,96 @@ function ComparativeSummaryCard({
       )}
     >
       <p className="text-sm font-medium text-slate-500">{title}</p>
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-slate-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">2025.2</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{previousValue}</p>
+          <p className="mt-2 break-words text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">
+            {previousValue}
+          </p>
         </div>
         <div className="rounded-2xl bg-slate-950 px-4 py-3 text-white">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">2026.2</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight">{currentValue}</p>
+          <p className="mt-2 break-words text-xl font-semibold tracking-tight sm:text-2xl">
+            {currentValue}
+          </p>
         </div>
       </div>
       <p className="mt-3 text-xs leading-5 text-slate-500">{helperText}</p>
     </article>
+  )
+}
+
+function ComparativeList({
+  data,
+  previousLabel = '2025.2',
+  currentLabel = '2026.2',
+}: {
+  data: Array<{
+    label: string
+    previousValue: number
+    currentValue: number
+  }>
+  previousLabel?: string
+  currentLabel?: string
+}) {
+  const maxValue = data.reduce(
+    (currentMax, item) =>
+      Math.max(currentMax, item.previousValue, item.currentValue),
+    0,
+  )
+
+  return (
+    <div className="space-y-3">
+      {data.map((item) => {
+        const previousWidth = maxValue > 0 ? (item.previousValue / maxValue) * 100 : 0
+        const currentWidth = maxValue > 0 ? (item.currentValue / maxValue) * 100 : 0
+
+        return (
+          <article
+            key={item.label}
+            className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+          >
+            <p className="text-sm font-semibold leading-5 text-slate-950">{item.label}</p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    {previousLabel}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {formatNumberBR(item.previousValue)}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-sky-400"
+                    style={{ width: `${Math.max(previousWidth, item.previousValue > 0 ? 6 : 0)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    {currentLabel}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-950">
+                    {formatNumberBR(item.currentValue)}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-slate-950"
+                    style={{ width: `${Math.max(currentWidth, item.currentValue > 0 ? 6 : 0)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </article>
+        )
+      })}
+    </div>
   )
 }
 
@@ -556,9 +634,64 @@ function InteractiveDistributionChart({
   minHeightPerItem?: number
   maxHeight?: number
 }) {
+  const isMobileViewport = viewportWidth < 640
   const chartTextStyle = getResponsiveChartTextStyle(viewportWidth)
   const chartHeight = Math.max(minHeight, data.length * minHeightPerItem)
   const wrapperHeight = maxHeight ? Math.min(chartHeight, maxHeight) : chartHeight
+
+  if (isMobileViewport) {
+    const maxValue = data.reduce(
+      (currentMax, item) => (item.value > currentMax ? item.value : currentMax),
+      0,
+    )
+
+    return (
+      <DashboardSection title={title} description={description}>
+        <div className="space-y-3">
+          {data.map((entry) => {
+            const isActive = selectedKey === entry.key
+            const widthPercent = maxValue > 0 ? (entry.value / maxValue) * 100 : 0
+
+            return (
+              <button
+                key={entry.key}
+                type="button"
+                onClick={() => onSelect(entry.key)}
+                className={cn(
+                  'w-full rounded-2xl border px-4 py-3 text-left transition',
+                  isActive
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-slate-50 text-slate-800',
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 text-sm font-medium leading-5">{entry.label}</p>
+                  <span className="shrink-0 text-sm font-semibold">
+                    {formatNumberBR(entry.value)}
+                  </span>
+                </div>
+
+                <div
+                  className={cn(
+                    'mt-3 h-2 overflow-hidden rounded-full',
+                    isActive ? 'bg-white/15' : 'bg-slate-200',
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'h-full rounded-full',
+                      isActive ? 'bg-white' : 'bg-sky-500',
+                    )}
+                    style={{ width: `${Math.max(widthPercent, 4)}%` }}
+                  />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </DashboardSection>
+    )
+  }
 
   return (
     <DashboardSection title={title} description={description}>
@@ -637,23 +770,27 @@ function InteractivePieChart({
   onSelect: (value: string) => void
   viewportWidth: number
 }) {
+  const isMobileViewport = viewportWidth < 640
   const chartTextStyle = getResponsiveChartTextStyle(viewportWidth)
 
   return (
     <DashboardSection title={title} description={description}>
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-center">
-        <div className="h-[280px]">
+        <div className={cn(isMobileViewport ? 'h-[220px]' : 'h-[280px]')}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
                 dataKey="value"
                 nameKey="label"
-                innerRadius={62}
-                outerRadius={104}
+                innerRadius={isMobileViewport ? 46 : 62}
+                outerRadius={isMobileViewport ? 78 : 104}
                 paddingAngle={3}
                 labelLine={false}
-                label={({ value, percent }) =>
+                label={
+                  isMobileViewport
+                    ? false
+                    : ({ value, percent }) =>
                   `${formatNumberBR(Number(value ?? 0))} • ${formatNumberBR(
                     Number((percent ?? 0) * 100),
                     { maximumFractionDigits: 0 },
@@ -1653,14 +1790,14 @@ export function DashboardEuro() {
           </button>
         </div>
 
-        <div className="mt-6 inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+        <div className="mt-6 grid gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 sm:inline-flex sm:w-auto sm:grid-cols-none">
           {tabItems.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'rounded-2xl px-4 py-2.5 text-sm font-semibold transition',
+                'w-full rounded-2xl px-4 py-2.5 text-left text-sm font-semibold transition sm:w-auto sm:text-center',
                 activeTab === tab.id
                   ? 'bg-slate-950 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-950',
@@ -2053,54 +2190,66 @@ export function DashboardEuro() {
                 title="Comparativo por semestre"
                 description="Leitura direta de 2025.2 vs 2026.2 entre inscritos e matriculados."
               >
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparativoSemestre}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="semestre" stroke="#64748b" />
-                      <YAxis
-                        stroke="#64748b"
-                        tickFormatter={(value) => formatCompactNumberBR(Number(value))}
-                      />
-                      <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                      <Legend />
-                      <Bar
-                        dataKey="inscritos"
-                        name="Inscritos"
-                        fill="#0ea5e9"
-                        radius={[8, 8, 0, 0]}
-                      >
-                        <LabelList
+                {viewportWidth < 640 ? (
+                  <ComparativeList
+                    previousLabel="Inscritos"
+                    currentLabel="Matriculados"
+                    data={comparativoSemestre.map((item) => ({
+                      label: item.semestre,
+                      previousValue: item.inscritos,
+                      currentValue: item.matriculados,
+                    }))}
+                  />
+                ) : (
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={comparativoSemestre}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="semestre" stroke="#64748b" />
+                        <YAxis
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatCompactNumberBR(Number(value))}
+                        />
+                        <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
+                        <Legend />
+                        <Bar
                           dataKey="inscritos"
-                          position="top"
-                          formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                          style={{
-                            fill: '#475569',
-                            fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
-                            fontWeight: 600,
-                          }}
-                        />
-                      </Bar>
-                      <Bar
-                        dataKey="matriculados"
-                        name="Matriculados"
-                        fill="#0f172a"
-                        radius={[8, 8, 0, 0]}
-                      >
-                        <LabelList
+                          name="Inscritos"
+                          fill="#0ea5e9"
+                          radius={[8, 8, 0, 0]}
+                        >
+                          <LabelList
+                            dataKey="inscritos"
+                            position="top"
+                            formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
+                            style={{
+                              fill: '#475569',
+                              fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
+                              fontWeight: 600,
+                            }}
+                          />
+                        </Bar>
+                        <Bar
                           dataKey="matriculados"
-                          position="top"
-                          formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                          style={{
-                            fill: '#475569',
-                            fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
-                            fontWeight: 600,
-                          }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                          name="Matriculados"
+                          fill="#0f172a"
+                          radius={[8, 8, 0, 0]}
+                        >
+                          <LabelList
+                            dataKey="matriculados"
+                            position="top"
+                            formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
+                            style={{
+                              fill: '#475569',
+                              fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
+                              fontWeight: 600,
+                            }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </DashboardSection>
 
               <section className="grid gap-4 sm:grid-cols-2">
@@ -2116,9 +2265,31 @@ export function DashboardEuro() {
                 title="Comparativo por unidade"
                 description="Asa Sul e Águas Claras, separando inscritos e matriculados por semestre."
               >
-                <div className="h-[360px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparativoCampus}>
+                {viewportWidth < 640 ? (
+                  <div className="space-y-4">
+                    <ComparativeList
+                      previousLabel="Inscritos 2025.2"
+                      currentLabel="Inscritos 2026.2"
+                      data={comparativoCampus.map((item) => ({
+                        label: item.unidade,
+                        previousValue: item.inscritos_20252,
+                        currentValue: item.inscritos_20262,
+                      }))}
+                    />
+                    <ComparativeList
+                      previousLabel="Matriculados 2025.2"
+                      currentLabel="Matriculados 2026.2"
+                      data={comparativoCampus.map((item) => ({
+                        label: `${item.unidade} - Matriculas`,
+                        previousValue: item.matriculados_20252,
+                        currentValue: item.matriculados_20262,
+                      }))}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-[360px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={comparativoCampus}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="unidade" stroke="#64748b" />
                       <YAxis
@@ -2176,8 +2347,9 @@ export function DashboardEuro() {
                         />
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </DashboardSection>
 
               <section className="grid gap-6 xl:grid-cols-2">
@@ -2185,9 +2357,18 @@ export function DashboardEuro() {
                   title="Formas de ingresso"
                   description="Top entradas de inscritos comparando as duas captações."
                 >
-                  <div className="h-[360px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={comparativoFormasIngresso} layout="vertical" margin={{ top: 0, right: 16, left: 12, bottom: 0 }}>
+                  {viewportWidth < 640 ? (
+                    <ComparativeList
+                      data={comparativoFormasIngresso.map((item) => ({
+                        label: item.label,
+                        previousValue: item.inscritos_20252,
+                        currentValue: item.inscritos_20262,
+                      }))}
+                    />
+                  ) : (
+                    <div className="h-[360px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={comparativoFormasIngresso} layout="vertical" margin={{ top: 0, right: 16, left: 12, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis
                           type="number"
@@ -2227,18 +2408,28 @@ export function DashboardEuro() {
                             }}
                           />
                         </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </DashboardSection>
 
                 <DashboardSection
                   title="Cursos com mais matriculas"
                   description="Top cursos de calouros para comparar a forca de fechamento entre 2025.2 e 2026.2."
                 >
-                  <div className="h-[360px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={comparativoCursos} layout="vertical" margin={{ top: 0, right: 16, left: 12, bottom: 0 }}>
+                  {viewportWidth < 640 ? (
+                    <ComparativeList
+                      data={comparativoCursos.map((item) => ({
+                        label: item.label,
+                        previousValue: item.matriculados_20252,
+                        currentValue: item.matriculados_20262,
+                      }))}
+                    />
+                  ) : (
+                    <div className="h-[360px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={comparativoCursos} layout="vertical" margin={{ top: 0, right: 16, left: 12, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis
                           type="number"
@@ -2278,9 +2469,10 @@ export function DashboardEuro() {
                             }}
                           />
                         </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </DashboardSection>
               </section>
 
