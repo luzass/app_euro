@@ -239,11 +239,32 @@ function getResponsiveChartTextStyle(viewportWidth: number) {
   return { fontSize: 12, offset: 10 }
 }
 
+function getSaoPauloDateParts(referenceDate = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  const parts = formatter.formatToParts(referenceDate)
+  const year = Number(parts.find((part) => part.type === 'year')?.value ?? '0')
+  const month = Number(parts.find((part) => part.type === 'month')?.value ?? '0')
+  const day = Number(parts.find((part) => part.type === 'day')?.value ?? '0')
+
+  return { year, month, day }
+}
+
 function getPreviousDayDateKey(referenceDate = new Date()) {
-  const previousDay = new Date(referenceDate)
-  previousDay.setHours(0, 0, 0, 0)
-  previousDay.setDate(previousDay.getDate() - 1)
-  return toDateKey(previousDay.toISOString())
+  const { year, month, day } = getSaoPauloDateParts(referenceDate)
+  const saoPauloMidnightUtc = new Date(Date.UTC(year, month - 1, day))
+  saoPauloMidnightUtc.setUTCDate(saoPauloMidnightUtc.getUTCDate() - 1)
+
+  const previousYear = saoPauloMidnightUtc.getUTCFullYear()
+  const previousMonth = `${saoPauloMidnightUtc.getUTCMonth() + 1}`.padStart(2, '0')
+  const previousDay = `${saoPauloMidnightUtc.getUTCDate()}`.padStart(2, '0')
+
+  return `${previousYear}-${previousMonth}-${previousDay}`
 }
 
 function wrapChartLabel(label: string, maxLineLength = 18, maxLines = 2) {
