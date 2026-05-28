@@ -239,6 +239,123 @@ function getResponsiveChartTextStyle(viewportWidth: number) {
   return { fontSize: 12, offset: 10 }
 }
 
+function getPreviousDayDateKey(referenceDate = new Date()) {
+  const previousDay = new Date(referenceDate)
+  previousDay.setHours(0, 0, 0, 0)
+  previousDay.setDate(previousDay.getDate() - 1)
+  return toDateKey(previousDay.toISOString())
+}
+
+function wrapChartLabel(label: string, maxLineLength = 18, maxLines = 2) {
+  if (!label) {
+    return ['']
+  }
+
+  const words = label.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let currentLine = ''
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word
+
+    if (nextLine.length <= maxLineLength) {
+      currentLine = nextLine
+      return
+    }
+
+    if (currentLine) {
+      lines.push(currentLine)
+    }
+
+    currentLine = word
+  })
+
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+
+  if (lines.length <= maxLines) {
+    return lines
+  }
+
+  const visibleLines = lines.slice(0, maxLines)
+  const lastLine = visibleLines[maxLines - 1] ?? ''
+  visibleLines[maxLines - 1] =
+    lastLine.length > maxLineLength - 3
+      ? `${lastLine.slice(0, Math.max(maxLineLength - 3, 1)).trim()}...`
+      : `${lastLine}...`
+
+  return visibleLines
+}
+
+function renderWrappedAxisTick(
+  props: {
+    x?: number
+    y?: number
+    payload?: { value?: string }
+  },
+  maxLineLength = 18,
+) {
+  const lines = wrapChartLabel(String(props.payload?.value ?? ''), maxLineLength)
+  const x = props.x ?? 0
+  const y = props.y ?? 0
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={4 - ((lines.length - 1) * 7)}
+        textAnchor="end"
+        fill="#64748b"
+        fontSize={12}
+      >
+        {lines.map((line, index) => (
+          <tspan key={`${line}-${index}`} x={0} dy={index === 0 ? 0 : 14}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  )
+}
+
+function renderBarValueLabel({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  value,
+}: {
+  x?: number | string
+  y?: number | string
+  width?: number | string
+  height?: number | string
+  value?: number | string
+}) {
+  const numericValue = Number(value ?? 0)
+  const numericX = Number(x ?? 0)
+  const numericY = Number(y ?? 0)
+  const numericWidth = Number(width ?? 0)
+  const numericHeight = Number(height ?? 0)
+  const shouldRenderInside = numericWidth >= 64
+  const labelX = shouldRenderInside ? numericX + numericWidth - 8 : numericX + numericWidth + 8
+
+  return (
+    <text
+      x={labelX}
+      y={numericY + numericHeight / 2}
+      dy={4}
+      textAnchor={shouldRenderInside ? 'end' : 'start'}
+      fill={shouldRenderInside ? '#ffffff' : '#475569'}
+      fontSize={12}
+      fontWeight={600}
+    >
+      {formatNumberBR(numericValue)}
+    </text>
+  )
+}
+
 function normalizeContrato(value?: string | null) {
   const normalized = normalizeString(value)
 
@@ -635,7 +752,6 @@ function InteractiveDistributionChart({
   maxHeight?: number
 }) {
   const isMobileViewport = viewportWidth < 640
-  const chartTextStyle = getResponsiveChartTextStyle(viewportWidth)
   const chartHeight = Math.max(minHeight, data.length * minHeightPerItem)
   const wrapperHeight = maxHeight ? Math.min(chartHeight, maxHeight) : chartHeight
 
@@ -704,7 +820,7 @@ function InteractiveDistributionChart({
             <BarChart
               data={data}
               layout="vertical"
-              margin={{ top: 0, right: 12, left: 12, bottom: 0 }}
+              margin={{ top: 0, right: 40, left: 8, bottom: 0 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -718,20 +834,15 @@ function InteractiveDistributionChart({
                 width={yAxisWidth}
                 interval={0}
                 stroke="#64748b"
-                tick={{ fontSize: 12 }}
+                tick={(props) =>
+                  renderWrappedAxisTick(props, yAxisWidth >= 200 ? 24 : 18)
+                }
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
               <Bar dataKey="value" radius={[0, 12, 12, 0]} onClick={(entry) => onSelect(entry.key)}>
                 <LabelList
                   dataKey="value"
-                  position="right"
-                  offset={chartTextStyle.offset}
-                  formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                  style={{
-                    fill: '#475569',
-                    fontSize: chartTextStyle.fontSize,
-                    fontWeight: 600,
-                  }}
+                  content={renderBarValueLabel}
                 />
                 {data.map((entry) => (
                   <Cell
@@ -1064,10 +1175,7 @@ export function DashboardEuro() {
   )
 
   const inscritosReferenceDate = useMemo(() => getLatestDate(inscritosFiltered), [inscritosFiltered])
-  const matriculadosReferenceDate = useMemo(
-    () => getLatestDate(matriculadosFiltered),
-    [matriculadosFiltered],
-  )
+  const matriculadosReferenceDate = useMemo(() => getPreviousDayDateKey(), [])
 
   const inscritosTodayRows = useMemo(
     () => inscritosFiltered.filter((row) => row.dateKey === inscritosReferenceDate),
@@ -1862,9 +1970,9 @@ export function DashboardEuro() {
                   data={inscritosCharts.cursos}
                   selectedKey={inscritosSelections.curso}
                   viewportWidth={viewportWidth}
-                  yAxisWidth={220}
+                  yAxisWidth={180}
                   minHeight={360}
-                  minHeightPerItem={34}
+                  minHeightPerItem={42}
                   maxHeight={360}
                   onSelect={(value) =>
                     setInscritosSelections((currentValue) => ({
@@ -1972,9 +2080,9 @@ export function DashboardEuro() {
                   data={matriculadosCharts.cursos}
                   selectedKey={matriculadosSelections.curso}
                   viewportWidth={viewportWidth}
-                  yAxisWidth={220}
+                  yAxisWidth={180}
                   minHeight={360}
-                  minHeightPerItem={34}
+                  minHeightPerItem={42}
                   maxHeight={360}
                   onSelect={(value) =>
                     setMatriculadosSelections((currentValue) => ({
@@ -2368,7 +2476,7 @@ export function DashboardEuro() {
                   ) : (
                     <div className="h-[360px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={comparativoFormasIngresso} layout="vertical" margin={{ top: 0, right: 16, left: 12, bottom: 0 }}>
+                        <BarChart data={comparativoFormasIngresso} layout="vertical" margin={{ top: 0, right: 40, left: 8, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis
                           type="number"
@@ -2380,32 +2488,20 @@ export function DashboardEuro() {
                           dataKey="label"
                           width={140}
                           stroke="#64748b"
-                          tick={{ fontSize: 12 }}
+                          tick={(props) => renderWrappedAxisTick(props, 18)}
                         />
                         <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
                         <Legend />
                         <Bar dataKey="inscritos_20252" name="2025.2" fill="#38bdf8" radius={[0, 10, 10, 0]}>
                           <LabelList
                             dataKey="inscritos_20252"
-                            position="right"
-                            formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                            style={{
-                              fill: '#475569',
-                              fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
-                              fontWeight: 600,
-                            }}
+                            content={renderBarValueLabel}
                           />
                         </Bar>
                         <Bar dataKey="inscritos_20262" name="2026.2" fill="#0f172a" radius={[0, 10, 10, 0]}>
                           <LabelList
                             dataKey="inscritos_20262"
-                            position="right"
-                            formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                            style={{
-                              fill: '#475569',
-                              fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
-                              fontWeight: 600,
-                            }}
+                            content={renderBarValueLabel}
                           />
                         </Bar>
                         </BarChart>
@@ -2429,7 +2525,7 @@ export function DashboardEuro() {
                   ) : (
                     <div className="h-[360px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={comparativoCursos} layout="vertical" margin={{ top: 0, right: 16, left: 12, bottom: 0 }}>
+                        <BarChart data={comparativoCursos} layout="vertical" margin={{ top: 0, right: 40, left: 8, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis
                           type="number"
@@ -2441,32 +2537,20 @@ export function DashboardEuro() {
                           dataKey="label"
                           width={150}
                           stroke="#64748b"
-                          tick={{ fontSize: 12 }}
+                          tick={(props) => renderWrappedAxisTick(props, 18)}
                         />
                         <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
                         <Legend />
                         <Bar dataKey="matriculados_20252" name="2025.2" fill="#94a3b8" radius={[0, 10, 10, 0]}>
                           <LabelList
                             dataKey="matriculados_20252"
-                            position="right"
-                            formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                            style={{
-                              fill: '#475569',
-                              fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
-                              fontWeight: 600,
-                            }}
+                            content={renderBarValueLabel}
                           />
                         </Bar>
                         <Bar dataKey="matriculados_20262" name="2026.2" fill="#0f172a" radius={[0, 10, 10, 0]}>
                           <LabelList
                             dataKey="matriculados_20262"
-                            position="right"
-                            formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                            style={{
-                              fill: '#475569',
-                              fontSize: getResponsiveChartTextStyle(viewportWidth).fontSize,
-                              fontWeight: 600,
-                            }}
+                            content={renderBarValueLabel}
                           />
                         </Bar>
                         </BarChart>
