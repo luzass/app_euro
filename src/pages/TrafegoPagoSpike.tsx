@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
+﻿import { Fragment, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import { CalendarRange, Eraser, RefreshCw, Sparkles } from 'lucide-react'
 import {
   Area,
@@ -825,7 +825,7 @@ export function TrafegoPagoSpike() {
 
       setAnalysisState({
         loading: false,
-        error: analysisText ? null : 'O webhook respondeu, mas o texto da análise veio vazio.',
+        error: analysisText ? null : 'O webhook respondeu, mas o texto da anÃ¡lise veio vazio.',
         content: analysisText || null,
         reportType,
         lastRangeLabel: reportRange.label,
@@ -915,16 +915,42 @@ export function TrafegoPagoSpike() {
   )
 
   const latestClarityDevices = useMemo(
-    () =>
-      clarityDeviceFiltered
+    () => {
+      const averageUsersByDevice = clarityDeviceFiltered.reduce(
+        (accumulator, row) => {
+          const deviceLabel = titleizeText(row.device)
+          const currentValue = accumulator.get(deviceLabel) ?? {
+            totalUniqueUsers: 0,
+            totalRows: 0,
+          }
+
+          currentValue.totalUniqueUsers += toNumber(row.unique_users)
+          currentValue.totalRows += 1
+          accumulator.set(deviceLabel, currentValue)
+          return accumulator
+        },
+        new Map<string, { totalUniqueUsers: number; totalRows: number }>(),
+      )
+
+      return clarityDeviceFiltered
         .filter((row) => getDateKey(row.data_referencia) === latestClarityDate)
-        .map((row) => ({
-          device: titleizeText(row.device),
-          sessions: toNumber(row.sessions),
-          uniqueUsers: toNumber(row.unique_users),
-          sessionPercentage: toNumber(row.session_percentage),
-        }))
-        .sort((currentItem, nextItem) => nextItem.sessions - currentItem.sessions),
+        .map((row) => {
+          const deviceLabel = titleizeText(row.device)
+          const deviceAverage = averageUsersByDevice.get(deviceLabel)
+
+          return {
+            device: deviceLabel,
+            sessions: toNumber(row.sessions),
+            uniqueUsers: toNumber(row.unique_users),
+            averageUniqueUsers:
+              deviceAverage && deviceAverage.totalRows > 0
+                ? deviceAverage.totalUniqueUsers / deviceAverage.totalRows
+                : 0,
+            sessionPercentage: toNumber(row.session_percentage),
+          }
+        })
+        .sort((currentItem, nextItem) => nextItem.sessions - currentItem.sessions)
+    },
     [clarityDeviceFiltered, latestClarityDate],
   )
 
@@ -985,28 +1011,28 @@ export function TrafegoPagoSpike() {
       {
         title: 'Sessões no periodo',
         value: formatNumberBR(totalSessions),
-        helperText: 'Somatória das sessões dentro do recorte filtrado.',
+        helperText: 'SomatÃ³ria das Sessões dentro do recorte filtrado.',
         emphasis: 'primary' as const,
       },
       {
-        title: 'Usuários únicos somados',
+        title: 'usuários únicos somados',
         value: formatNumberBR(totalUniqueUsers),
-        helperText: 'Soma diária do Clarity, sem deduplicação entre dias.',
+        helperText: 'Soma diária do Clarity, sem deduplicaÃ§Ã£o entre dias.',
       },
       {
-        title: 'Páginas por sessão',
+        title: 'páginas por sessão',
         value: formatDecimalBR(weightedPagesPerSession),
-        helperText: 'Média ponderada pelo volume de sessões.',
+        helperText: 'média ponderada pelo volume de Sessões.',
       },
       {
         title: 'Scroll médio do período',
         value: formatPercentBR(weightedScrollDepth),
-        helperText: 'Média ponderada da profundidade de rolagem.',
+        helperText: 'média ponderada da profundidade de rolagem.',
       },
       {
         title: 'Tempo ativo médio',
         value: formatDurationMinutes(weightedActiveTime),
-        helperText: 'Média ponderada do tempo ativo por sessão.',
+        helperText: 'média ponderada do tempo ativo por sessão.',
       },
     ]
   }, [clarityResumoFiltered])
@@ -1022,12 +1048,12 @@ export function TrafegoPagoSpike() {
               emphasis: 'primary' as const,
             },
             {
-              title: 'Usuários únicos',
+              title: 'usuários únicos',
               value: formatNumberBR(toNumber(latestClarityResumo.unique_users)),
               helperText: 'Pessoas unicas navegando na landing page.',
             },
             {
-              title: 'Páginas por sessão',
+              title: 'páginas por sessão',
               value: formatDecimalBR(toNumber(latestClarityResumo.pages_per_session)),
               helperText: 'Profundidade média de navegacao.',
             },
@@ -1059,7 +1085,7 @@ export function TrafegoPagoSpike() {
       {
         title: 'Impressões',
         value: formatNumberBR(kpis.impressoes),
-        helperText: 'Total de exibicões da campanha.',
+        helperText: 'Total de exibições da campanha.',
       },
       {
         title: 'Alcance',
@@ -1069,12 +1095,12 @@ export function TrafegoPagoSpike() {
       {
         title: 'Frequência media',
         value: formatDecimalBR(kpis.frequencia),
-        helperText: 'Quantidade média de exibicões por usuário.',
+        helperText: 'Quantidade média de exibições por usuário.',
       },
       {
         title: 'CPM',
         value: formatCurrencyBR(kpis.cpm),
-        helperText: 'Custo por mil impressões.',
+        helperText: 'Custo por mil Impressões.',
       },
       {
         title: 'Cliques no link',
@@ -1099,7 +1125,7 @@ export function TrafegoPagoSpike() {
       {
         title: 'CPLPV',
         value: formatCurrencyBR(kpis.cplpv),
-        helperText: 'Custo por visualização de landing page.',
+        helperText: 'Custo por Visualização de landing page.',
       },
       {
         title: 'Connect Rate',
@@ -1147,7 +1173,7 @@ export function TrafegoPagoSpike() {
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
             <Sparkles className="h-3.5 w-3.5" />
-            Relatório IA
+            relatório IA
           </div>
           <h3 className="mt-4 text-xl font-semibold text-slate-950">
             Geração de análise por período fechado
@@ -1215,7 +1241,7 @@ export function TrafegoPagoSpike() {
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
                 }`}
               >
-                Último {reportType}
+                Ãšltimo {reportType}
               </button>
             ))}
           </div>
@@ -1281,8 +1307,8 @@ export function TrafegoPagoSpike() {
         !selectedStoredReport ? (
           <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">
             {profile?.role === 'admin'
-              ? 'Escolha semanal ou mensal para montar o payload e pedir a análise ao n8n.'
-              : 'Nenhum relatório salvo foi encontrado ainda para essa visualização.'}
+              ? 'Escolha semanal ou mensal para montar o payload e pedir a anÃ¡lise ao n8n.'
+              : 'Nenhum relatório salvo foi encontrado ainda para essa Visualização.'}
           </div>
         ) : null}
       </div>
@@ -1318,7 +1344,7 @@ export function TrafegoPagoSpike() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Tráfego Pago - Spike
+              TrÃ¡fego Pago - Spike
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
               Visão consolidada da Campanha Euro 2026.2
@@ -1451,7 +1477,7 @@ export function TrafegoPagoSpike() {
 
             <ChartContainer
               title="Impressões, alcance e cliques por dia"
-              description="Comparacao diaria das metricas de volume e trafego."
+              description="Comparação diaria das métricas de volume e trafego."
             >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={groupedRows}>
@@ -1528,7 +1554,7 @@ export function TrafegoPagoSpike() {
             </ChartContainer>
 
             <ChartContainer
-              title="Eficiência de mídia ao longo do tempo"
+              title="Eficiência de média ao longo do tempo"
               description="Leitura diária de CPC, CPM e custo por lead recalculados a partir dos totais."
             >
               <ResponsiveContainer width="100%" height="100%">
@@ -1873,7 +1899,7 @@ export function TrafegoPagoSpike() {
                         <Line
                           type="monotone"
                           dataKey="unique_users"
-                          name="Usuários únicos"
+                          name="usuários únicos"
                           stroke="#0f172a"
                           strokeWidth={2.5}
                         />
@@ -1882,36 +1908,85 @@ export function TrafegoPagoSpike() {
                   </ChartContainer>
 
                   <ChartContainer
-                    title="Dispositivos na última leitura"
-                    description="Distribuição de sessões por device na data mais recente do Clarity dentro do filtro."
+                    title="Dispositivos na Última leitura"
+                    description="distribuição de Sessões por device na data mais recente do Clarity dentro do filtro."
                   >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={latestClarityDevices}
-                        layout="vertical"
-                        margin={{ top: 0, right: 16, left: 12, bottom: 0 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          type="number"
-                          stroke="#64748b"
-                          tickFormatter={(value) => formatCompactNumberBR(Number(value))}
-                        />
-                        <YAxis
-                          type="category"
-                          dataKey="device"
-                          width={90}
-                          stroke="#64748b"
-                          tick={{ fontSize: 12 }}
-                        />
-                        <Tooltip
-                          formatter={(value) => formatNumberBR(Number(value ?? 0))}
-                          labelFormatter={(label) => `Device: ${label}`}
-                        />
-                        <Bar dataKey="sessions" name="Sessões" fill="#0ea5e9" radius={[0, 12, 12, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="flex h-full flex-col gap-4">
+                      <div className="min-h-0 flex-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={latestClarityDevices}
+                            layout="vertical"
+                            margin={{ top: 0, right: 16, left: 12, bottom: 0 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis
+                              type="number"
+                              stroke="#64748b"
+                              tickFormatter={(value) => formatCompactNumberBR(Number(value))}
+                            />
+                            <YAxis
+                              type="category"
+                              dataKey="device"
+                              width={90}
+                              stroke="#64748b"
+                              tick={{ fontSize: 12 }}
+                            />
+                            <Tooltip
+                              formatter={(value) => formatNumberBR(Number(value ?? 0))}
+                              labelFormatter={(label) => `Device: ${label}`}
+                            />
+                            <Legend />
+                            <Bar
+                              dataKey="sessions"
+                              name="Sessoes"
+                              fill="#0ea5e9"
+                              radius={[0, 12, 12, 0]}
+                            />
+                            <Bar
+                              dataKey="averageUniqueUsers"
+                              name="Media de usuarios"
+                              fill="#0f172a"
+                              radius={[0, 12, 12, 0]}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {latestClarityDevices.map((item) => (
+                          <div
+                            key={item.device}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-semibold text-slate-900">
+                                {item.device}
+                              </span>
+                              <span className="text-sm font-semibold text-slate-600">
+                                {formatPercentBR(item.sessionPercentage)}
+                              </span>
+                            </div>
+                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className="h-full rounded-full bg-sky-500"
+                                style={{
+                                  width: `${Math.min(
+                                    Math.max(
+                                      item.sessionPercentage,
+                                      item.sessionPercentage > 0 ? 4 : 0,
+                                    ),
+                                    100,
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </ChartContainer>
+
 
                   <ChartContainer
                     title="Qualidade da visita"
@@ -1945,7 +2020,7 @@ export function TrafegoPagoSpike() {
                         <Line
                           type="monotone"
                           dataKey="pages_per_session"
-                          name="Páginas por sessão"
+                          name="páginas por sessão"
                           stroke="#0f766e"
                           strokeWidth={2.5}
                         />
@@ -2001,3 +2076,5 @@ export function TrafegoPagoSpike() {
     </div>
   )
 }
+
+
