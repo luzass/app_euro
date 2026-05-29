@@ -63,6 +63,35 @@ interface MatriculadoAnalysisRow {
   data_baixa_do_pagamento: string | null
 }
 
+interface ClarityResumoRow {
+  id: number
+  created_at: string
+  data_referencia: string
+  periodo: string | null
+  sessions: string | number | null
+  bot_sessions: string | number | null
+  total_sessions_incluindo_bots: string | number | null
+  unique_users: string | number | null
+  pages_per_session: string | number | null
+  scroll_depth_percentage: string | number | null
+  active_time_spent_seconds: string | number | null
+  total_time_spent_seconds: string | number | null
+}
+
+interface ClarityDeviceRow {
+  id: number
+  created_at: string
+  data_referencia: string
+  periodo: string | null
+  device: string | null
+  sessions: string | number | null
+  bot_sessions: string | number | null
+  total_sessions_incluindo_bots: string | number | null
+  unique_users: string | number | null
+  pages_per_session: string | number | null
+  session_percentage: string | number | null
+}
+
 type ReportType = 'semanal' | 'mensal'
 
 interface ReportRange {
@@ -207,6 +236,26 @@ function titleizeText(value?: string | null) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
+}
+
+function formatDurationMinutes(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '0 min'
+  }
+
+  const totalSeconds = Math.round(seconds)
+  const minutes = Math.floor(totalSeconds / 60)
+  const remainingSeconds = totalSeconds % 60
+
+  if (minutes === 0) {
+    return `${remainingSeconds}s`
+  }
+
+  if (remainingSeconds === 0) {
+    return `${minutes} min`
+  }
+
+  return `${minutes} min ${remainingSeconds}s`
 }
 
 function normalizeText(value?: string | null) {
@@ -401,6 +450,8 @@ export function TrafegoPagoSpike() {
   )
   const [rows, setRows] = useState<CampaignRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
+  const [clarityResumoRows, setClarityResumoRows] = useState<ClarityResumoRow[]>([])
+  const [clarityDeviceRows, setClarityDeviceRows] = useState<ClarityDeviceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<FilterState>(initialFilters)
@@ -427,13 +478,31 @@ export function TrafegoPagoSpike() {
     setLoading(true)
     setError(null)
 
-    const [campaignResponse, leadsResponse, matriculadosResponse] = await Promise.all([
+    const [
+      campaignResponse,
+      leadsResponse,
+      matriculadosResponse,
+      clarityResumoResponse,
+      clarityDevicesResponse,
+    ] = await Promise.all([
       supabase
         .from('campanha_euro_20262')
         .select('*')
         .order('data_inicio', { ascending: true }),
       supabase.from('leads_cursos').select('*'),
       supabase.from('matriculados_20262').select('*'),
+      supabase
+        .from('clarity_resumo_diario')
+        .select(
+          'id, created_at, data_referencia, periodo, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, scroll_depth_percentage, active_time_spent_seconds, total_time_spent_seconds',
+        )
+        .order('data_referencia', { ascending: true }),
+      supabase
+        .from('clarity_devices_diario')
+        .select(
+          'id, created_at, data_referencia, periodo, device, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, session_percentage',
+        )
+        .order('data_referencia', { ascending: true }),
     ])
 
     if (campaignResponse.error) {
@@ -447,6 +516,8 @@ export function TrafegoPagoSpike() {
     }
 
     setRows((campaignResponse.data as CampaignRow[]) ?? [])
+    setClarityResumoRows((clarityResumoResponse.data as ClarityResumoRow[]) ?? [])
+    setClarityDeviceRows((clarityDevicesResponse.data as ClarityDeviceRow[]) ?? [])
 
     if (!leadsResponse.error && !matriculadosResponse.error) {
       setMatriculados(
@@ -461,6 +532,13 @@ export function TrafegoPagoSpike() {
         matriculadosError: matriculadosResponse.error,
       })
       setMatriculados(0)
+    }
+
+    if (clarityResumoResponse.error || clarityDevicesResponse.error) {
+      console.warn('Nao foi possivel carregar as tabelas do Clarity.', {
+        clarityResumoError: clarityResumoResponse.error,
+        clarityDevicesError: clarityDevicesResponse.error,
+      })
     }
 
     setLoading(false)
@@ -778,6 +856,26 @@ export function TrafegoPagoSpike() {
     })
   }, [filters.endDate, filters.startDate, rows])
 
+  const clarityResumoFiltered = useMemo(() => {
+    return clarityResumoRows.filter((row) => {
+      const dateKey = getDateKey(row.data_referencia)
+      const startDatePass = !filters.startDate || dateKey >= filters.startDate
+      const endDatePass = !filters.endDate || dateKey <= filters.endDate
+
+      return startDatePass && endDatePass
+    })
+  }, [clarityResumoRows, filters.endDate, filters.startDate])
+
+  const clarityDeviceFiltered = useMemo(() => {
+    return clarityDeviceRows.filter((row) => {
+      const dateKey = getDateKey(row.data_referencia)
+      const startDatePass = !filters.startDate || dateKey >= filters.startDate
+      const endDatePass = !filters.endDate || dateKey <= filters.endDate
+
+      return startDatePass && endDatePass
+    })
+  }, [clarityDeviceRows, filters.endDate, filters.startDate])
+
   const groupedRows = useMemo(() => agruparPorData(filteredRows), [filteredRows])
   const baseKpis = useMemo(() => calcularKPIsCampanha(filteredRows), [filteredRows])
   const kpis = useMemo<ExtendedCampaignKpis>(
@@ -798,6 +896,157 @@ export function TrafegoPagoSpike() {
   )
 
   const topOfFunnel = funnelSteps[0]?.value ?? 0
+
+  const latestClarityDate = useMemo(
+    () =>
+      clarityResumoFiltered.reduce((latestDate, row) => {
+        const dateKey = getDateKey(row.data_referencia)
+        return dateKey > latestDate ? dateKey : latestDate
+      }, ''),
+    [clarityResumoFiltered],
+  )
+
+  const latestClarityResumo = useMemo(
+    () =>
+      clarityResumoFiltered.find(
+        (row) => getDateKey(row.data_referencia) === latestClarityDate,
+      ) ?? null,
+    [clarityResumoFiltered, latestClarityDate],
+  )
+
+  const latestClarityDevices = useMemo(
+    () =>
+      clarityDeviceFiltered
+        .filter((row) => getDateKey(row.data_referencia) === latestClarityDate)
+        .map((row) => ({
+          device: titleizeText(row.device),
+          sessions: toNumber(row.sessions),
+          uniqueUsers: toNumber(row.unique_users),
+          sessionPercentage: toNumber(row.session_percentage),
+        }))
+        .sort((currentItem, nextItem) => nextItem.sessions - currentItem.sessions),
+    [clarityDeviceFiltered, latestClarityDate],
+  )
+
+  const claritySeries = useMemo(
+    () =>
+      clarityResumoFiltered.map((row) => ({
+        date: getDateKey(row.data_referencia),
+        sessions: toNumber(row.sessions),
+        unique_users: toNumber(row.unique_users),
+        pages_per_session: toNumber(row.pages_per_session),
+        scroll_depth_percentage: toNumber(row.scroll_depth_percentage),
+        active_time_spent_seconds: toNumber(row.active_time_spent_seconds),
+      })),
+    [clarityResumoFiltered],
+  )
+
+  const clarityPeriodCards = useMemo(() => {
+    if (clarityResumoFiltered.length === 0) {
+      return []
+    }
+
+    const totalSessions = clarityResumoFiltered.reduce(
+      (accumulator, row) => accumulator + toNumber(row.sessions),
+      0,
+    )
+    const totalUniqueUsers = clarityResumoFiltered.reduce(
+      (accumulator, row) => accumulator + toNumber(row.unique_users),
+      0,
+    )
+    const weightedPagesPerSession =
+      totalSessions > 0
+        ? clarityResumoFiltered.reduce(
+            (accumulator, row) =>
+              accumulator + toNumber(row.pages_per_session) * toNumber(row.sessions),
+            0,
+          ) / totalSessions
+        : 0
+    const weightedScrollDepth =
+      totalSessions > 0
+        ? clarityResumoFiltered.reduce(
+            (accumulator, row) =>
+              accumulator +
+              toNumber(row.scroll_depth_percentage) * toNumber(row.sessions),
+            0,
+          ) / totalSessions
+        : 0
+    const weightedActiveTime =
+      totalSessions > 0
+        ? clarityResumoFiltered.reduce(
+            (accumulator, row) =>
+              accumulator +
+              toNumber(row.active_time_spent_seconds) * toNumber(row.sessions),
+            0,
+          ) / totalSessions
+        : 0
+
+    return [
+      {
+        title: 'Sessões no periodo',
+        value: formatNumberBR(totalSessions),
+        helperText: 'Somatória das sessões dentro do recorte filtrado.',
+        emphasis: 'primary' as const,
+      },
+      {
+        title: 'Usuários únicos somados',
+        value: formatNumberBR(totalUniqueUsers),
+        helperText: 'Soma diária do Clarity, sem deduplicação entre dias.',
+      },
+      {
+        title: 'Páginas por sessão',
+        value: formatDecimalBR(weightedPagesPerSession),
+        helperText: 'Média ponderada pelo volume de sessões.',
+      },
+      {
+        title: 'Scroll médio do período',
+        value: formatPercentBR(weightedScrollDepth),
+        helperText: 'Média ponderada da profundidade de rolagem.',
+      },
+      {
+        title: 'Tempo ativo médio',
+        value: formatDurationMinutes(weightedActiveTime),
+        helperText: 'Média ponderada do tempo ativo por sessão.',
+      },
+    ]
+  }, [clarityResumoFiltered])
+
+  const clarityCards = useMemo(
+    () =>
+      latestClarityResumo
+        ? [
+            {
+              title: 'Sessões no dia',
+              value: formatNumberBR(toNumber(latestClarityResumo.sessions)),
+              helperText: `Base em ${formatDateBR(latestClarityDate)}.`,
+              emphasis: 'primary' as const,
+            },
+            {
+              title: 'Usuários únicos',
+              value: formatNumberBR(toNumber(latestClarityResumo.unique_users)),
+              helperText: 'Pessoas unicas navegando na landing page.',
+            },
+            {
+              title: 'Páginas por sessão',
+              value: formatDecimalBR(toNumber(latestClarityResumo.pages_per_session)),
+              helperText: 'Profundidade média de navegacao.',
+            },
+            {
+              title: 'Scroll médio',
+              value: formatPercentBR(toNumber(latestClarityResumo.scroll_depth_percentage)),
+              helperText: 'Percentual médio de profundidade de rolagem.',
+            },
+            {
+              title: 'Tempo ativo',
+              value: formatDurationMinutes(
+                toNumber(latestClarityResumo.active_time_spent_seconds),
+              ),
+              helperText: 'Tempo ativo médio registrado pelo Clarity.',
+            },
+          ]
+        : [],
+    [latestClarityDate, latestClarityResumo],
+  )
 
   const kpiCards = useMemo(
     () => [
@@ -1534,6 +1783,216 @@ export function TrafegoPagoSpike() {
                 </div>
               )}
             </section>
+          </section>
+
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-5">
+              <h3 className="text-lg font-semibold text-slate-950">Dados da Landing Page</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Leitura de comportamento da página com base no Clarity, usando o mesmo recorte
+                de datas aplicado ao restante do dashboard.
+              </p>
+            </div>
+
+            {clarityCards.length === 0 ? (
+              <EmptyState
+                title="Sem dados do Clarity para o periodo atual"
+                description="Assim que as tabelas clarity_resumo_diario e clarity_devices_diario tiverem registros dentro do recorte, essa secao sera preenchida automaticamente."
+              />
+            ) : (
+              <>
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-slate-900">Consolidado do periodo</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Leitura geral do recorte filtrado para entender o tamanho da audiencia e a
+                    qualidade media da navegacao.
+                  </p>
+                </div>
+
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  {clarityPeriodCards.map((card) => (
+                    <KpiCard
+                      key={card.title}
+                      title={card.title}
+                      value={card.value}
+                      helperText={card.helperText}
+                      emphasis={card.emphasis}
+                    />
+                  ))}
+                </section>
+
+                <div className="mb-4 mt-8">
+                  <p className="text-sm font-semibold text-slate-900">Última leitura disponível</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Foto mais recente do Clarity dentro do periodo para acompanhar o comportamento
+                    mais atual da landing page.
+                  </p>
+                </div>
+
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  {clarityCards.map((card) => (
+                    <KpiCard
+                      key={card.title}
+                      title={card.title}
+                      value={card.value}
+                      helperText={card.helperText}
+                      emphasis={card.emphasis}
+                    />
+                  ))}
+                </section>
+
+                <section className="mt-6 grid gap-6 xl:grid-cols-2">
+                  <ChartContainer
+                    title="Sessões e usuários por dia"
+                    description="Série diária do Clarity para acompanhar volume e alcance da landing page."
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={claritySeries}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatDateShortBR(String(value))}
+                        />
+                        <YAxis
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatCompactNumberBR(Number(value))}
+                        />
+                        <Tooltip
+                          formatter={(value) => formatNumberBR(Number(value ?? 0))}
+                          labelFormatter={(label) => formatDateBR(String(label))}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="sessions"
+                          name="Sessões"
+                          stroke="#0ea5e9"
+                          strokeWidth={2.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="unique_users"
+                          name="Usuários únicos"
+                          stroke="#0f172a"
+                          strokeWidth={2.5}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+
+                  <ChartContainer
+                    title="Dispositivos na última leitura"
+                    description="Distribuição de sessões por device na data mais recente do Clarity dentro do filtro."
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={latestClarityDevices}
+                        layout="vertical"
+                        margin={{ top: 0, right: 16, left: 12, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          type="number"
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatCompactNumberBR(Number(value))}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="device"
+                          width={90}
+                          stroke="#64748b"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip
+                          formatter={(value) => formatNumberBR(Number(value ?? 0))}
+                          labelFormatter={(label) => `Device: ${label}`}
+                        />
+                        <Bar dataKey="sessions" name="Sessões" fill="#0ea5e9" radius={[0, 12, 12, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+
+                  <ChartContainer
+                    title="Qualidade da visita"
+                    description="Profundidade de scroll e páginas por sessão ao longo dos dias filtrados."
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={claritySeries}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatDateShortBR(String(value))}
+                        />
+                        <YAxis stroke="#64748b" />
+                        <Tooltip
+                          formatter={(value, name) =>
+                            name === 'Scroll médio'
+                              ? formatPercentBR(Number(value ?? 0))
+                              : formatDecimalBR(Number(value ?? 0))
+                          }
+                          labelFormatter={(label) => formatDateBR(String(label))}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="scroll_depth_percentage"
+                          name="Scroll médio"
+                          stroke="#7c3aed"
+                          strokeWidth={2.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="pages_per_session"
+                          name="Páginas por sessão"
+                          stroke="#0f766e"
+                          strokeWidth={2.5}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+
+                  <ChartContainer
+                    title="Tempo ativo por dia"
+                    description="Tempo ativo médio identificado pelo Clarity em cada data."
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={claritySeries}>
+                        <defs>
+                          <linearGradient id="clarityActiveTime" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.4} />
+                            <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0.05} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatDateShortBR(String(value))}
+                        />
+                        <YAxis
+                          stroke="#64748b"
+                          tickFormatter={(value) => formatDurationMinutes(Number(value ?? 0))}
+                        />
+                        <Tooltip
+                          formatter={(value) => formatDurationMinutes(Number(value ?? 0))}
+                          labelFormatter={(label) => formatDateBR(String(label))}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="active_time_spent_seconds"
+                          name="Tempo ativo"
+                          stroke="#0ea5e9"
+                          fill="url(#clarityActiveTime)"
+                          strokeWidth={2.5}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </section>
+              </>
+            )}
           </section>
 
           {reportSection}
