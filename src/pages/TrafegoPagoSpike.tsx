@@ -1179,8 +1179,7 @@ export function TrafegoPagoSpike() {
             Geração de análise por período fechado
           </h3>
           <p className="mt-3 text-sm leading-7 text-slate-500">
-            O botão monta o recorte automaticamente e envia para o webhook do n8n os dados da
-            campanha, dos inscritos e das matrículas do mesmo período.
+            O botão monta o recorte automaticamente e envia os dados da campanha, dos inscritos e das matrículas do mesmo período.
           </p>
           <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-700">
@@ -1241,7 +1240,7 @@ export function TrafegoPagoSpike() {
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
                 }`}
               >
-                Ãšltimo {reportType}
+                Último {reportType}
               </button>
             ))}
           </div>
@@ -1307,7 +1306,7 @@ export function TrafegoPagoSpike() {
         !selectedStoredReport ? (
           <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">
             {profile?.role === 'admin'
-              ? 'Escolha semanal ou mensal para montar o payload e pedir a anÃ¡lise ao n8n.'
+              ? 'Escolha semanal ou mensal para montar o payload e pedir a análise ao n8n.'
               : 'Nenhum relatório salvo foi encontrado ainda para essa Visualização.'}
           </div>
         ) : null}
