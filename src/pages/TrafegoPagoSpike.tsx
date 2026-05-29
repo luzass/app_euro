@@ -1011,13 +1011,13 @@ export function TrafegoPagoSpike() {
       {
         title: 'Sessões no periodo',
         value: formatNumberBR(totalSessions),
-        helperText: 'SomatÃ³ria das Sessões dentro do recorte filtrado.',
+        helperText: 'Somatória das Sessões dentro do recorte filtrado.',
         emphasis: 'primary' as const,
       },
       {
         title: 'usuários únicos somados',
         value: formatNumberBR(totalUniqueUsers),
-        helperText: 'Soma diária do Clarity, sem deduplicaÃ§Ã£o entre dias.',
+        helperText: 'Soma diária do Clarity, sem deduplicação entre dias.',
       },
       {
         title: 'páginas por sessão',
