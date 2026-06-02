@@ -44,6 +44,7 @@ interface FilterState {
 }
 
 interface InscritoAnalysisRow {
+  cpf: string | null
   campus: string | null
   curso: string | null
   turno: string | null
@@ -138,6 +139,16 @@ const cpfFieldCandidates = [
   'cpf_lead',
   'documento',
   'document',
+]
+
+const dateFieldCandidates = [
+  'data_inscricao',
+  'created_at',
+  'createdAt',
+  'data_cadastro',
+  'data',
+  'dt_cadastro',
+  'date',
 ]
 
 const funnelAccentClasses = [
@@ -409,6 +420,37 @@ function extractCpfSet(rows: GenericRow[]) {
   return cpfs
 }
 
+function getGenericRowDateKey(row: GenericRow) {
+  for (const fieldName of dateFieldCandidates) {
+    const value = row[fieldName]
+
+    if (value !== null && value !== undefined && value !== '') {
+      return getDateKey(String(value))
+    }
+  }
+
+  return ''
+}
+
+function applyGenericDateFilter(rows: GenericRow[], filters: FilterState) {
+  return rows.filter((row) => {
+    const dateKey = getGenericRowDateKey(row)
+
+    if (!filters.startDate && !filters.endDate) {
+      return true
+    }
+
+    if (!dateKey) {
+      return false
+    }
+
+    const startDatePass = !filters.startDate || dateKey >= filters.startDate
+    const endDatePass = !filters.endDate || dateKey <= filters.endDate
+
+    return startDatePass && endDatePass
+  })
+}
+
 function countIntersectedCpfs(leadsRows: GenericRow[], matriculadosRows: GenericRow[]) {
   const leadsCpfs = extractCpfSet(leadsRows)
   const matriculadosCpfs = extractCpfSet(matriculadosRows)
@@ -449,6 +491,8 @@ export function TrafegoPagoSpike() {
     typeof window === 'undefined' ? 1440 : window.innerWidth,
   )
   const [rows, setRows] = useState<CampaignRow[]>([])
+  const [leadRows, setLeadRows] = useState<GenericRow[]>([])
+  const [inscritoRows, setInscritoRows] = useState<GenericRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
   const [clarityResumoRows, setClarityResumoRows] = useState<ClarityResumoRow[]>([])
   const [clarityDeviceRows, setClarityDeviceRows] = useState<ClarityDeviceRow[]>([])
@@ -481,6 +525,7 @@ export function TrafegoPagoSpike() {
     const [
       campaignResponse,
       leadsResponse,
+      inscritosResponse,
       matriculadosResponse,
       clarityResumoResponse,
       clarityDevicesResponse,
@@ -490,6 +535,7 @@ export function TrafegoPagoSpike() {
         .select('*')
         .order('data_inicio', { ascending: true }),
       supabase.from('leads_cursos').select('*'),
+      supabase.from('inscritos_20262').select('cpf, data_inscricao'),
       supabase.from('matriculados_20262').select('*'),
       supabase
         .from('clarity_resumo_diario')
@@ -516,10 +562,12 @@ export function TrafegoPagoSpike() {
     }
 
     setRows((campaignResponse.data as CampaignRow[]) ?? [])
+    setLeadRows((leadsResponse.data as GenericRow[]) ?? [])
+    setInscritoRows((inscritosResponse.data as GenericRow[]) ?? [])
     setClarityResumoRows((clarityResumoResponse.data as ClarityResumoRow[]) ?? [])
     setClarityDeviceRows((clarityDevicesResponse.data as ClarityDeviceRow[]) ?? [])
 
-    if (!leadsResponse.error && !matriculadosResponse.error) {
+    if (!leadsResponse.error && !inscritosResponse.error && !matriculadosResponse.error) {
       setMatriculados(
         countIntersectedCpfs(
           (leadsResponse.data as GenericRow[]) ?? [],
@@ -529,6 +577,7 @@ export function TrafegoPagoSpike() {
     } else {
       console.warn('Nao foi possivel calcular matriculados a partir das tabelas extras.', {
         leadsError: leadsResponse.error,
+        inscritosError: inscritosResponse.error,
         matriculadosError: matriculadosResponse.error,
       })
       setMatriculados(0)
@@ -636,11 +685,16 @@ export function TrafegoPagoSpike() {
 
     const groupedCampaignRows = agruparPorData(campaignRowsForRange)
 
-    const [{ data: inscritosData, error: inscritosError }, { data: matriculadosData, error: matriculadosError }] =
+    const [
+      { data: leadsData, error: leadsError },
+      { data: inscritosData, error: inscritosError },
+      { data: matriculadosData, error: matriculadosError },
+    ] =
       await Promise.all([
+        supabase.from('leads_cursos').select('*'),
         supabase
           .from('inscritos_20262')
-          .select('campus, curso, turno, forma_de_ingresso, etapa_atual, data_inscricao'),
+          .select('cpf, campus, curso, turno, forma_de_ingresso, etapa_atual, data_inscricao'),
         supabase
           .from('matriculados_20262')
           .select(
@@ -648,11 +702,16 @@ export function TrafegoPagoSpike() {
           ),
       ])
 
-    if (inscritosError || matriculadosError) {
+    if (leadsError || inscritosError || matriculadosError) {
       throw new Error(
-        'Nao foi possivel buscar inscritos_20262 ou matriculados_20262 para montar o relatório.',
+        'Nao foi possivel buscar leads_cursos, inscritos_20262 ou matriculados_20262 para montar o relatório.',
       )
     }
+
+    const leadsRows = applyGenericDateFilter((leadsData as GenericRow[]) ?? [], {
+      startDate: range.startDate,
+      endDate: range.endDate,
+    })
 
     const inscritosRows = ((inscritosData as InscritoAnalysisRow[]) ?? []).filter((row) => {
       const dateKey = getDateKey(row.data_inscricao)
@@ -665,10 +724,23 @@ export function TrafegoPagoSpike() {
       return isCalouro && dateKey >= range.startDate && dateKey <= range.endDate
     })
 
-    const campaignKpis = expandCampaignKpis(
+    const baseCampaignKpis = expandCampaignKpis(
       calcularKPIsCampanha(campaignRowsForRange),
       matriculadosRows.length,
     )
+    const operationalLeads = extractCpfSet(leadsRows).size
+    const inscritosFromLeads = countIntersectedCpfs(
+      leadsRows,
+      inscritosRows as unknown as GenericRow[],
+    )
+    const campaignKpis = {
+      ...baseCampaignKpis,
+      lead: operationalLeads,
+      custo_por_lead:
+        operationalLeads > 0
+          ? safeDivide(baseCampaignKpis.valor_usado, operationalLeads)
+          : 0,
+    }
 
     return {
       dashboard: 'spike',
@@ -698,6 +770,7 @@ export function TrafegoPagoSpike() {
           { label: 'Cliques no link', value: Math.round(campaignKpis.cliques_no_link) },
           { label: 'LP Views', value: Math.round(campaignKpis.lp_views) },
           { label: 'Leads', value: Math.round(campaignKpis.lead) },
+          { label: 'Inscritos', value: Math.round(inscritosFromLeads) },
           { label: 'Matriculados', value: Math.round(campaignKpis.matriculados) },
         ],
         serie_diaria: groupedCampaignRows,
@@ -876,11 +949,30 @@ export function TrafegoPagoSpike() {
     })
   }, [clarityDeviceRows, filters.endDate, filters.startDate])
 
+  const filteredLeadRows = useMemo(
+    () => applyGenericDateFilter(leadRows, filters),
+    [filters, leadRows],
+  )
+
+  const filteredInscritoRows = useMemo(
+    () => applyGenericDateFilter(inscritoRows, filters),
+    [filters, inscritoRows],
+  )
+
   const groupedRows = useMemo(() => agruparPorData(filteredRows), [filteredRows])
   const baseKpis = useMemo(() => calcularKPIsCampanha(filteredRows), [filteredRows])
   const kpis = useMemo<ExtendedCampaignKpis>(
     () => expandCampaignKpis(baseKpis, matriculados),
     [baseKpis, matriculados],
+  )
+
+  const operationalLeadsCount = useMemo(
+    () => extractCpfSet(filteredLeadRows).size,
+    [filteredLeadRows],
+  )
+  const inscritosGeradosNoPeriodo = useMemo(
+    () => countIntersectedCpfs(filteredLeadRows, filteredInscritoRows),
+    [filteredInscritoRows, filteredLeadRows],
   )
 
   const funnelSteps = useMemo(
@@ -889,10 +981,19 @@ export function TrafegoPagoSpike() {
       { label: 'Alcance', value: Math.round(kpis.alcance) },
       { label: 'Cliques no link', value: Math.round(kpis.cliques_no_link) },
       { label: 'LP Views', value: Math.round(kpis.lp_views) },
-      { label: 'Leads', value: Math.round(kpis.lead) },
+      { label: 'Leads', value: operationalLeadsCount },
+      { label: 'Inscritos', value: inscritosGeradosNoPeriodo },
       { label: 'Matriculados', value: Math.round(kpis.matriculados) },
     ],
-    [kpis.alcance, kpis.cliques_no_link, kpis.impressoes, kpis.lead, kpis.lp_views, kpis.matriculados],
+    [
+      inscritosGeradosNoPeriodo,
+      kpis.alcance,
+      kpis.cliques_no_link,
+      kpis.impressoes,
+      kpis.lp_views,
+      kpis.matriculados,
+      operationalLeadsCount,
+    ],
   )
 
   const topOfFunnel = funnelSteps[0]?.value ?? 0
@@ -1134,12 +1235,16 @@ export function TrafegoPagoSpike() {
       },
       {
         title: 'Leads',
-        value: formatNumberBR(kpis.lead),
+        value: formatNumberBR(operationalLeadsCount),
         helperText: 'Total de leads gerados.',
       },
       {
         title: 'Custo por lead',
-        value: formatCurrencyBR(kpis.custo_por_lead),
+        value: formatCurrencyBR(
+          operationalLeadsCount > 0
+            ? safeDivide(kpis.valor_usado, operationalLeadsCount)
+            : 0,
+        ),
         helperText: 'Valor gasto para gerar cada lead.',
       },
       {
@@ -1153,7 +1258,7 @@ export function TrafegoPagoSpike() {
         helperText: 'Valor gasto para cada matrícula.',
       },
     ],
-    [kpis],
+    [kpis, operationalLeadsCount],
   )
 
   const selectedStoredReport = storedReports[selectedReportType] ?? null
@@ -2075,5 +2180,3 @@ export function TrafegoPagoSpike() {
     </div>
   )
 }
-
-
