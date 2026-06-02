@@ -17,6 +17,7 @@ export interface CampaignRow {
   contatos: number | string | null
   custo_por_contato: number | string | null
   lead: number | string | null
+  matriculado?: number | string | null
   custo_por_lead: number | string | null
   seguidores: number | string | null
   custo_por_seguidor: number | string | null
@@ -39,6 +40,7 @@ export interface CampaignKpis {
   mensagens: number
   custo_por_mensagem: number
   lead: number
+  matriculado: number
   custo_por_lead: number
 }
 
@@ -64,6 +66,7 @@ const totalFields: NumericField[] = [
   'lp_views',
   'mensagens',
   'lead',
+  'matriculado',
 ]
 
 function isBlankValue(value: unknown) {
@@ -118,6 +121,7 @@ function calculateDerivedMetrics(data: {
   lp_views: number
   mensagens: number
   lead: number
+  matriculado: number
 }): CampaignKpis {
   return {
     ...data,
@@ -201,6 +205,7 @@ export function calcularKPIsCampanha(rows: CampaignRow[]) {
     lp_views: totals.lp_views,
     mensagens: totals.mensagens,
     lead: totals.lead,
+    matriculado: totals.matriculado,
     frequencia: getFrequencyAverage(rows),
   })
 }
@@ -209,11 +214,15 @@ export function expandCampaignKpis(
   baseKpis: CampaignKpis,
   matriculados: number,
 ): ExtendedCampaignKpis {
+  const resolvedMatriculados = baseKpis.matriculado > 0 ? baseKpis.matriculado : matriculados
+
   return {
     ...baseKpis,
-    matriculados,
+    matriculados: resolvedMatriculados,
     custo_por_matricula:
-      matriculados > 0 ? safeDivide(baseKpis.valor_usado, matriculados) : baseKpis.valor_usado,
+      resolvedMatriculados > 0
+        ? safeDivide(baseKpis.valor_usado, resolvedMatriculados)
+        : baseKpis.valor_usado,
   }
 }
 

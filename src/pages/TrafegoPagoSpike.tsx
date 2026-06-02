@@ -126,6 +126,16 @@ interface StoredReport {
 
 type GenericRow = Record<string, unknown>
 
+interface FunilGeralRow {
+  impressoes: string | number | null
+  alcance: string | number | null
+  cliques_link: string | number | null
+  landing_page_views: string | number | null
+  leads: string | number | null
+  inscritos: string | number | null
+  matriculas: string | number | null
+}
+
 const initialFilters: FilterState = {
   startDate: '',
   endDate: '',
@@ -494,6 +504,7 @@ export function TrafegoPagoSpike() {
   const [leadRows, setLeadRows] = useState<GenericRow[]>([])
   const [inscritoRows, setInscritoRows] = useState<GenericRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
+  const [funilGeralRow, setFunilGeralRow] = useState<FunilGeralRow | null>(null)
   const [clarityResumoRows, setClarityResumoRows] = useState<ClarityResumoRow[]>([])
   const [clarityDeviceRows, setClarityDeviceRows] = useState<ClarityDeviceRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -527,6 +538,7 @@ export function TrafegoPagoSpike() {
       leadsResponse,
       inscritosResponse,
       matriculadosResponse,
+      funilGeralResponse,
       clarityResumoResponse,
       clarityDevicesResponse,
     ] = await Promise.all([
@@ -537,6 +549,13 @@ export function TrafegoPagoSpike() {
       supabase.from('leads_cursos').select('*'),
       supabase.from('inscritos_20262').select('cpf, data_inscricao'),
       supabase.from('matriculados_20262').select('*'),
+      supabase
+        .from('funil_euro_20262_geral')
+        .select(
+          'impressoes, alcance, cliques_link, landing_page_views, leads, inscritos, matriculas',
+        )
+        .limit(1)
+        .maybeSingle(),
       supabase
         .from('clarity_resumo_diario')
         .select(
@@ -564,6 +583,7 @@ export function TrafegoPagoSpike() {
     setRows((campaignResponse.data as CampaignRow[]) ?? [])
     setLeadRows((leadsResponse.data as GenericRow[]) ?? [])
     setInscritoRows((inscritosResponse.data as GenericRow[]) ?? [])
+    setFunilGeralRow((funilGeralResponse.data as FunilGeralRow | null) ?? null)
     setClarityResumoRows((clarityResumoResponse.data as ClarityResumoRow[]) ?? [])
     setClarityDeviceRows((clarityDevicesResponse.data as ClarityDeviceRow[]) ?? [])
 
@@ -587,6 +607,12 @@ export function TrafegoPagoSpike() {
       console.warn('Nao foi possivel carregar as tabelas do Clarity.', {
         clarityResumoError: clarityResumoResponse.error,
         clarityDevicesError: clarityDevicesResponse.error,
+      })
+    }
+
+    if (funilGeralResponse.error) {
+      console.warn('Nao foi possivel carregar a tabela funil_euro_20262_geral.', {
+        funilGeralError: funilGeralResponse.error,
       })
     }
 
@@ -977,15 +1003,47 @@ export function TrafegoPagoSpike() {
 
   const funnelSteps = useMemo(
     () => [
-      { label: 'Impressoes', value: Math.round(kpis.impressoes) },
-      { label: 'Alcance', value: Math.round(kpis.alcance) },
-      { label: 'Cliques no link', value: Math.round(kpis.cliques_no_link) },
-      { label: 'LP Views', value: Math.round(kpis.lp_views) },
-      { label: 'Leads', value: operationalLeadsCount },
-      { label: 'Inscritos', value: inscritosGeradosNoPeriodo },
-      { label: 'Matriculados', value: Math.round(kpis.matriculados) },
+      {
+        label: 'Impressoes',
+        value: Math.round(
+          funilGeralRow ? toNumber(funilGeralRow.impressoes) : kpis.impressoes,
+        ),
+      },
+      {
+        label: 'Alcance',
+        value: Math.round(funilGeralRow ? toNumber(funilGeralRow.alcance) : kpis.alcance),
+      },
+      {
+        label: 'Cliques no link',
+        value: Math.round(
+          funilGeralRow ? toNumber(funilGeralRow.cliques_link) : kpis.cliques_no_link,
+        ),
+      },
+      {
+        label: 'LP Views',
+        value: Math.round(
+          funilGeralRow ? toNumber(funilGeralRow.landing_page_views) : kpis.lp_views,
+        ),
+      },
+      {
+        label: 'Leads',
+        value: Math.round(funilGeralRow ? toNumber(funilGeralRow.leads) : operationalLeadsCount),
+      },
+      {
+        label: 'Inscritos',
+        value: Math.round(
+          funilGeralRow ? toNumber(funilGeralRow.inscritos) : inscritosGeradosNoPeriodo,
+        ),
+      },
+      {
+        label: 'Matriculados',
+        value: Math.round(
+          funilGeralRow ? toNumber(funilGeralRow.matriculas) : kpis.matriculados,
+        ),
+      },
     ],
     [
+      funilGeralRow,
       inscritosGeradosNoPeriodo,
       kpis.alcance,
       kpis.cliques_no_link,
@@ -1235,16 +1293,12 @@ export function TrafegoPagoSpike() {
       },
       {
         title: 'Leads',
-        value: formatNumberBR(operationalLeadsCount),
+        value: formatNumberBR(kpis.lead),
         helperText: 'Total de leads gerados.',
       },
       {
         title: 'Custo por lead',
-        value: formatCurrencyBR(
-          operationalLeadsCount > 0
-            ? safeDivide(kpis.valor_usado, operationalLeadsCount)
-            : 0,
-        ),
+        value: formatCurrencyBR(kpis.custo_por_lead),
         helperText: 'Valor gasto para gerar cada lead.',
       },
       {
@@ -1258,7 +1312,7 @@ export function TrafegoPagoSpike() {
         helperText: 'Valor gasto para cada matrícula.',
       },
     ],
-    [kpis, operationalLeadsCount],
+    [kpis],
   )
 
   const selectedStoredReport = storedReports[selectedReportType] ?? null
