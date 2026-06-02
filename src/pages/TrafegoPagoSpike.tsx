@@ -993,7 +993,7 @@ export function TrafegoPagoSpike() {
   )
 
   const operationalLeadsCount = useMemo(
-    () => extractCpfSet(filteredLeadRows).size,
+    () => filteredLeadRows.length,
     [filteredLeadRows],
   )
   const inscritosGeradosNoPeriodo = useMemo(
