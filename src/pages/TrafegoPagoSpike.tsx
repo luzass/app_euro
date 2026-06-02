@@ -754,19 +754,11 @@ export function TrafegoPagoSpike() {
       calcularKPIsCampanha(campaignRowsForRange),
       matriculadosRows.length,
     )
-    const operationalLeads = extractCpfSet(leadsRows).size
     const inscritosFromLeads = countIntersectedCpfs(
       leadsRows,
       inscritosRows as unknown as GenericRow[],
     )
-    const campaignKpis = {
-      ...baseCampaignKpis,
-      lead: operationalLeads,
-      custo_por_lead:
-        operationalLeads > 0
-          ? safeDivide(baseCampaignKpis.valor_usado, operationalLeads)
-          : 0,
-    }
+    const campaignKpis = baseCampaignKpis
 
     return {
       dashboard: 'spike',
