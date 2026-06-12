@@ -2,6 +2,7 @@ import {
   BarChart3,
   type LucideIcon,
   LayoutDashboard,
+  Target,
   UserRoundPlus,
 } from 'lucide-react'
 import type { Role } from './types'
@@ -15,7 +16,7 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   {
-    title: 'Tráfego Pago - Spike',
+    title: 'Trafego Pago - Spike',
     path: '/app/spike',
     icon: BarChart3,
     allowedRoles: ['admin', 'reitoria', 'spike'],
@@ -27,7 +28,13 @@ export const navItems: NavItem[] = [
     allowedRoles: ['admin', 'reitoria', 'captacao', 'funcionario'],
   },
   {
-    title: 'Criar Usuário',
+    title: 'Metas',
+    path: '/app/metas',
+    icon: Target,
+    allowedRoles: ['admin', 'reitoria', 'captacao'],
+  },
+  {
+    title: 'Criar Usuario',
     path: '/app/criar-usuario',
     icon: UserRoundPlus,
     allowedRoles: ['admin'],

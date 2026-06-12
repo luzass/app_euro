@@ -9,6 +9,7 @@ import type { Role } from '../lib/types'
 import { CriarUsuario } from '../pages/CriarUsuario'
 import { DashboardEuro } from '../pages/DashboardEuro'
 import { Login } from '../pages/Login'
+import { Metas } from '../pages/Metas'
 import { NotFound } from '../pages/NotFound'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
 
@@ -76,6 +77,14 @@ export function AppRoutes() {
             element={
               <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'funcionario']}>
                 <DashboardEuro />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="metas"
+            element={
+              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao']}>
+                <Metas />
               </RequireRole>
             }
           />
