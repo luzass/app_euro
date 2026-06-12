@@ -992,6 +992,13 @@ export function TrafegoPagoSpike() {
     () => countIntersectedCpfs(filteredLeadRows, filteredInscritoRows),
     [filteredInscritoRows, filteredLeadRows],
   )
+  const inscritosForTrafficCards = useMemo(
+    () =>
+      funilGeralRow && toNumber(funilGeralRow.inscritos) > 0
+        ? toNumber(funilGeralRow.inscritos)
+        : inscritosGeradosNoPeriodo,
+    [funilGeralRow, inscritosGeradosNoPeriodo],
+  )
 
   const funnelSteps = useMemo(
     () => [
@@ -1294,6 +1301,15 @@ export function TrafegoPagoSpike() {
         helperText: 'Valor gasto para gerar cada lead.',
       },
       {
+        title: 'Custo por inscrito',
+        value: formatCurrencyBR(
+          inscritosForTrafficCards > 0
+            ? safeDivide(kpis.valor_usado, inscritosForTrafficCards)
+            : 0,
+        ),
+        helperText: 'Valor gasto para gerar cada inscrito.',
+      },
+      {
         title: 'Matriculados',
         value: formatNumberBR(kpis.matriculados),
         helperText: 'Quantidade de matriculados.',
@@ -1304,7 +1320,7 @@ export function TrafegoPagoSpike() {
         helperText: 'Valor gasto para cada matrícula.',
       },
     ],
-    [kpis],
+    [inscritosForTrafficCards, kpis],
   )
 
   const selectedStoredReport = storedReports[selectedReportType] ?? null
