@@ -76,6 +76,10 @@ function normalizeString(value?: string | null) {
     .toUpperCase()
 }
 
+function normalizeCpf(value?: string | null) {
+  return (value ?? '').replace(/\D/g, '')
+}
+
 function titleize(value?: string | null) {
   if (!value) {
     return 'Nao informado'
@@ -399,13 +403,21 @@ export function Metas() {
       return
     }
 
+    const cpf = normalizeCpf(row.cpf)
+
+    if (!cpf) {
+      setSaveMessage('Esta matricula nao possui CPF valido para salvar o vendedor.')
+      return
+    }
+
     setSavingRowId(rowId)
     setSaveMessage(null)
 
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from('matriculados_20262')
       .update({ vendedor: selectedSeller })
-      .eq('id', rowId)
+      .eq('cpf', row.cpf ?? cpf)
+      .select('id, cpf, vendedor')
 
     if (updateError) {
       setSaveMessage('Nao foi possivel salvar o vendedor desta matricula.')
@@ -413,9 +425,17 @@ export function Metas() {
       return
     }
 
+    if (!updatedRows || updatedRows.length === 0) {
+      setSaveMessage('O Supabase nao encontrou nenhuma linha para atualizar com este CPF.')
+      setSavingRowId(null)
+      return
+    }
+
     setRows((currentValue) =>
       currentValue.map((currentRow) =>
-        currentRow.id === rowId ? { ...currentRow, vendedor: selectedSeller } : currentRow,
+        normalizeCpf(currentRow.cpf) === cpf
+          ? { ...currentRow, vendedor: selectedSeller }
+          : currentRow,
       ),
     )
     setDraftAssignments((currentValue) => ({
