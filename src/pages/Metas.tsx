@@ -25,6 +25,16 @@ interface MatriculadoMetaRow {
   vendedor?: string | null
 }
 
+interface MatriculadoVendedorRow {
+  cpf: string
+  curso_key: string
+  filial_key: string
+  turno_key: string
+  data_baixa: string
+  vendedor: Seller
+  updated_at?: string
+}
+
 type Seller = 'Tony' | 'William' | 'Gustavo' | 'Jordana'
 type MonthKey = '05' | '06' | '07' | '08' | '09'
 
@@ -76,6 +86,10 @@ function normalizeString(value?: string | null) {
     .toUpperCase()
 }
 
+function normalizeCpf(value?: string | null) {
+  return (value ?? '').replace(/\D/g, '')
+}
+
 function titleize(value?: string | null) {
   if (!value) {
     return 'Nao informado'
@@ -112,6 +126,22 @@ function toDateKey(value?: string | null) {
   const month = `${parsed.getMonth() + 1}`.padStart(2, '0')
   const day = `${parsed.getDate()}`.padStart(2, '0')
   return `${parsed.getFullYear()}-${month}-${day}`
+}
+
+function buildAssignmentKey(values: {
+  cpf?: string | null
+  curso?: string | null
+  filial?: string | null
+  turno?: string | null
+  data?: string | null
+}) {
+  return [
+    normalizeCpf(values.cpf),
+    normalizeString(values.curso),
+    normalizeString(values.filial),
+    normalizeString(values.turno),
+    toDateKey(values.data),
+  ].join('|')
 }
 
 function getCurrentSaoPauloMonthKey(): MonthKey {
@@ -206,10 +236,10 @@ export function Metas() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<MonthKey>(getCurrentSaoPauloMonthKey())
-  const [nameFilter, setNameFilter] = useState('')
+  const [listNameFilter, setListNameFilter] = useState('')
   const [draftAssignments, setDraftAssignments] = useState<Record<number, Seller | ''>>({})
   const [savingRowId, setSavingRowId] = useState<number | null>(null)
-  const [vendorColumnAvailable, setVendorColumnAvailable] = useState(true)
+  const [assignmentTableAvailable, setAssignmentTableAvailable] = useState(true)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
   const loadRows = async () => {
@@ -222,40 +252,72 @@ export function Metas() {
     setLoading(true)
     setError(null)
 
-    const { data, error: loadError } = await supabase
-      .from('matriculados_20262')
-      .select(
-        'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status, vendedor',
-      )
-      .order('data_baixa_do_pagamento', { ascending: false })
-
-    if (loadError) {
-      const fallback = await supabase
+    const [matriculadosResult, assignmentsResult] = await Promise.all([
+      supabase
         .from('matriculados_20262')
         .select(
-          'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status',
+          'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status, vendedor',
         )
-        .order('data_baixa_do_pagamento', { ascending: false })
+        .order('data_baixa_do_pagamento', { ascending: false }),
+      supabase
+        .from('matriculados_vendedores')
+        .select('cpf, curso_key, filial_key, turno_key, data_baixa, vendedor, updated_at')
+        .order('updated_at', { ascending: false }),
+    ])
 
-      if (fallback.error) {
-        setError(
-          'Nao foi possivel carregar a base de matriculados_20262 para a visao de metas.',
-        )
-        setRows([])
-        setLoading(false)
-        return
-      }
-
-      setVendorColumnAvailable(false)
-      setRows((fallback.data as MatriculadoMetaRow[]) ?? [])
+    if (matriculadosResult.error) {
+      setError(
+        'Nao foi possivel carregar a base de matriculados_20262 para a visao de metas.',
+      )
+      setRows([])
       setLoading(false)
       return
     }
 
-    setVendorColumnAvailable(
-      Boolean(data && data.length > 0 ? Object.prototype.hasOwnProperty.call(data[0], 'vendedor') : true),
-    )
-    setRows((data as MatriculadoMetaRow[]) ?? [])
+    const assignmentMap = new Map<string, Seller>()
+    const cpfFallbackMap = new Map<string, Seller>()
+
+    if (assignmentsResult.error) {
+      setAssignmentTableAvailable(false)
+    } else {
+      ;(assignmentsResult.data as MatriculadoVendedorRow[] | null)?.forEach((assignment) => {
+        const normalizedCpf = normalizeCpf(assignment.cpf)
+
+        assignmentMap.set(
+          buildAssignmentKey({
+            cpf: assignment.cpf,
+            curso: assignment.curso_key,
+            filial: assignment.filial_key,
+            turno: assignment.turno_key,
+            data: assignment.data_baixa,
+          }),
+          assignment.vendedor,
+        )
+        if (normalizedCpf && !cpfFallbackMap.has(normalizedCpf)) {
+          cpfFallbackMap.set(normalizedCpf, assignment.vendedor)
+        }
+      })
+      setAssignmentTableAvailable(true)
+    }
+
+    const mergedRows = ((matriculadosResult.data as MatriculadoMetaRow[]) ?? []).map((row) => ({
+      ...row,
+      vendedor:
+        assignmentMap.get(
+          buildAssignmentKey({
+            cpf: row.cpf,
+            curso: row.curso,
+            filial: row.filial,
+            turno: row.turno,
+            data: row.data_baixa_do_pagamento,
+          }),
+        ) ??
+        cpfFallbackMap.get(normalizeCpf(row.cpf)) ??
+        row.vendedor ??
+        null,
+    }))
+
+    setRows(mergedRows)
     setLoading(false)
   }
 
@@ -274,73 +336,14 @@ export function Metas() {
 
   const allCalouroRows = useMemo(() => rows.filter((row) => isCalouro(row)), [rows])
 
-  const normalizedNameFilter = useMemo(() => normalizeString(nameFilter), [nameFilter])
-
-  const filteredNormalRows = useMemo(() => {
-    if (!normalizedNameFilter) {
-      return monthRows.filter((row) => !isProuni(row))
-    }
-
-    return monthRows.filter((row) => {
-      if (isProuni(row)) {
-        return false
-      }
-
-      const candidate = normalizeString(row.aluno)
-      return candidate.includes(normalizedNameFilter)
-    })
-  }, [monthRows, normalizedNameFilter])
-
-  const filteredProuniRows = useMemo(() => {
-    if (!normalizedNameFilter) {
-      return allCalouroRows.filter((row) => isProuni(row))
-    }
-
-    return allCalouroRows.filter((row) => {
-      if (!isProuni(row)) {
-        return false
-      }
-
-      const candidate = normalizeString(row.aluno)
-      return candidate.includes(normalizedNameFilter)
-    })
-  }, [allCalouroRows, normalizedNameFilter])
-
-  const filteredRowsForAssignments = useMemo(() => {
-    const mergedRows = new Map<number, MatriculadoMetaRow>()
-
-    filteredNormalRows.forEach((row) => {
-      mergedRows.set(row.id, row)
-    })
-
-    filteredProuniRows.forEach((row) => {
-      mergedRows.set(row.id, row)
-    })
-
-    return Array.from(mergedRows.values())
-  }, [filteredNormalRows, filteredProuniRows])
-
-  const filteredMonthRows = useMemo(() => {
-    const normalizedNameFilter = normalizeString(nameFilter)
-
-    if (!normalizedNameFilter) {
-      return filteredRowsForAssignments
-    }
-
-    return filteredRowsForAssignments.filter((row) => {
-      const candidate = normalizeString(row.aluno)
-      return candidate.includes(normalizedNameFilter)
-    })
-  }, [filteredRowsForAssignments, nameFilter])
-
   const normalRows = useMemo(
-    () => filteredNormalRows,
-    [filteredNormalRows],
+    () => monthRows.filter((row) => !isProuni(row)),
+    [monthRows],
   )
 
   const prouniRows = useMemo(
-    () => filteredProuniRows,
-    [filteredProuniRows],
+    () => allCalouroRows.filter((row) => isProuni(row)),
+    [allCalouroRows],
   )
 
   const normalStages = useMemo(() => buildNormalStages(selectedMonth), [selectedMonth])
@@ -375,9 +378,9 @@ export function Metas() {
 
   const sellerCards = useMemo<SellerCardData[]>(() => {
     return sellers.map((seller) => {
-      const sellerRows = filteredMonthRows.filter((row) => row.vendedor === seller)
-      const sellerNormalRows = sellerRows.filter((row) => !isProuni(row))
-      const sellerProuniRows = sellerRows.filter((row) => isProuni(row))
+      const sellerNormalRows = normalRows.filter((row) => row.vendedor === seller)
+      const sellerProuniRows = prouniRows.filter((row) => row.vendedor === seller)
+      const totalCount = sellerNormalRows.length + sellerProuniRows.length
 
       const normalResolution = resolveStage(sellerNormalRows.length, normalStages)
       const prouniResolution = resolveStage(sellerProuniRows.length, prouniStages)
@@ -389,7 +392,7 @@ export function Metas() {
         seller,
         normalCount: sellerNormalRows.length,
         prouniCount: sellerProuniRows.length,
-        totalCount: sellerRows.length,
+        totalCount,
         normalStage: normalResolution.achieved,
         prouniStage: prouniResolution.achieved,
         payout,
@@ -399,49 +402,120 @@ export function Metas() {
         nextProuniLabel: prouniResolution.next?.label ?? null,
       }
     })
-  }, [filteredMonthRows, normalStages, prouniStages])
+  }, [normalRows, prouniRows, normalStages, prouniStages])
+
+  const assignmentBaseRows = useMemo(() => {
+    const mergedRows = new Map<number, MatriculadoMetaRow>()
+
+    normalRows.forEach((row) => {
+      mergedRows.set(row.id, row)
+    })
+
+    prouniRows.forEach((row) => {
+      mergedRows.set(row.id, row)
+    })
+
+    return Array.from(mergedRows.values())
+  }, [normalRows, prouniRows])
+
+  const normalizedListNameFilter = useMemo(
+    () => normalizeString(listNameFilter),
+    [listNameFilter],
+  )
+
+  const filteredAssignmentRows = useMemo(() => {
+    if (!normalizedListNameFilter) {
+      return assignmentBaseRows
+    }
+
+    return assignmentBaseRows.filter((row) =>
+      normalizeString(row.aluno).includes(normalizedListNameFilter),
+    )
+  }, [assignmentBaseRows, normalizedListNameFilter])
 
   const unassignedRows = useMemo(
-    () => filteredMonthRows.filter((row) => !(row.vendedor && row.vendedor.trim())),
-    [filteredMonthRows],
+    () => filteredAssignmentRows.filter((row) => !(row.vendedor && row.vendedor.trim())),
+    [filteredAssignmentRows],
   )
 
   const assignedRows = useMemo(
-    () => filteredMonthRows.filter((row) => row.vendedor && row.vendedor.trim()),
-    [filteredMonthRows],
+    () => filteredAssignmentRows.filter((row) => row.vendedor && row.vendedor.trim()),
+    [filteredAssignmentRows],
   )
 
   const handleAssignSeller = async (rowId: number, fallbackSeller?: string | null) => {
-    if (!supabase || !vendorColumnAvailable) {
+    if (!supabase || !assignmentTableAvailable) {
+      return
+    }
+
+    const row = rows.find((item) => item.id === rowId)
+
+    if (!row) {
+      setSaveMessage('Nao encontramos esta matricula para salvar o vendedor.')
       return
     }
 
     const selectedSeller = draftAssignments[rowId] || (fallbackSeller as Seller | '') || ''
+    const cpf = normalizeCpf(row.cpf)
+    const dataBaixa = toDateKey(row.data_baixa_do_pagamento)
 
     if (!selectedSeller) {
       setSaveMessage('Escolha um vendedor antes de salvar a atribuicao.')
       return
     }
 
+    if (!cpf || !dataBaixa) {
+      setSaveMessage('Esta matricula precisa de CPF e data de baixa validos para salvar o vendedor.')
+      return
+    }
+
     setSavingRowId(rowId)
     setSaveMessage(null)
 
-    const { error: updateError } = await supabase
-      .from('matriculados_20262')
-      .update({ vendedor: selectedSeller })
-      .eq('id', rowId)
+    const { error: upsertError } = await supabase
+      .from('matriculados_vendedores')
+      .upsert(
+        {
+          cpf,
+          curso_key: normalizeString(row.curso),
+          filial_key: normalizeString(row.filial),
+          turno_key: normalizeString(row.turno),
+          data_baixa: dataBaixa,
+          vendedor: selectedSeller,
+        },
+        {
+          onConflict: 'cpf,curso_key,filial_key,turno_key,data_baixa',
+        },
+      )
 
-    if (updateError) {
+    if (upsertError) {
       setSaveMessage('Nao foi possivel salvar o vendedor desta matricula.')
       setSavingRowId(null)
       return
     }
 
+    const { error: updateCurrentRowError } = await supabase
+      .from('matriculados_20262')
+      .update({ vendedor: selectedSeller })
+      .eq('id', rowId)
+
+    if (updateCurrentRowError) {
+      setSaveMessage(
+        'Salvou no historico de vendedores, mas nao conseguiu atualizar a coluna vendedor da base atual.',
+      )
+      setSavingRowId(null)
+      return
+    }
+
     setRows((currentValue) =>
-      currentValue.map((row) =>
-        row.id === rowId ? { ...row, vendedor: selectedSeller } : row,
+      currentValue.map((currentRow) =>
+        currentRow.id === rowId ? { ...currentRow, vendedor: selectedSeller } : currentRow,
       ),
     )
+    setDraftAssignments((currentValue) => ({
+      ...currentValue,
+      [rowId]: selectedSeller,
+    }))
     setSavingRowId(null)
     setSaveMessage('Vendedor salvo com sucesso.')
   }
@@ -501,12 +575,11 @@ export function Metas() {
         </div>
       </section>
 
-      {!vendorColumnAvailable ? (
+      {!assignmentTableAvailable ? (
         <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm">
-          A coluna <strong>vendedor</strong> ainda nao existe em{' '}
-          <strong>matriculados_20262</strong>. A tela consegue ler as metas, mas a
-          atribuicao fica bloqueada ate rodar o SQL em{' '}
-          <code>supabase/metas_vendedor.sql</code>.
+          A tabela <strong>matriculados_vendedores</strong> ainda nao existe no Supabase.
+          As metas aparecem normalmente, mas a atribuicao de vendedores fica bloqueada
+          ate rodar o SQL em <code>supabase/metas_vendedor.sql</code>.
         </section>
       ) : null}
 
@@ -674,7 +747,7 @@ export function Metas() {
                 <div>
                   <p className="text-xl font-semibold text-slate-950">{card.seller}</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {formatNumberBR(card.totalCount)} matriculas no mes
+                    {formatNumberBR(card.totalCount)} matriculas no ciclo atual
                   </p>
                 </div>
                 <div className="rounded-2xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">
@@ -692,7 +765,7 @@ export function Metas() {
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
                     {card.normalStage
-                      ? `${card.normalStage.label} ativa • ${formatCurrencyBR(card.normalStage.reward)} por matricula`
+                      ? `${card.normalStage.label} ativa - ${formatCurrencyBR(card.normalStage.reward)} por matricula`
                       : card.nextNormalLabel
                         ? `Faltam ${formatNumberBR(card.remainingNormal)} para ${card.nextNormalLabel}`
                         : 'Sem faixa ativa.'}
@@ -708,7 +781,7 @@ export function Metas() {
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
                     {card.prouniStage
-                      ? `${card.prouniStage.label} ativa • ${formatCurrencyBR(card.prouniStage.reward)} por matricula`
+                      ? `${card.prouniStage.label} ativa - ${formatCurrencyBR(card.prouniStage.reward)} por matricula`
                       : card.nextProuniLabel
                         ? `Faltam ${formatNumberBR(card.remainingProuni)} para ${card.nextProuniLabel}`
                         : 'Sem faixa ativa.'}
@@ -734,8 +807,8 @@ export function Metas() {
                 <span className="mb-2 block text-sm font-medium text-slate-700">Nome do aluno</span>
                 <input
                   type="text"
-                  value={nameFilter}
-                  onChange={(event) => setNameFilter(event.target.value)}
+                  value={listNameFilter}
+                  onChange={(event) => setListNameFilter(event.target.value)}
                   placeholder="Ex.: Ana Claudia"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 />
@@ -750,7 +823,7 @@ export function Metas() {
             <div className="mt-6">
               <EmptyState
                 title="Nenhuma matricula pendente"
-                description="As matriculas do mes selecionado ja possuem vendedor atribuido."
+                description="As matriculas do recorte atual ja possuem vendedor atribuido."
               />
             </div>
           ) : (
@@ -761,10 +834,10 @@ export function Metas() {
                     <div className="space-y-1">
                       <p className="font-semibold text-slate-950">{titleize(row.aluno)}</p>
                       <p className="text-sm text-slate-500">
-                        {titleize(row.curso)} • {titleize(row.filial)} • {formatDateBR(row.data_baixa_do_pagamento)}
+                        {titleize(row.curso)} - {titleize(row.filial)} - {formatDateBR(row.data_baixa_do_pagamento)}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {isProuni(row) ? 'PROUNI' : 'Normal'} • {titleize(row.tipo_de_ingresso)}
+                        {isProuni(row) ? 'PROUNI' : 'Normal'} - {titleize(row.tipo_de_ingresso)}
                       </p>
                     </div>
 
@@ -777,7 +850,7 @@ export function Metas() {
                             [row.id]: event.target.value as Seller,
                           }))
                         }
-                        disabled={!vendorColumnAvailable || savingRowId === row.id}
+                        disabled={!assignmentTableAvailable || savingRowId === row.id}
                         className="min-w-[170px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                       >
                         <option value="">Escolher vendedor</option>
@@ -791,7 +864,7 @@ export function Metas() {
                       <button
                         type="button"
                         onClick={() => void handleAssignSeller(row.id)}
-                        disabled={!vendorColumnAvailable || savingRowId === row.id}
+                        disabled={!assignmentTableAvailable || savingRowId === row.id}
                         className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Check className="h-4 w-4" />
@@ -818,8 +891,8 @@ export function Metas() {
                 <span className="mb-2 block text-sm font-medium text-slate-700">Nome do aluno</span>
                 <input
                   type="text"
-                  value={nameFilter}
-                  onChange={(event) => setNameFilter(event.target.value)}
+                  value={listNameFilter}
+                  onChange={(event) => setListNameFilter(event.target.value)}
                   placeholder="Ex.: Ana Claudia"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 />
@@ -845,10 +918,10 @@ export function Metas() {
                     <div className="space-y-1">
                       <p className="font-semibold text-slate-950">{titleize(row.aluno)}</p>
                       <p className="text-sm text-slate-500">
-                        {titleize(row.curso)} • {titleize(row.filial)} • {formatDateBR(row.data_baixa_do_pagamento)}
+                        {titleize(row.curso)} - {titleize(row.filial)} - {formatDateBR(row.data_baixa_do_pagamento)}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {titleize(row.vendedor)} • {isProuni(row) ? 'PROUNI' : 'Normal'}
+                        {titleize(row.vendedor)} - {isProuni(row) ? 'PROUNI' : 'Normal'}
                       </p>
                     </div>
 
@@ -861,7 +934,7 @@ export function Metas() {
                             [row.id]: event.target.value as Seller,
                           }))
                         }
-                        disabled={!vendorColumnAvailable || savingRowId === row.id}
+                        disabled={!assignmentTableAvailable || savingRowId === row.id}
                         className="min-w-[170px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                       >
                         {sellers.map((seller) => (
@@ -874,7 +947,7 @@ export function Metas() {
                       <button
                         type="button"
                         onClick={() => void handleAssignSeller(row.id, row.vendedor)}
-                        disabled={!vendorColumnAvailable || savingRowId === row.id}
+                        disabled={!assignmentTableAvailable || savingRowId === row.id}
                         className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Check className="h-4 w-4" />
