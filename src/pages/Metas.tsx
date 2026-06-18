@@ -46,6 +46,9 @@ interface SellerCardData {
   remainingProuni: number
   nextNormalLabel: string | null
   nextProuniLabel: string | null
+  normalGateReached: boolean
+  normalGateTarget: number
+  normalGateCurrent: number
 }
 
 const sellers: Seller[] = ['Tony', 'William', 'Gustavo', 'Jordana']
@@ -307,6 +310,10 @@ export function Metas() {
     [generalNormalStages, normalRows.length],
   )
 
+  const generalNormalGateTarget = normalGeneralCards[0]?.target ?? 0
+  const generalNormalGateReached =
+    generalNormalGateTarget > 0 ? normalRows.length >= generalNormalGateTarget : true
+
   const prouniGeneralCards = useMemo(
     () =>
       generalProuniStages.map((stage) => ({
@@ -324,10 +331,18 @@ export function Metas() {
       const sellerProuniRows = prouniRows.filter((row) => row.vendedor === seller)
       const totalCount = sellerNormalRows.length + sellerProuniRows.length
 
-      const normalResolution = resolveStage(sellerNormalRows.length, normalStages)
+      const normalResolution = generalNormalGateReached
+        ? resolveStage(sellerNormalRows.length, normalStages)
+        : {
+            achieved: null,
+            next: null,
+            remaining: Math.max(generalNormalGateTarget - normalRows.length, 0),
+          }
       const prouniResolution = resolveStage(sellerProuniRows.length, prouniStages)
       const payout =
-        buildPayout(sellerNormalRows.length, normalResolution.achieved) +
+        (generalNormalGateReached
+          ? buildPayout(sellerNormalRows.length, normalResolution.achieved)
+          : 0) +
         buildPayout(sellerProuniRows.length, prouniResolution.achieved)
 
       return {
@@ -340,11 +355,23 @@ export function Metas() {
         payout,
         remainingNormal: normalResolution.remaining,
         remainingProuni: prouniResolution.remaining,
-        nextNormalLabel: normalResolution.next?.label ?? null,
+        nextNormalLabel: generalNormalGateReached
+          ? normalResolution.next?.label ?? null
+          : 'Meta 01 geral',
         nextProuniLabel: prouniResolution.next?.label ?? null,
+        normalGateReached: generalNormalGateReached,
+        normalGateTarget: generalNormalGateTarget,
+        normalGateCurrent: normalRows.length,
       }
     })
-  }, [normalRows, prouniRows, normalStages, prouniStages])
+  }, [
+    generalNormalGateReached,
+    generalNormalGateTarget,
+    normalRows,
+    prouniRows,
+    normalStages,
+    prouniStages,
+  ])
 
   const assignmentBaseRows = useMemo(() => {
     const mergedRows = new Map<number, MatriculadoMetaRow>()
@@ -690,7 +717,9 @@ export function Metas() {
                     {formatNumberBR(card.normalCount)}
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    {card.normalStage
+                    {!card.normalGateReached
+                      ? `Liberamos a meta individual quando a Meta 01 geral chegar em ${formatNumberBR(card.normalGateTarget)}. Hoje estamos em ${formatNumberBR(card.normalGateCurrent)}.`
+                      : card.normalStage
                       ? `${card.normalStage.label} ativa - ${formatCurrencyBR(card.normalStage.reward)} por matricula`
                       : card.nextNormalLabel
                         ? `Faltam ${formatNumberBR(card.remainingNormal)} para ${card.nextNormalLabel}`
