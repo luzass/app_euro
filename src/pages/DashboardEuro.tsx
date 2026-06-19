@@ -109,6 +109,7 @@ interface FilialTableRow {
   enem: number
   prouni: number
   total: number
+  manualAdjustmentCount: number
 }
 
 interface ComparativeKpiCard {
@@ -129,6 +130,37 @@ const initialDateRange: DateRangeFilter = {
   startDate: '',
   endDate: '',
 }
+
+const manualTurmaRows = [
+  {
+    aluno: 'JULIA STEFANI SANTANA DE ARAUJO',
+    filial: 'Águas Claras',
+    curso: 'Biomedicina',
+    turno: 'Noturno',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'YASMIN DE CARVALHO DA SILVA',
+    filial: 'Águas Claras',
+    curso: 'Biomedicina',
+    turno: 'Noturno',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'LETICIA SANTOS DIAS',
+    filial: 'Águas Claras',
+    curso: 'Direito',
+    turno: 'Matutino',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'GRAZIELLE GOMES SILVA DE OLIVEIRA',
+    filial: 'Águas Claras',
+    curso: 'Fisioterapia',
+    turno: 'Matutino',
+    ingresso: 'PROUNI',
+  },
+] as const
 
 const activeBarColor = '#0f172a'
 const defaultBarColor = '#0ea5e9'
@@ -1721,6 +1753,7 @@ export function DashboardEuro() {
             enem: 0,
             prouni: 0,
             total: 0,
+            manualAdjustmentCount: 0,
           }
 
         if (ingresso === 'Vestibular') {
@@ -1731,6 +1764,31 @@ export function DashboardEuro() {
           currentRow.prouni += 1
         }
 
+        currentRow.total = currentRow.vestibular + currentRow.enem + currentRow.prouni
+        rowsMap.set(mapKey, currentRow)
+      })
+
+      manualTurmaRows.forEach((manualRow) => {
+        if (normalizeBranch(manualRow.filial) !== filial) {
+          return
+        }
+
+        const mapKey = `${manualRow.curso}-${manualRow.turno}`
+        const currentRow =
+          rowsMap.get(mapKey) ??
+          {
+            curso: manualRow.curso,
+            turno: manualRow.turno,
+            vestibular: 0,
+            enem: 0,
+            prouni: 0,
+            total: 0,
+            manualAdjustmentCount: 0,
+          }
+
+        currentRow.prouni += 1
+
+        currentRow.manualAdjustmentCount += 1
         currentRow.total = currentRow.vestibular + currentRow.enem + currentRow.prouni
         rowsMap.set(mapKey, currentRow)
       })
@@ -2205,6 +2263,7 @@ export function DashboardEuro() {
                               >
                                 <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
                                   {row.curso}
+                                  {row.manualAdjustmentCount > 0 ? ' *' : ''}
                                 </td>
                                 <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
                                   {row.turno}
@@ -2226,6 +2285,13 @@ export function DashboardEuro() {
                           </tbody>
                         </table>
                       </div>
+
+                      {table.rows.some((row) => row.manualAdjustmentCount > 0) ? (
+                        <p className="mt-4 text-xs leading-5 text-slate-500">
+                          * Inclui ajustes manuais fora da meta de vendedores. PROUNI referente a
+                          2026.1 com matricula realizada apenas em 2026.2.
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
