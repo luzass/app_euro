@@ -112,6 +112,17 @@ interface FilialTableRow {
   manualAdjustmentCount: number
 }
 
+interface ManualMatriculadoPrepared {
+  aluno: string
+  dateKey: string
+  filialLabel: string
+  cursoLabel: string
+  turnoLabel: string
+  ingressoLabel: string
+  statusLabel: string
+  contratoLabel: string
+}
+
 interface ComparativeKpiCard {
   title: string
   previousValue: string
@@ -1159,6 +1170,21 @@ export function DashboardEuro() {
     [matriculados20252Rows],
   )
 
+  const manualMatriculadosPrepared = useMemo<ManualMatriculadoPrepared[]>(
+    () =>
+      manualTurmaRows.map((row) => ({
+        aluno: row.aluno,
+        dateKey: '',
+        filialLabel: normalizeBranch(row.filial),
+        cursoLabel: titleize(row.curso),
+        turnoLabel: titleize(row.turno),
+        ingressoLabel: row.ingresso,
+        statusLabel: 'Nao informado',
+        contratoLabel: 'Nao informado',
+      })),
+    [],
+  )
+
   const inscritosFiltered = useMemo(
     () =>
       inscritosPrepared.filter((row) => {
@@ -1227,6 +1253,42 @@ export function DashboardEuro() {
     [matriculadosDateRange, matriculadosPrepared, matriculadosSelections],
   )
 
+  const manualMatriculadosFiltered = useMemo(
+    () =>
+      manualMatriculadosPrepared.filter((row) => {
+        if (!applyDateRange(row.dateKey, matriculadosDateRange)) {
+          return false
+        }
+
+        if (matriculadosSelections.filial && row.filialLabel !== matriculadosSelections.filial) {
+          return false
+        }
+
+        if (matriculadosSelections.curso && row.cursoLabel !== matriculadosSelections.curso) {
+          return false
+        }
+
+        if (matriculadosSelections.ingresso && row.ingressoLabel !== matriculadosSelections.ingresso) {
+          return false
+        }
+
+        if (matriculadosSelections.turno && row.turnoLabel !== matriculadosSelections.turno) {
+          return false
+        }
+
+        if (matriculadosSelections.contrato && row.contratoLabel !== matriculadosSelections.contrato) {
+          return false
+        }
+
+        if (matriculadosSelections.status && row.statusLabel !== matriculadosSelections.status) {
+          return false
+        }
+
+        return true
+      }),
+    [manualMatriculadosPrepared, matriculadosDateRange, matriculadosSelections],
+  )
+
   const inscritosReferenceDate = useMemo(() => getLatestDate(inscritosFiltered), [inscritosFiltered])
   const matriculadosReferenceDate = useMemo(() => getPreviousDayDateKey(), [])
 
@@ -1238,6 +1300,24 @@ export function DashboardEuro() {
   const matriculadosTodayRows = useMemo(
     () => matriculadosFiltered.filter((row) => row.dateKey === matriculadosReferenceDate),
     [matriculadosFiltered, matriculadosReferenceDate],
+  )
+
+  const matriculadosGeraisComAjustes = useMemo(
+    () => [...matriculadosFiltered, ...manualMatriculadosFiltered],
+    [manualMatriculadosFiltered, matriculadosFiltered],
+  )
+
+  const matriculadosGeraisComMedicina = useMemo(
+    () => matriculadosFiltered,
+    [matriculadosFiltered],
+  )
+
+  const matriculadosGeraisComReadmissao = useMemo(
+    () => [
+      ...matriculadosFiltered.filter((row) => row.cursoLabel !== 'Medicina'),
+      ...manualMatriculadosFiltered,
+    ],
+    [manualMatriculadosFiltered, matriculadosFiltered],
   )
 
   const inscritosCards = useMemo(
@@ -1309,25 +1389,69 @@ export function DashboardEuro() {
       },
       {
         title: 'Matriculas no geral',
-        value: formatNumberBR(matriculadosFiltered.length),
-        helperText: 'Total filtrado de calouros.',
+        value: formatNumberBR(matriculadosGeraisComAjustes.length),
+        helperText: 'Total de calouros com os ajustes manuais da formacao de turma.',
       },
       {
         title: 'Matriculas gerais - Asa Sul',
         value: formatNumberBR(
-          matriculadosFiltered.filter((row) => row.filialLabel === 'Asa Sul').length,
+          matriculadosGeraisComAjustes.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
         helperText: 'Volume acumulado da filial Asa Sul.',
       },
       {
         title: 'Matriculas gerais - Águas Claras',
         value: formatNumberBR(
-          matriculadosFiltered.filter((row) => row.filialLabel === 'Águas Claras').length,
+          matriculadosGeraisComAjustes.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
         helperText: 'Volume acumulado da filial Águas Claras.',
       },
+      {
+        title: 'Matriculados + Medicina',
+        value: formatNumberBR(matriculadosGeraisComMedicina.length),
+        helperText: 'Base geral incluindo todos os cursos da captacao atual.',
+      },
+      {
+        title: 'Matriculados + Medicina - Asa Sul',
+        value: formatNumberBR(
+          matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Asa Sul').length,
+        ),
+        helperText: 'Recorte da filial Asa Sul com todos os cursos.',
+      },
+      {
+        title: 'Matriculados + Medicina - Águas Claras',
+        value: formatNumberBR(
+          matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Águas Claras').length,
+        ),
+        helperText: 'Recorte da filial Águas Claras com todos os cursos.',
+      },
+      {
+        title: 'Matriculados + PROUNI 26.1 (Readmissao)',
+        value: formatNumberBR(matriculadosGeraisComReadmissao.length),
+        helperText: 'Base sem Medicina, somando os ajustes manuais de PROUNI 26.1.',
+      },
+      {
+        title: 'Matriculados + PROUNI 26.1 - Asa Sul',
+        value: formatNumberBR(
+          matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Asa Sul').length,
+        ),
+        helperText: 'Recorte da filial Asa Sul sem Medicina e com ajustes manuais.',
+      },
+      {
+        title: 'Matriculados + PROUNI 26.1 - Águas Claras',
+        value: formatNumberBR(
+          matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Águas Claras').length,
+        ),
+        helperText: 'Recorte da filial Águas Claras sem Medicina e com ajustes manuais.',
+      },
     ],
-    [matriculadosFiltered, matriculadosReferenceDate, matriculadosTodayRows],
+    [
+      matriculadosGeraisComAjustes,
+      matriculadosGeraisComMedicina,
+      matriculadosGeraisComReadmissao,
+      matriculadosReferenceDate,
+      matriculadosTodayRows,
+    ],
   )
 
   const inscritosCharts = useMemo(
@@ -1768,17 +1892,17 @@ export function DashboardEuro() {
         rowsMap.set(mapKey, currentRow)
       })
 
-      manualTurmaRows.forEach((manualRow) => {
-        if (normalizeBranch(manualRow.filial) !== filial) {
+      manualMatriculadosFiltered.forEach((manualRow) => {
+        if (manualRow.filialLabel !== filial) {
           return
         }
 
-        const mapKey = `${manualRow.curso}-${manualRow.turno}`
+        const mapKey = `${manualRow.cursoLabel}-${manualRow.turnoLabel}`
         const currentRow =
           rowsMap.get(mapKey) ??
           {
-            curso: manualRow.curso,
-            turno: manualRow.turno,
+            curso: manualRow.cursoLabel,
+            turno: manualRow.turnoLabel,
             vestibular: 0,
             enem: 0,
             prouni: 0,
@@ -1806,7 +1930,7 @@ export function DashboardEuro() {
       asaSul: aggregateByFilial('Asa Sul'),
       aguasClaras: aggregateByFilial('Águas Claras'),
     }
-  }, [matriculadosFiltered])
+  }, [manualMatriculadosFiltered, matriculadosFiltered])
 
   const inscritosActiveFilters = useMemo(
     () =>
@@ -2283,6 +2407,38 @@ export function DashboardEuro() {
                               </tr>
                             ))}
                           </tbody>
+                          <tfoot>
+                            <tr className="bg-slate-950 text-white">
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">Total</td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">-</td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {formatNumberBR(
+                                  table.rows.reduce(
+                                    (accumulator, row) => accumulator + row.vestibular,
+                                    0,
+                                  ),
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {formatNumberBR(
+                                  table.rows.reduce((accumulator, row) => accumulator + row.enem, 0),
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {formatNumberBR(
+                                  table.rows.reduce(
+                                    (accumulator, row) => accumulator + row.prouni,
+                                    0,
+                                  ),
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {formatNumberBR(
+                                  table.rows.reduce((accumulator, row) => accumulator + row.total, 0),
+                                )}
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
 
