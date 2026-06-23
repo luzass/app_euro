@@ -346,6 +346,10 @@ function normalizeMatriculaIngresso(value?: string | null) {
   return titleize(value)
 }
 
+function isMedicineCourse(value?: string | null) {
+  return normalizeString(value) === 'MEDICINA'
+}
+
 function normalizeInscricaoStageDisplay(value?: string | null) {
   const etapaNormalizada = normalizeString(value)
 
@@ -1419,20 +1423,22 @@ export function DashboardEuro() {
     [manualMatriculadosFiltered, matriculadosFiltered],
   )
 
+  const matriculadosGerais20262 = useMemo(
+    () => matriculadosFiltered,
+    [matriculadosFiltered],
+  )
+
   const matriculadosGeraisComMedicina = useMemo(
     () => [
-      ...matriculadosFiltered.filter((row) => row.cursoLabel === 'Medicina'),
-      ...manualMatriculadosFiltered.filter((row) => row.cursoLabel === 'Medicina'),
+      ...matriculadosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
+      ...manualMatriculadosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
     ],
     [manualMatriculadosFiltered, matriculadosFiltered],
   )
 
   const matriculadosGeraisComReadmissao = useMemo(
-    () => [
-      ...matriculadosFiltered.filter((row) => row.cursoLabel !== 'Medicina'),
-      ...manualMatriculadosFiltered.filter((row) => row.cursoLabel !== 'Medicina'),
-    ],
-    [manualMatriculadosFiltered, matriculadosFiltered],
+    () => manualMatriculadosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
+    [manualMatriculadosFiltered],
   )
 
   const inscritosCards = useMemo(
@@ -1505,63 +1511,68 @@ export function DashboardEuro() {
       {
         title: 'Matriculas no geral',
         value: formatNumberBR(matriculadosGeraisComAjustes.length),
-        helperText: 'Total de calouros com os ajustes manuais da formacao de turma.',
+        helperText: `${formatNumberBR(matriculadosGeraisComMedicina.length)} matriculados Medicina.`,
       },
       {
         title: 'Matriculas gerais - Asa Sul',
         value: formatNumberBR(
           matriculadosGeraisComAjustes.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Volume acumulado da filial Asa Sul.',
+        helperText: `${formatNumberBR(
+          matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Asa Sul').length,
+        )} matriculados Medicina.`,
       },
       {
         title: 'Matriculas gerais - Águas Claras',
         value: formatNumberBR(
           matriculadosGeraisComAjustes.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Volume acumulado da filial Águas Claras.',
-      },
-      {
-        title: 'Matriculados Medicina',
-        value: formatNumberBR(matriculadosGeraisComMedicina.length),
-        helperText: 'Somente matriculas do curso de Medicina.',
-      },
-      {
-        title: 'Matriculados Medicina - Asa Sul',
-        value: formatNumberBR(
-          matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Asa Sul').length,
-        ),
-        helperText: 'Recorte da filial Asa Sul somente para Medicina.',
-      },
-      {
-        title: 'Matriculados Medicina - Águas Claras',
-        value: formatNumberBR(
+        helperText: `${formatNumberBR(
           matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Águas Claras').length,
+        )} matriculados Medicina.`,
+      },
+      {
+        title: 'Matriculados 26.2',
+        value: formatNumberBR(matriculadosGerais20262.length),
+        helperText: 'Base 26.2 sem os ajustes manuais de PROUNI 26.1.',
+      },
+      {
+        title: 'Matriculados 26.2 - Asa Sul',
+        value: formatNumberBR(
+          matriculadosGerais20262.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Recorte da filial Águas Claras somente para Medicina.',
+        helperText: 'Base 26.2 da filial Asa Sul sem os ajustes manuais.',
+      },
+      {
+        title: 'Matriculados 26.2 - Águas Claras',
+        value: formatNumberBR(
+          matriculadosGerais20262.filter((row) => row.filialLabel === 'Águas Claras').length,
+        ),
+        helperText: 'Base 26.2 da filial Águas Claras sem os ajustes manuais.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 (Readmissao)',
         value: formatNumberBR(matriculadosGeraisComReadmissao.length),
-        helperText: 'Base sem Medicina, somando os ajustes manuais de PROUNI 26.1.',
+        helperText: 'Somente os ajustes manuais de PROUNI 26.1.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 - Asa Sul',
         value: formatNumberBR(
           matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Recorte da filial Asa Sul sem Medicina e com ajustes manuais.',
+        helperText: 'Somente os ajustes manuais de PROUNI 26.1 na filial Asa Sul.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 - Águas Claras',
         value: formatNumberBR(
           matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Recorte da filial Águas Claras sem Medicina e com ajustes manuais.',
+        helperText: 'Somente os ajustes manuais de PROUNI 26.1 na filial Águas Claras.',
       },
     ],
     [
       matriculadosGeraisComAjustes,
+      matriculadosGerais20262,
       matriculadosGeraisComMedicina,
       matriculadosGeraisComReadmissao,
       matriculadosReferenceDate,
