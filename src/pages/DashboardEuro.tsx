@@ -1424,7 +1424,7 @@ export function DashboardEuro() {
   )
 
   const matriculadosGerais20262 = useMemo(
-    () => matriculadosFiltered,
+    () => matriculadosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
     [matriculadosFiltered],
   )
 
@@ -1534,21 +1534,21 @@ export function DashboardEuro() {
       {
         title: 'Matriculados 26.2',
         value: formatNumberBR(matriculadosGerais20262.length),
-        helperText: 'Base 26.2 sem os ajustes manuais de PROUNI 26.1.',
+        helperText: 'Base 26.2 sem Medicina e sem os ajustes manuais de PROUNI 26.1.',
       },
       {
         title: 'Matriculados 26.2 - Asa Sul',
         value: formatNumberBR(
           matriculadosGerais20262.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Base 26.2 da filial Asa Sul sem os ajustes manuais.',
+        helperText: 'Base 26.2 da filial Asa Sul sem Medicina e sem os ajustes manuais.',
       },
       {
         title: 'Matriculados 26.2 - Águas Claras',
         value: formatNumberBR(
           matriculadosGerais20262.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Base 26.2 da filial Águas Claras sem os ajustes manuais.',
+        helperText: 'Base 26.2 da filial Águas Claras sem Medicina e sem os ajustes manuais.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 (Readmissao)',
