@@ -234,6 +234,55 @@ const manualTurmaRows = [
     turno: 'Matutino',
     ingresso: 'PROUNI',
   },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 01',
+    filial: 'Asa Sul',
+    curso: 'Medicina',
+    turno: 'Nao informado',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 02',
+    filial: 'Asa Sul',
+    curso: 'Medicina',
+    turno: 'Nao informado',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 03',
+    filial: 'Asa Sul',
+    curso: 'Medicina',
+    turno: 'Nao informado',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 04',
+    filial: 'Asa Sul',
+    curso: 'Medicina',
+    turno: 'Nao informado',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 05',
+    filial: 'Asa Sul',
+    curso: 'Medicina',
+    turno: 'Nao informado',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - ENFERMAGEM MATUTINO ASA SUL 01',
+    filial: 'Asa Sul',
+    curso: 'Enfermagem',
+    turno: 'Matutino',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA INTEGRAL ASA SUL 01',
+    filial: 'Asa Sul',
+    curso: 'Odontologia',
+    turno: 'Integral',
+    ingresso: 'PROUNI',
+  },
 ] as const
 
 const activeBarColor = '#0f172a'
@@ -1371,14 +1420,14 @@ export function DashboardEuro() {
   )
 
   const matriculadosGeraisComMedicina = useMemo(
-    () => matriculadosFiltered,
-    [matriculadosFiltered],
+    () => [...matriculadosFiltered, ...manualMatriculadosFiltered],
+    [manualMatriculadosFiltered, matriculadosFiltered],
   )
 
   const matriculadosGeraisComReadmissao = useMemo(
     () => [
       ...matriculadosFiltered.filter((row) => row.cursoLabel !== 'Medicina'),
-      ...manualMatriculadosFiltered,
+      ...manualMatriculadosFiltered.filter((row) => row.cursoLabel !== 'Medicina'),
     ],
     [manualMatriculadosFiltered, matriculadosFiltered],
   )
