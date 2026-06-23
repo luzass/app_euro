@@ -1420,7 +1420,10 @@ export function DashboardEuro() {
   )
 
   const matriculadosGeraisComMedicina = useMemo(
-    () => [...matriculadosFiltered, ...manualMatriculadosFiltered],
+    () => [
+      ...matriculadosFiltered.filter((row) => row.cursoLabel === 'Medicina'),
+      ...manualMatriculadosFiltered.filter((row) => row.cursoLabel === 'Medicina'),
+    ],
     [manualMatriculadosFiltered, matriculadosFiltered],
   )
 
@@ -1519,23 +1522,23 @@ export function DashboardEuro() {
         helperText: 'Volume acumulado da filial Águas Claras.',
       },
       {
-        title: 'Matriculados + Medicina',
+        title: 'Matriculados Medicina',
         value: formatNumberBR(matriculadosGeraisComMedicina.length),
-        helperText: 'Base geral incluindo todos os cursos da captacao atual.',
+        helperText: 'Somente matriculas do curso de Medicina.',
       },
       {
-        title: 'Matriculados + Medicina - Asa Sul',
+        title: 'Matriculados Medicina - Asa Sul',
         value: formatNumberBR(
           matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Recorte da filial Asa Sul com todos os cursos.',
+        helperText: 'Recorte da filial Asa Sul somente para Medicina.',
       },
       {
-        title: 'Matriculados + Medicina - Águas Claras',
+        title: 'Matriculados Medicina - Águas Claras',
         value: formatNumberBR(
           matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Recorte da filial Águas Claras com todos os cursos.',
+        helperText: 'Recorte da filial Águas Claras somente para Medicina.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 (Readmissao)',
