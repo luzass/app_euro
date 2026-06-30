@@ -1629,16 +1629,22 @@ export function DashboardEuro() {
   const comparativoMatriculados20252 = useMemo(
     () =>
       comparativoBranchFilter === 'Todas'
-        ? matriculados20252Prepared
-        : matriculados20252Prepared.filter((row) => row.filialLabel === comparativoBranchFilter),
+        ? matriculados20252Prepared.filter((row) => !isMedicineCourse(row.cursoLabel))
+        : matriculados20252Prepared.filter(
+            (row) =>
+              row.filialLabel === comparativoBranchFilter && !isMedicineCourse(row.cursoLabel),
+          ),
     [comparativoBranchFilter, matriculados20252Prepared],
   )
 
   const comparativoMatriculados20262 = useMemo(
     () =>
       comparativoBranchFilter === 'Todas'
-        ? matriculadosPrepared
-        : matriculadosPrepared.filter((row) => row.filialLabel === comparativoBranchFilter),
+        ? matriculadosPrepared.filter((row) => !isMedicineCourse(row.cursoLabel))
+        : matriculadosPrepared.filter(
+            (row) =>
+              row.filialLabel === comparativoBranchFilter && !isMedicineCourse(row.cursoLabel),
+          ),
     [comparativoBranchFilter, matriculadosPrepared],
   )
 
@@ -1818,7 +1824,7 @@ export function DashboardEuro() {
         title: 'Matriculados',
         previousValue: formatNumberBR(matriculados2025),
         currentValue: formatNumberBR(matriculados2026),
-        helperText: `${formatDeltaLabel(matriculados2026, matriculados2025)} vs 2025.2. Somente calouros.`,
+        helperText: `${formatDeltaLabel(matriculados2026, matriculados2025)} vs 2025.2. Somente calouros, exceto Medicina.`,
       },
       {
         title: 'Conversao',
@@ -1840,13 +1846,13 @@ export function DashboardEuro() {
         title: 'Contratos Ativos',
         previousValue: formatNumberBR(comparativoContratos[0]?.ativos ?? 0),
         currentValue: formatNumberBR(comparativoContratos[1]?.ativos ?? 0),
-        helperText: 'Somente calouros.',
+        helperText: 'Somente calouros, exceto Medicina.',
       },
       {
         title: 'Contratos Cancelados',
         previousValue: formatNumberBR(comparativoContratos[0]?.cancelados ?? 0),
         currentValue: formatNumberBR(comparativoContratos[1]?.cancelados ?? 0),
-        helperText: 'Somente calouros.',
+        helperText: 'Somente calouros, exceto Medicina.',
       },
     ],
     [comparativoContratos],
@@ -2665,7 +2671,7 @@ export function DashboardEuro() {
 
               <DashboardSection
                 title="Comparativo por semestre"
-                description="Leitura direta de 2025.2 vs 2026.2 entre inscritos e matriculados."
+                description="Leitura direta de 2025.2 vs 2026.2 entre inscritos e matriculados, usando somente calouros e excluindo Medicina."
               >
                 {viewportWidth < 640 ? (
                   <ComparativeList
@@ -2881,7 +2887,7 @@ export function DashboardEuro() {
 
                 <DashboardSection
                   title="Cursos com mais matriculas"
-                  description="Top cursos de calouros para comparar a forca de fechamento entre 2025.2 e 2026.2."
+                  description="Top cursos de calouros para comparar a forca de fechamento entre 2025.2 e 2026.2, exceto Medicina."
                 >
                   {viewportWidth < 640 ? (
                     <ComparativeList
