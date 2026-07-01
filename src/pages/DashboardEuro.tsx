@@ -172,20 +172,6 @@ const manualTurmaRows = [
     ingresso: 'PROUNI',
   },
   {
-    aluno: 'AJUSTE MANUAL PROUNI - DIREITO MATUTINO 03',
-    filial: 'Águas Claras',
-    curso: 'Direito',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - DIREITO MATUTINO 04',
-    filial: 'Águas Claras',
-    curso: 'Direito',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
     aluno: 'GRAZIELLE GOMES SILVA DE OLIVEIRA',
     filial: 'Águas Claras',
     curso: 'Fisioterapia',
@@ -201,6 +187,13 @@ const manualTurmaRows = [
   },
   {
     aluno: 'AJUSTE MANUAL PROUNI - FISIOTERAPIA NOTURNO 01',
+    filial: 'Águas Claras',
+    curso: 'Fisioterapia',
+    turno: 'Noturno',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - FISIOTERAPIA NOTURNO 02',
     filial: 'Águas Claras',
     curso: 'Fisioterapia',
     turno: 'Noturno',
@@ -228,7 +221,28 @@ const manualTurmaRows = [
     ingresso: 'PROUNI',
   },
   {
+    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 04',
+    filial: 'Águas Claras',
+    curso: 'Odontologia',
+    turno: 'Noturno',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 05',
+    filial: 'Águas Claras',
+    curso: 'Odontologia',
+    turno: 'Noturno',
+    ingresso: 'PROUNI',
+  },
+  {
     aluno: 'AJUSTE MANUAL PROUNI - PSICOLOGIA MATUTINO 01',
+    filial: 'Águas Claras',
+    curso: 'Psicologia',
+    turno: 'Matutino',
+    ingresso: 'PROUNI',
+  },
+  {
+    aluno: 'AJUSTE MANUAL PROUNI - PSICOLOGIA MATUTINO 02',
     filial: 'Águas Claras',
     curso: 'Psicologia',
     turno: 'Matutino',
