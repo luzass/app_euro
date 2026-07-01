@@ -1310,7 +1310,7 @@ export function DashboardEuro() {
         turnoLabel: titleize(row.turno),
         ingressoLabel: row.ingresso,
         statusLabel: 'Nao informado',
-        contratoLabel: 'Nao informado',
+        contratoLabel: 'Ativo',
       })),
     [],
   )
@@ -1428,31 +1428,44 @@ export function DashboardEuro() {
   )
 
   const matriculadosTodayRows = useMemo(
-    () => matriculadosFiltered.filter((row) => row.dateKey === matriculadosReferenceDate),
+    () =>
+      matriculadosFiltered.filter(
+        (row) => row.dateKey === matriculadosReferenceDate && row.contratoLabel === 'Ativo',
+      ),
     [matriculadosFiltered, matriculadosReferenceDate],
   )
 
+  const matriculadosAtivosFiltered = useMemo(
+    () => matriculadosFiltered.filter((row) => row.contratoLabel === 'Ativo'),
+    [matriculadosFiltered],
+  )
+
+  const manualMatriculadosAtivosFiltered = useMemo(
+    () => manualMatriculadosFiltered.filter((row) => row.contratoLabel === 'Ativo'),
+    [manualMatriculadosFiltered],
+  )
+
   const matriculadosGeraisComAjustes = useMemo(
-    () => [...matriculadosFiltered, ...manualMatriculadosFiltered],
-    [manualMatriculadosFiltered, matriculadosFiltered],
+    () => [...matriculadosAtivosFiltered, ...manualMatriculadosAtivosFiltered],
+    [manualMatriculadosAtivosFiltered, matriculadosAtivosFiltered],
   )
 
   const matriculadosGerais20262 = useMemo(
-    () => matriculadosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
-    [matriculadosFiltered],
+    () => matriculadosAtivosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
+    [matriculadosAtivosFiltered],
   )
 
   const matriculadosGeraisComMedicina = useMemo(
     () => [
-      ...matriculadosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
-      ...manualMatriculadosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
+      ...matriculadosAtivosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
+      ...manualMatriculadosAtivosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
     ],
-    [manualMatriculadosFiltered, matriculadosFiltered],
+    [manualMatriculadosAtivosFiltered, matriculadosAtivosFiltered],
   )
 
   const matriculadosGeraisComReadmissao = useMemo(
-    () => manualMatriculadosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
-    [manualMatriculadosFiltered],
+    () => manualMatriculadosAtivosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
+    [manualMatriculadosAtivosFiltered],
   )
 
   const inscritosCards = useMemo(
@@ -1513,19 +1526,19 @@ export function DashboardEuro() {
         value: formatNumberBR(
           matriculadosTodayRows.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Somente calouros.',
+        helperText: 'Somente calouros com contrato ativo.',
       },
       {
         title: 'Matriculas do dia - Águas Claras',
         value: formatNumberBR(
           matriculadosTodayRows.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Somente calouros.',
+        helperText: 'Somente calouros com contrato ativo.',
       },
       {
         title: 'Matriculas no geral',
         value: formatNumberBR(matriculadosGeraisComAjustes.length),
-        helperText: `${formatNumberBR(matriculadosGeraisComMedicina.length)} matriculados Medicina.`,
+        helperText: `${formatNumberBR(matriculadosGeraisComMedicina.length)} matriculados Medicina com contrato ativo.`,
       },
       {
         title: 'Matriculas gerais - Asa Sul',
@@ -1534,7 +1547,7 @@ export function DashboardEuro() {
         ),
         helperText: `${formatNumberBR(
           matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Asa Sul').length,
-        )} matriculados Medicina.`,
+        )} matriculados Medicina com contrato ativo.`,
       },
       {
         title: 'Matriculas gerais - Águas Claras',
@@ -1543,45 +1556,45 @@ export function DashboardEuro() {
         ),
         helperText: `${formatNumberBR(
           matriculadosGeraisComMedicina.filter((row) => row.filialLabel === 'Águas Claras').length,
-        )} matriculados Medicina.`,
+        )} matriculados Medicina com contrato ativo.`,
       },
       {
         title: 'Matriculados 26.2',
         value: formatNumberBR(matriculadosGerais20262.length),
-        helperText: 'Base 26.2 sem Medicina e sem os ajustes manuais de PROUNI 26.1.',
+        helperText: 'Base 26.2 com contrato ativo, sem Medicina e sem os ajustes manuais de PROUNI 26.1.',
       },
       {
         title: 'Matriculados 26.2 - Asa Sul',
         value: formatNumberBR(
           matriculadosGerais20262.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Base 26.2 da filial Asa Sul sem Medicina e sem os ajustes manuais.',
+        helperText: 'Base 26.2 da filial Asa Sul com contrato ativo, sem Medicina e sem os ajustes manuais.',
       },
       {
         title: 'Matriculados 26.2 - Águas Claras',
         value: formatNumberBR(
           matriculadosGerais20262.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Base 26.2 da filial Águas Claras sem Medicina e sem os ajustes manuais.',
+        helperText: 'Base 26.2 da filial Águas Claras com contrato ativo, sem Medicina e sem os ajustes manuais.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 (Readmissao)',
         value: formatNumberBR(matriculadosGeraisComReadmissao.length),
-        helperText: 'Somente os ajustes manuais de PROUNI 26.1.',
+        helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 - Asa Sul',
         value: formatNumberBR(
           matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Somente os ajustes manuais de PROUNI 26.1 na filial Asa Sul.',
+        helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo na filial Asa Sul.',
       },
       {
         title: 'Matriculados + PROUNI 26.1 - Águas Claras',
         value: formatNumberBR(
           matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Somente os ajustes manuais de PROUNI 26.1 na filial Águas Claras.',
+        helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo na filial Águas Claras.',
       },
     ],
     [
@@ -2003,7 +2016,7 @@ export function DashboardEuro() {
     const aggregateByFilial = (filial: 'Asa Sul' | 'Águas Claras') => {
       const rowsMap = new Map<string, FilialTableRow>()
 
-      matriculadosFiltered.forEach((row) => {
+      matriculadosAtivosFiltered.forEach((row) => {
         if (row.filialLabel !== filial) {
           return
         }
@@ -2038,7 +2051,7 @@ export function DashboardEuro() {
         rowsMap.set(mapKey, currentRow)
       })
 
-      manualMatriculadosFiltered.forEach((manualRow) => {
+      manualMatriculadosAtivosFiltered.forEach((manualRow) => {
         if (manualRow.filialLabel !== filial) {
           return
         }
@@ -2076,7 +2089,7 @@ export function DashboardEuro() {
       asaSul: aggregateByFilial('Asa Sul'),
       aguasClaras: aggregateByFilial('Águas Claras'),
     }
-  }, [manualMatriculadosFiltered, matriculadosFiltered])
+  }, [manualMatriculadosAtivosFiltered, matriculadosAtivosFiltered])
 
   const inscritosActiveFilters = useMemo(
     () =>
@@ -2496,7 +2509,7 @@ export function DashboardEuro() {
 
               <DashboardSection
                 title="Tabela por filial"
-                description="Duas visoes separadas por filial, contando apenas Vestibular, ENEM e PROUNI para os calouros."
+                description="Duas visoes separadas por filial, contando apenas Vestibular, ENEM e PROUNI para os calouros com contrato ativo."
               >
                 <div className="space-y-6">
                   {[
