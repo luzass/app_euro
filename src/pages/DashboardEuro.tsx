@@ -331,8 +331,8 @@ function normalizeBranch(value?: string | null) {
     return 'Asa Sul'
   }
 
-  if (normalized.includes('ÁGUAS CLARAS')) {
-    return 'Águas Claras'
+  if (normalized.includes('AGUAS CLARAS') || normalized.includes('GUAS CLARAS')) {
+    return '?guas Claras'
   }
 
   return titleize(value)
@@ -605,6 +605,49 @@ function applyDateRange(dateKey: string, filters: DateRangeFilter) {
 
 function getLatestDate(rows: Array<{ dateKey: string }>) {
   return rows.reduce((latest, row) => (row.dateKey > latest ? row.dateKey : latest), '')
+}
+
+async function fetchAllRows<T>(tableName: string, orderColumn: string) {
+  if (!supabase) {
+    return {
+      data: null as T[] | null,
+      error: new Error('Supabase indisponivel.'),
+    }
+  }
+
+  const pageSize = 1000
+  const allRows: T[] = []
+  let from = 0
+
+  while (true) {
+    const tableClient = supabase.from(tableName as never) as any
+
+    const { data, error } = await tableClient
+      .select('*')
+      .order(orderColumn, { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) {
+      return {
+        data: null as T[] | null,
+        error,
+      }
+    }
+
+    const batch = (data as T[] | null) ?? []
+    allRows.push(...batch)
+
+    if (batch.length < pageSize) {
+      break
+    }
+
+    from += pageSize
+  }
+
+  return {
+    data: allRows,
+    error: null,
+  }
 }
 
 function getMonthDayKey(dateKey: string) {
@@ -1193,16 +1236,10 @@ export function DashboardEuro() {
       inscritos20252Response,
       matriculados20252Response,
     ] = await Promise.all([
-      supabase.from('inscritos_20262').select('*').order('data_inscricao', { ascending: false }),
-      supabase
-        .from('matriculados_20262')
-        .select('*')
-        .order('data_baixa_do_pagamento', { ascending: false }),
-      supabase.from('inscritos_20252').select('*').order('data_inscricao', { ascending: false }),
-      supabase
-        .from('matriculados_20252')
-        .select('*')
-        .order('data_baixa_do_pagamento', { ascending: false }),
+      fetchAllRows<InscritoRow>('inscritos_20262', 'data_inscricao'),
+      fetchAllRows<MatriculadoRow>('matriculados_20262', 'data_baixa_do_pagamento'),
+      fetchAllRows<InscritoRow>('inscritos_20252', 'data_inscricao'),
+      fetchAllRows<MatriculadoRow>('matriculados_20252', 'data_baixa_do_pagamento'),
     ])
 
     if (
