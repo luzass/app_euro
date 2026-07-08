@@ -212,6 +212,48 @@ function buildPayout(count: number, stage: GoalStage | null) {
   return count * stage.reward
 }
 
+async function fetchAllRows<T>(selectClause: string) {
+  if (!supabase) {
+    return {
+      data: null as T[] | null,
+      error: new Error('Supabase indisponivel.'),
+    }
+  }
+
+  const pageSize = 1000
+  const allRows: T[] = []
+  let from = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('matriculados_20262')
+      .select(selectClause)
+      .order('data_baixa_do_pagamento', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) {
+      return {
+        data: null as T[] | null,
+        error,
+      }
+    }
+
+    const batch = (data as T[] | null) ?? []
+    allRows.push(...batch)
+
+    if (batch.length < pageSize) {
+      break
+    }
+
+    from += pageSize
+  }
+
+  return {
+    data: allRows,
+    error: null,
+  }
+}
+
 export function Metas() {
   const [rows, setRows] = useState<MatriculadoMetaRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -233,20 +275,14 @@ export function Metas() {
     setLoading(true)
     setError(null)
 
-    const { data, error: loadError } = await supabase
-      .from('matriculados_20262')
-      .select(
-        'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status, vendedor',
-      )
-      .order('data_baixa_do_pagamento', { ascending: false })
+    const { data, error: loadError } = await fetchAllRows<MatriculadoMetaRow>(
+      'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status, vendedor',
+    )
 
     if (loadError) {
-      const fallback = await supabase
-        .from('matriculados_20262')
-        .select(
-          'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status',
-        )
-        .order('data_baixa_do_pagamento', { ascending: false })
+      const fallback = await fetchAllRows<MatriculadoMetaRow>(
+        'id, aluno, cpf, curso, filial, turno, tipo_aluno, tipo_de_ingresso, data_baixa_do_pagamento, contrato, status',
+      )
 
       if (fallback.error) {
         setError(
