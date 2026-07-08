@@ -332,7 +332,7 @@ function normalizeBranch(value?: string | null) {
   }
 
   if (normalized.includes('AGUAS CLARAS') || normalized.includes('GUAS CLARAS')) {
-    return '?guas Claras'
+    return '\u00C1guas Claras'
   }
 
   return titleize(value)
