@@ -261,35 +261,43 @@ function normalizeProcessLabel(value?: string | null) {
     return 'Nao informado'
   }
 
-  const campus = normalizeCampus(decoded)
-  const semester = normalized.includes('2026.2')
-    ? '2026.2'
-    : normalized.includes('2026.1')
-      ? '2026.1'
-      : normalized.includes('2025.2')
-        ? '2025.2'
-        : ''
-
-  let base = titleize(decoded)
-
   if (
-    (normalized.includes('GRADUACAO') || normalized.includes('GRADU') || normalized.includes('2A')) &&
-    normalized.includes('2')
+    ((normalized.includes('GRADUACAO') || normalized.includes('GRADUA') || normalized.includes('2A')) &&
+      normalized.includes('2')) ||
+    normalized.includes('SEGUNDA GRADUACAO')
   ) {
-    base = '2a Graduacao'
-  } else if (normalized.includes('VESTIBULAR DIGITAL')) {
-    base = 'Vestibular Digital'
-  } else if (normalized.includes('NOTA ENEM')) {
-    base = 'Nota ENEM'
-  } else if (normalized.includes('TRANSFERENCIA EXTERNA') || normalized.includes('TRANSFERENCIA')) {
-    base = 'Transferencia Externa'
-  } else if (normalized.includes('REINGRESSO')) {
-    base = 'Reingresso'
-  } else if (normalized.includes('SEMIPRESENCIAIS') || normalized.includes('SEMIPRESENCIAL')) {
-    base = 'Semipresencial'
+    return '2a Graduacao'
   }
 
-  return [base, campus !== 'Nao informado' ? campus : '', semester].filter(Boolean).join(' - ')
+  if (normalized.includes('PROUNI')) {
+    return 'PROUNI'
+  }
+
+  if (normalized.includes('TRANSFERENCIA EXTERNA') || normalized.includes('TRANSFERENCIA')) {
+    return 'Transf. Externa'
+  }
+
+  if (normalized.includes('REINGRESSO')) {
+    return 'Reingresso'
+  }
+
+  if (normalized.includes('ENEM')) {
+    return 'ENEM'
+  }
+
+  if (normalized.includes('VESTIBULAR')) {
+    return 'Vestibular'
+  }
+
+  if (normalized.includes('SEMIPRESENCIAIS') || normalized.includes('SEMIPRESENCIAL')) {
+    return 'Semipresencial'
+  }
+
+  if (normalized.includes('EAD')) {
+    return 'EAD'
+  }
+
+  return titleize(decoded)
 }
 
 function buildCountData(rows: ActivityCrmPrepared[], getValue: (row: ActivityCrmPrepared) => string) {
@@ -463,7 +471,8 @@ function ChartCard({
   description: string
   data: CountDatum[]
 }) {
-  const chartHeight = Math.max(300, data.length * 58)
+  const chartHeight = Math.max(320, data.length * 58)
+  const viewportHeight = 420
 
   return (
     <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
@@ -475,32 +484,34 @@ function ChartCard({
           Sem dados para este grafico no recorte atual.
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden" style={{ height: chartHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={data}
-              layout="vertical"
-              margin={{ top: 4, right: 20, left: 12, bottom: 4 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-              <XAxis type="number" tick={{ fill: '#64748b', fontSize: 12 }} />
-              <YAxis
-                type="category"
-                dataKey="label"
-                width={156}
-                tick={<WrappedYAxisTick />}
-              />
-              <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-              <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]}>
-                <LabelList
-                  dataKey="value"
-                  position="right"
-                  formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                  className="fill-slate-700 text-xs font-semibold"
+        <div className="mt-6 overflow-y-auto pr-2" style={{ height: viewportHeight }}>
+          <div style={{ height: chartHeight }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data}
+                layout="vertical"
+                margin={{ top: 4, right: 20, left: 12, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                <XAxis type="number" tick={{ fill: '#64748b', fontSize: 12 }} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={156}
+                  tick={<WrappedYAxisTick />}
                 />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
+                <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]}>
+                  <LabelList
+                    dataKey="value"
+                    position="right"
+                    formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
+                    className="fill-slate-700 text-xs font-semibold"
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </section>
@@ -1235,11 +1246,6 @@ export function VisaoCrm() {
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
-                <span>Codigo da pessoa: {candidate.personCode}</span>
-                <span>CPF: {candidate.cpf || '--'}</span>
-                <span>E-mail: {candidate.email || '--'}</span>
-              </div>
             </article>
             ))}
           </section>
