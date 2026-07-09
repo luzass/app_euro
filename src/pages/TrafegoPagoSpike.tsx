@@ -1750,8 +1750,8 @@ export function TrafegoPagoSpike() {
             </ChartContainer>
           </section>
 
-          <section className="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
-            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <section className="grid items-stretch gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
+            <section className="h-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5">
                 <h3 className="text-lg font-semibold text-slate-950">Funil da campanha</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -1810,7 +1810,7 @@ export function TrafegoPagoSpike() {
               </div>
             </section>
 
-            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <section className="flex h-full min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5">
                 <h3 className="text-lg font-semibold text-slate-950">Tabela detalhada</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -1888,8 +1888,9 @@ export function TrafegoPagoSpike() {
                     })}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border-separate border-spacing-0 text-sm">
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <div className="h-full overflow-auto rounded-3xl border border-slate-200 bg-slate-50/60 pr-1">
+                    <table className="min-w-full border-separate border-spacing-0 text-sm">
                     <thead>
                       <tr>
                         {[
@@ -1907,7 +1908,7 @@ export function TrafegoPagoSpike() {
                         ].map((header) => (
                           <th
                             key={header}
-                            className="sticky top-0 whitespace-nowrap border-b border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-600"
+                            className="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-white px-4 py-3 text-left font-semibold text-slate-600"
                           >
                             {header}
                           </th>
@@ -1934,44 +1935,45 @@ export function TrafegoPagoSpike() {
 
                           return (
                             <tr key={String(row.id)} className="odd:bg-slate-50/70">
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatDateBR(row.data_inicio)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-900">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 font-medium text-slate-900">
                                 {formatCurrencyBR(valorUsado)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatNumberBR(impressoes)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatNumberBR(toNumber(row.alcance))}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatNumberBR(cliques)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatNumberBR(lpViews)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatNumberBR(leads)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatCurrencyBR(cpc)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatPercentBR(ctr)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatCurrencyBR(cpm)}
                               </td>
-                              <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
+                              <td className="whitespace-nowrap border-b border-slate-100 bg-white/70 px-4 py-3 text-slate-700">
                                 {formatCurrencyBR(custoPorLead)}
                               </td>
                             </tr>
                           )
                         })}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
               )}
             </section>
