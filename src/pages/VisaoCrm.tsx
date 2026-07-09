@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   ResponsiveContainer,
   Tooltip,
@@ -33,6 +34,10 @@ type CountDatum = {
   label: string
   value: number
 }
+
+type ChartFilterKey = 'campus' | 'process' | 'course' | 'activity'
+
+type ChartSelections = Record<ChartFilterKey, string[]>
 
 type ActivityCrmPrepared = {
   id: number
@@ -87,6 +92,13 @@ const initialFilters: FilterState = {
   campus: '',
   process: '',
   candidateName: '',
+}
+
+const initialChartSelections: ChartSelections = {
+  campus: [],
+  process: [],
+  course: [],
+  activity: [],
 }
 
 function normalizeString(value?: string | null) {
@@ -315,6 +327,30 @@ function buildCountData(rows: ActivityCrmPrepared[], getValue: (row: ActivityCrm
     .slice(0, 10)
 }
 
+function hasActiveChartSelections(selections: ChartSelections) {
+  return Object.values(selections).some((items) => items.length > 0)
+}
+
+function applyChartSelections(row: ActivityCrmPrepared, selections: ChartSelections) {
+  if (selections.campus.length > 0 && !selections.campus.includes(row.campusLabel)) {
+    return false
+  }
+
+  if (selections.process.length > 0 && !selections.process.includes(row.processLabel)) {
+    return false
+  }
+
+  if (selections.course.length > 0 && !selections.course.includes(row.courseLabel)) {
+    return false
+  }
+
+  if (selections.activity.length > 0 && !selections.activity.includes(row.activity)) {
+    return false
+  }
+
+  return true
+}
+
 function wrapAxisLabel(label: string, maxLineLength = 18, maxLines = 3) {
   if (!label) {
     return ['']
@@ -466,10 +502,16 @@ function ChartCard({
   title,
   description,
   data,
+  chartKey,
+  selectedKeys,
+  onSelect,
 }: {
   title: string
   description: string
   data: CountDatum[]
+  chartKey: ChartFilterKey
+  selectedKeys: string[]
+  onSelect: (chartKey: ChartFilterKey, label: string, accumulate: boolean) => void
 }) {
   const chartHeight = Math.max(320, data.length * 58)
   const viewportHeight = 420
@@ -501,7 +543,34 @@ function ChartCard({
                   tick={<WrappedYAxisTick />}
                 />
                 <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]}>
+                <Bar
+                  dataKey="value"
+                  radius={[0, 12, 12, 0]}
+                  cursor="pointer"
+                  onClick={(entry: CountDatum, _index: number, event: MouseEvent | KeyboardEvent | any) =>
+                    onSelect(
+                      chartKey,
+                      entry?.label ?? '',
+                      Boolean(
+                        event?.ctrlKey ||
+                          event?.metaKey ||
+                          event?.nativeEvent?.ctrlKey ||
+                          event?.nativeEvent?.metaKey,
+                      ),
+                    )
+                  }
+                >
+                  {data.map((entry) => {
+                    const isActive = selectedKeys.includes(entry.label)
+                    const hasSelection = selectedKeys.length > 0
+
+                    return (
+                      <Cell
+                        key={`${chartKey}-${entry.key}`}
+                        fill={isActive ? '#0f172a' : hasSelection ? '#7dd3fc' : '#0ea5e9'}
+                      />
+                    )
+                  })}
                   <LabelList
                     dataKey="value"
                     position="right"
@@ -667,6 +736,7 @@ export function VisaoCrm() {
   const [matriculadosRows, setMatriculadosRows] = useState<MatriculadoPrepared[]>([])
   const [filters, setFilters] = useState<FilterState>(initialFilters)
   const [cardFilters, setCardFilters] = useState<FilterState>(initialFilters)
+  const [chartSelections, setChartSelections] = useState<ChartSelections>(initialChartSelections)
   const [candidatePage, setCandidatePage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -796,8 +866,67 @@ export function VisaoCrm() {
   }, [sellerRows])
 
   const filteredActivityRows = useMemo(
-    () => sellerRows.filter((row) => applyFilters(row, filters)),
-    [filters, sellerRows],
+    () =>
+      sellerRows
+        .filter((row) => applyFilters(row, filters))
+        .filter((row) => applyChartSelections(row, chartSelections)),
+    [chartSelections, filters, sellerRows],
+  )
+
+  const handleChartSelection = (
+    chartKey: ChartFilterKey,
+    label: string,
+    accumulate: boolean,
+  ) => {
+    if (!label) {
+      return
+    }
+
+    setChartSelections((currentValue) => {
+      const currentItems = currentValue[chartKey]
+      const alreadySelected = currentItems.includes(label)
+
+      if (accumulate) {
+        return {
+          ...currentValue,
+          [chartKey]: alreadySelected
+            ? currentItems.filter((item) => item !== label)
+            : [...currentItems, label],
+        }
+      }
+
+      return {
+        ...currentValue,
+        [chartKey]: alreadySelected && currentItems.length === 1 ? [] : [label],
+      }
+    })
+  }
+
+  const activeChartFilters = useMemo(
+    () =>
+      [
+        ...chartSelections.campus.map((value) => ({
+          chartKey: 'campus' as const,
+          label: 'Campus',
+          value,
+        })),
+        ...chartSelections.process.map((value) => ({
+          chartKey: 'process' as const,
+          label: 'Processo',
+          value,
+        })),
+        ...chartSelections.course.map((value) => ({
+          chartKey: 'course' as const,
+          label: 'Curso',
+          value,
+        })),
+        ...chartSelections.activity.map((value) => ({
+          chartKey: 'activity' as const,
+          label: 'Atividade',
+          value,
+        })),
+      ],
+    [chartSelections],
   )
 
   const candidateSummaries = useMemo(() => {
@@ -1043,26 +1172,81 @@ export function VisaoCrm() {
         ))}
       </section>
 
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-950">Filtros pelos graficos</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Clique em uma barra para filtrar. Use <strong>Ctrl</strong> ou{' '}
+              <strong>Cmd</strong> para acumular mais de uma selecao.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setChartSelections(initialChartSelections)}
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            <Eraser className="h-4 w-4" />
+            Limpar cliques
+          </button>
+        </div>
+
+        {hasActiveChartSelections(chartSelections) ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {activeChartFilters.map((filterItem) => (
+              <button
+                key={`${filterItem.chartKey}-${filterItem.value}`}
+                type="button"
+                onClick={() =>
+                  handleChartSelection(filterItem.chartKey, filterItem.value, true)
+                }
+                className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+              >
+                <span>{filterItem.label}</span>
+                <span className="text-white/80">{filterItem.value}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">
+            Nenhum filtro visual ativo no momento.
+          </p>
+        )}
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-2">
         <ChartCard
           title="Por campus"
           description="Distribuicao das atividades por unidade padronizada."
           data={charts.campus}
+          chartKey="campus"
+          selectedKeys={chartSelections.campus}
+          onSelect={handleChartSelection}
         />
         <ChartCard
           title="Por processo seletivo"
           description="Leitura das atividades pelo processo normalizado do CRM."
           data={charts.process}
+          chartKey="process"
+          selectedKeys={chartSelections.process}
+          onSelect={handleChartSelection}
         />
         <ChartCard
           title="Por curso"
           description="Concentracao das atividades por curso, ignorando a unidade no nome da oferta."
           data={charts.course}
+          chartKey="course"
+          selectedKeys={chartSelections.course}
+          onSelect={handleChartSelection}
         />
         <ChartCard
           title="Qual atividade"
           description="Tipos de atividade mais recorrentes no recorte atual."
           data={charts.activity}
+          chartKey="activity"
+          selectedKeys={chartSelections.activity}
+          onSelect={handleChartSelection}
         />
       </section>
 
