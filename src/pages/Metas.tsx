@@ -85,7 +85,7 @@ function normalizeCpf(value?: string | null) {
 
 function titleize(value?: string | null) {
   if (!value) {
-    return 'Nao informado'
+    return 'Não informado'
   }
 
   return value
@@ -216,7 +216,7 @@ async function fetchAllRows<T>(selectClause: string) {
   if (!supabase) {
     return {
       data: null as T[] | null,
-      error: new Error('Supabase indisponivel.'),
+      error: new Error('Supabase indisponível.'),
     }
   }
 
@@ -286,7 +286,7 @@ export function Metas() {
 
       if (fallback.error) {
         setError(
-          'Nao foi possivel carregar a base de matriculados_20262 para a visao de metas.',
+          'Não foi possível carregar a base de matriculados_20262 para a visão de metas.',
         )
         setRows([])
         setLoading(false)
@@ -464,20 +464,20 @@ export function Metas() {
     const row = rows.find((item) => item.id === rowId)
 
     if (!row) {
-      setSaveMessage('Nao encontramos esta matricula para salvar o vendedor.')
+      setSaveMessage('Não encontramos esta matrícula para salvar o vendedor.')
       return
     }
 
     const selectedSeller = draftAssignments[rowId] || (fallbackSeller as Seller | '') || ''
     if (!selectedSeller) {
-      setSaveMessage('Escolha um vendedor antes de salvar a atribuicao.')
+      setSaveMessage('Escolha um vendedor antes de salvar a atribuição.')
       return
     }
 
     const cpf = normalizeCpf(row.cpf)
 
     if (!cpf) {
-      setSaveMessage('Esta matricula nao possui CPF valido para salvar o vendedor.')
+      setSaveMessage('Esta matrícula não possui CPF válido para salvar o vendedor.')
       return
     }
 
@@ -491,13 +491,13 @@ export function Metas() {
       .select('id, cpf, vendedor')
 
     if (updateError) {
-      setSaveMessage('Nao foi possivel salvar o vendedor desta matricula.')
+      setSaveMessage('Não foi possível salvar o vendedor desta matrícula.')
       setSavingRowId(null)
       return
     }
 
     if (!updatedRows || updatedRows.length === 0) {
-      setSaveMessage('O Supabase nao encontrou nenhuma linha para atualizar com este CPF.')
+      setSaveMessage('O Supabase não encontrou nenhuma linha para atualizar com este CPF.')
       setSavingRowId(null)
       return
     }
@@ -520,11 +520,11 @@ export function Metas() {
   const monthLabel = monthConfig[selectedMonth].label
 
   if (loading) {
-    return <Loading message="Carregando metas e atribuicoes..." />
+    return <Loading message="Carregando metas e atribuições..." />
   }
 
   if (error) {
-    return <EmptyState title="Nao foi possivel carregar as metas" description={error} />
+    return <EmptyState title="Não foi possível carregar as metas" description={error} />
   }
 
   return (
@@ -533,14 +533,14 @@ export function Metas() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Operacao comercial
+              Operação comercial
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Metas de captacao
+              Metas de captação
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
               A leitura considera somente calouros, usando a data da baixa do
-              pagamento para definir o mes. PROUNI roda separado das metas normais.
+              pagamento para definir o mês. PROUNI é acompanhado separadamente das metas normais.
             </p>
           </div>
 
@@ -574,8 +574,8 @@ export function Metas() {
 
       {!vendorColumnAvailable ? (
         <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm">
-          A coluna <strong>vendedor</strong> ainda nao existe em <strong>matriculados_20262</strong>.
-          As metas aparecem normalmente, mas a atribuicao fica bloqueada ate rodar o SQL em{' '}
+          A coluna <strong>vendedor</strong> ainda não existe em <strong>matriculados_20262</strong>.
+          As metas aparecem normalmente, mas a atribuição fica bloqueada até rodar o SQL em{' '}
           <code>supabase/metas_vendedor.sql</code>.
         </section>
       ) : null}
@@ -602,16 +602,16 @@ export function Metas() {
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <p className="text-sm font-medium text-slate-500">Matriculas normais</p>
+              <p className="text-sm font-medium text-slate-500">Matrículas normais</p>
               <p className="mt-3 text-3xl font-semibold text-slate-950">
                 {formatNumberBR(normalRows.length)}
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                Calouros do mes fora do recorte PROUNI.
+                Calouros do mês fora do recorte PROUNI.
               </p>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <p className="text-sm font-medium text-slate-500">Matriculas PROUNI</p>
+              <p className="text-sm font-medium text-slate-500">Matrículas PROUNI</p>
               <p className="mt-3 text-3xl font-semibold text-slate-950">
                 {formatNumberBR(prouniRows.length)}
               </p>
@@ -625,7 +625,7 @@ export function Metas() {
                 {formatNumberBR(unassignedRows.length)}
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                Matriculas que ainda precisam de atribuicao.
+                Matrículas que ainda precisam de atribuição.
               </p>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
@@ -634,14 +634,14 @@ export function Metas() {
                 {formatNumberBR(assignedRows.length)}
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                Matriculas ja distribuidas entre o time.
+                Matrículas já distribuídas entre o time.
               </p>
             </div>
           </div>
         </div>
 
         <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-950">Faixas do mes</h3>
+          <h3 className="text-lg font-semibold text-slate-950">Faixas do mês</h3>
           <div className="mt-4 space-y-3">
             {normalGeneralCards.map((stage) => (
               <div
@@ -664,8 +664,8 @@ export function Metas() {
                 </div>
                 <p className="mt-3 text-xs text-slate-600">
                   {stage.hit
-                    ? 'Faixa ja atingida no recorte atual.'
-                    : `Faltam ${formatNumberBR(stage.remaining)} matriculas para bater esta faixa.`}
+                    ? 'Faixa já atingida no recorte atual.'
+                    : `Faltam ${formatNumberBR(stage.remaining)} matrículas para atingir esta faixa.`}
                 </p>
               </div>
             ))}
@@ -681,7 +681,7 @@ export function Metas() {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-slate-950">Meta normal</h3>
-              <p className="text-sm text-slate-500">Faixas gerais do mes selecionado.</p>
+              <p className="text-sm text-slate-500">Faixas gerais do mês selecionado.</p>
             </div>
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -693,7 +693,7 @@ export function Metas() {
                 </p>
                 <p className="mt-2 text-xs text-slate-500">
                   {stage.hit
-                    ? 'Meta geral batida.'
+                    ? 'Meta geral atingida.'
                     : `Faltam ${formatNumberBR(stage.remaining)} para a meta geral.`}
                 </p>
               </article>
@@ -733,7 +733,7 @@ export function Metas() {
         <div>
           <h3 className="text-lg font-semibold text-slate-950">Progresso por vendedor</h3>
           <p className="mt-1 text-sm text-slate-500">
-            A meta individual usa a divisao da meta geral entre os quatro vendedores.
+            A meta individual usa a divisão da meta geral entre os quatro vendedores.
           </p>
         </div>
 
@@ -744,7 +744,7 @@ export function Metas() {
                 <div>
                   <p className="text-xl font-semibold text-slate-950">{card.seller}</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {formatNumberBR(card.totalCount)} matriculas no ciclo atual
+                    {formatNumberBR(card.totalCount)} matrículas no ciclo atual
                   </p>
                 </div>
                 <div className="rounded-2xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">
@@ -764,7 +764,7 @@ export function Metas() {
                     {!card.normalGateReached
                       ? `Liberamos a meta individual quando a Meta 01 geral chegar em ${formatNumberBR(card.normalGateTarget)}. Hoje estamos em ${formatNumberBR(card.normalGateCurrent)}.`
                       : card.normalStage
-                      ? `${card.normalStage.label} ativa - ${formatCurrencyBR(card.normalStage.reward)} por matricula`
+                      ? `${card.normalStage.label} ativa - ${formatCurrencyBR(card.normalStage.reward)} por matrícula`
                       : card.nextNormalLabel
                         ? `Faltam ${formatNumberBR(card.remainingNormal)} para ${card.nextNormalLabel}`
                         : 'Sem faixa ativa.'}
@@ -780,7 +780,7 @@ export function Metas() {
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
                     {card.prouniStage
-                      ? `${card.prouniStage.label} ativa - ${formatCurrencyBR(card.prouniStage.reward)} por matricula`
+                      ? `${card.prouniStage.label} ativa - ${formatCurrencyBR(card.prouniStage.reward)} por matrícula`
                       : card.nextProuniLabel
                         ? `Faltam ${formatNumberBR(card.remainingProuni)} para ${card.nextProuniLabel}`
                         : 'Sem faixa ativa.'}
@@ -798,7 +798,7 @@ export function Metas() {
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-slate-950">Sem vendedor</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Matriculas do mes atual que ainda precisam de atribuicao.
+                Matrículas do mês atual que ainda precisam de atribuição.
               </p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto">
@@ -808,7 +808,7 @@ export function Metas() {
                   type="text"
                   value={listNameFilter}
                   onChange={(event) => setListNameFilter(event.target.value)}
-                  placeholder="Ex.: Ana Claudia"
+                  placeholder="Ex.: Ana Cláudia"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 />
               </label>
@@ -821,8 +821,8 @@ export function Metas() {
           {unassignedRows.length === 0 ? (
             <div className="mt-6">
               <EmptyState
-                title="Nenhuma matricula pendente"
-                description="As matriculas do recorte atual ja possuem vendedor atribuido."
+                title="Nenhuma matrícula pendente"
+                description="As matrículas do recorte atual já possuem vendedor atribuído."
               />
             </div>
           ) : (
@@ -882,7 +882,7 @@ export function Metas() {
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-slate-950">Com vendedor</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Matriculas ja distribuidas, com possibilidade de ajuste.
+                Matrículas já distribuídas, com possibilidade de ajuste.
               </p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto">
@@ -892,7 +892,7 @@ export function Metas() {
                   type="text"
                   value={listNameFilter}
                   onChange={(event) => setListNameFilter(event.target.value)}
-                  placeholder="Ex.: Ana Claudia"
+                  placeholder="Ex.: Ana Cláudia"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 />
               </label>
@@ -905,7 +905,7 @@ export function Metas() {
           {assignedRows.length === 0 ? (
             <div className="mt-6">
               <EmptyState
-                title="Nenhuma matricula atribuida ainda"
+                title="Nenhuma matrícula atribuída ainda"
                 description="Quando os vendedores forem definidos, elas passam a aparecer aqui."
               />
             </div>

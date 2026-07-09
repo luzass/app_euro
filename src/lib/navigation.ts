@@ -17,7 +17,7 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   {
-    title: 'Trafego Pago - Spike',
+    title: 'Tráfego Pago - Spike',
     path: '/app/spike',
     icon: BarChart3,
     allowedRoles: ['admin', 'reitoria', 'spike'],
@@ -35,13 +35,13 @@ export const navItems: NavItem[] = [
     allowedRoles: ['admin', 'reitoria', 'captacao'],
   },
   {
-    title: 'Visao CRM',
+    title: 'Visão CRM',
     path: '/app/visao-crm',
     icon: Building2,
     allowedRoles: ['admin', 'reitoria', 'captacao'],
   },
   {
-    title: 'Criar Usuario',
+    title: 'Criar Usuário',
     path: '/app/criar-usuario',
     icon: UserRoundPlus,
     allowedRoles: ['admin'],

@@ -79,7 +79,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       async signIn(email, password) {
         if (!supabase) {
           throw new Error(
-            'Configure as variaveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
+            'Configure as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
           )
         }
 

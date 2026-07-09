@@ -23,7 +23,7 @@ export function CriarUsuario() {
 
     if (!supabase) {
       setMessageTone('error')
-      setMessage('O Supabase ainda nao esta configurado neste ambiente.')
+      setMessage('O Supabase ainda não está configurado neste ambiente.')
       return
     }
 
@@ -45,12 +45,12 @@ export function CriarUsuario() {
       }
 
       if (!data?.success) {
-        throw new Error(data?.error ?? 'A Edge Function nao confirmou a criacao do usuario.')
+        throw new Error(data?.error ?? 'A Edge Function não confirmou a criação do usuário.')
       }
 
       setFormData(initialFormState)
       setMessageTone('success')
-      setMessage(`Usuario criado com sucesso para ${data.user?.email ?? 'o novo acesso'}.`)
+      setMessage(`Usuário criado com sucesso para ${data.user?.email ?? 'o novo acesso'}.`)
     } catch (error) {
       setMessageTone('error')
       setMessage(normalizeSupabaseError(error))
@@ -65,14 +65,14 @@ export function CriarUsuario() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Administracao
+              Administração
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Criar novo usuario
+              Criar novo usuário
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
-              O cadastro e feito por uma Edge Function protegida no Supabase. Assim,
-              a tela continua simples para o admin e a criacao real fica segura no
+              O cadastro é feito por uma Edge Function protegida no Supabase. Assim,
+              a tela continua simples para o administrador e a criação real fica segura no
               backend.
             </p>
           </div>
@@ -155,7 +155,7 @@ export function CriarUsuario() {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-700">Role</span>
+              <span className="mb-2 block text-sm font-medium text-slate-700">Perfil de acesso</span>
               <select
                 value={formData.role}
                 onChange={(event) =>
@@ -168,9 +168,9 @@ export function CriarUsuario() {
                 disabled={submitting}
               >
                 <option value="admin">admin</option>
-                <option value="reitoria">reitoria</option>
-                <option value="spike">spike</option>
-                <option value="captacao">captacao</option>
+                <option value="reitoria">Reitoria</option>
+                <option value="spike">Spike</option>
+                <option value="captacao">Captação</option>
               </select>
             </label>
 
@@ -180,7 +180,7 @@ export function CriarUsuario() {
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <UserRoundPlus className="h-4 w-4" />
-              {submitting ? 'Criando usuario...' : 'Criar usuario'}
+              {submitting ? 'Criando usuário...' : 'Criar usuário'}
             </button>
           </form>
         </section>
@@ -192,7 +192,7 @@ export function CriarUsuario() {
           <h3 className="mt-4 text-lg font-semibold text-amber-950">Fluxo seguro</h3>
           <p className="mt-3 text-sm leading-7 text-amber-900/80">
             O frontend envia os dados do novo acesso, a Edge Function valida se o
-            usuario atual e admin, cria o login no Auth e registra o perfil na
+            usuário atual é administrador, cria o login no Auth e registra o perfil na
             tabela profiles.
           </p>
         </aside>

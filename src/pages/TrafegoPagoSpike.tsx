@@ -248,7 +248,7 @@ function getPreviousMonthRange(referenceDate = new Date()): ReportRange {
 
 function titleizeText(value?: string | null) {
   if (!value) {
-    return 'Nao informado'
+    return 'Não informado'
   }
 
   return value
@@ -323,7 +323,7 @@ function countByLabel<T>(rows: T[], getLabel: (row: T) => string, limit = 8) {
   const counts = new Map<string, number>()
 
   rows.forEach((row) => {
-    const label = getLabel(row) || 'Nao informado'
+    const label = getLabel(row) || 'Não informado'
     counts.set(label, (counts.get(label) ?? 0) + 1)
   })
 
@@ -572,7 +572,7 @@ export function TrafegoPagoSpike() {
 
     if (campaignResponse.error) {
       setError(
-        'Nao conseguimos buscar a tabela campanha_euro_20262. Confira o nome da tabela e as permissoes no Supabase.',
+        'Não conseguimos buscar a tabela campanha_euro_20262. Confira o nome da tabela e as permissões no Supabase.',
       )
       setRows([])
       setMatriculados(0)
@@ -595,7 +595,7 @@ export function TrafegoPagoSpike() {
         ),
       )
     } else {
-      console.warn('Nao foi possivel calcular matriculados a partir das tabelas extras.', {
+      console.warn('Não foi possível calcular matriculados a partir das tabelas extras.', {
         leadsError: leadsResponse.error,
         inscritosError: inscritosResponse.error,
         matriculadosError: matriculadosResponse.error,
@@ -604,14 +604,14 @@ export function TrafegoPagoSpike() {
     }
 
     if (clarityResumoResponse.error || clarityDevicesResponse.error) {
-      console.warn('Nao foi possivel carregar as tabelas do Clarity.', {
+      console.warn('Não foi possível carregar as tabelas do Clarity.', {
         clarityResumoError: clarityResumoResponse.error,
         clarityDevicesError: clarityDevicesResponse.error,
       })
     }
 
     if (funilGeralResponse.error) {
-      console.warn('Nao foi possivel carregar a tabela funil_euro_20262_geral.', {
+      console.warn('Não foi possível carregar a tabela funil_euro_20262_geral.', {
         funilGeralError: funilGeralResponse.error,
       })
     }
@@ -639,7 +639,7 @@ export function TrafegoPagoSpike() {
 
     if (reportsLoadError) {
       setReportsError(
-        'Nao foi possivel carregar os relatórios salvos. Confira as permissoes de leitura da tabela relatorios_ia.',
+        'Não foi possível carregar os relatórios salvos. Confira as permissões de leitura da tabela relatorios_ia.',
       )
       setReportsLoading(false)
       return
@@ -705,7 +705,7 @@ export function TrafegoPagoSpike() {
 
     if (campaignRowsForRange.length === 0) {
       throw new Error(
-        'Nao encontrei dados da campanha para esse período. Ajuste o client_id ou aguarde novos registros.',
+        'Não encontramos dados da campanha para esse período. Ajuste o client_id ou aguarde novos registros.',
       )
     }
 
@@ -730,7 +730,7 @@ export function TrafegoPagoSpike() {
 
     if (leadsError || inscritosError || matriculadosError) {
       throw new Error(
-        'Nao foi possivel buscar leads_cursos, inscritos_20262 ou matriculados_20262 para montar o relatório.',
+        'Não foi possível buscar leads_cursos, inscritos_20262 ou matriculados_20262 para montar o relatório.',
       )
     }
 
@@ -890,7 +890,7 @@ export function TrafegoPagoSpike() {
 
         if (reportInsertError) {
           setReportsError(
-            'O relatório foi gerado, mas nao conseguimos salvar o texto em relatorios_ia.',
+            'O relatório foi gerado, mas não conseguimos salvar o texto em relatorios_ia.',
           )
         } else {
           const insertedReport = (insertedReports?.[0] as StoredReport | undefined) ?? {
@@ -916,7 +916,7 @@ export function TrafegoPagoSpike() {
 
       setAnalysisState({
         loading: false,
-        error: analysisText ? null : 'O webhook respondeu, mas o texto da anÃ¡lise veio vazio.',
+        error: analysisText ? null : 'O webhook respondeu, mas o texto da análise veio vazio.',
         content: analysisText || null,
         reportType,
         lastRangeLabel: reportRange.label,
@@ -928,7 +928,7 @@ export function TrafegoPagoSpike() {
         error:
           generationError instanceof Error
             ? generationError.message
-            : 'Nao foi possivel gerar o relatório agora.',
+            : 'Não foi possível gerar o relatório agora.',
         content: null,
         reportType,
         lastRangeLabel: reportRange.label,
@@ -1167,7 +1167,7 @@ export function TrafegoPagoSpike() {
 
     return [
       {
-        title: 'Sessões no periodo',
+        title: 'Sessões no período',
         value: formatNumberBR(totalSessions),
         helperText: 'Somatória das Sessões dentro do recorte filtrado.',
         emphasis: 'primary' as const,
@@ -1208,7 +1208,7 @@ export function TrafegoPagoSpike() {
             {
               title: 'usuários únicos',
               value: formatNumberBR(toNumber(latestClarityResumo.unique_users)),
-              helperText: 'Pessoas unicas navegando na landing page.',
+              helperText: 'Pessoas únicas navegando na landing page.',
             },
             {
               title: 'páginas por sessão',
@@ -1248,7 +1248,7 @@ export function TrafegoPagoSpike() {
       {
         title: 'Alcance',
         value: formatNumberBR(kpis.alcance),
-        helperText: 'Pessoas alcancadas no periodo filtrado.',
+        helperText: 'Pessoas alcançadas no período filtrado.',
       },
       {
         title: 'Frequência media',
@@ -1283,7 +1283,7 @@ export function TrafegoPagoSpike() {
       {
         title: 'CPLPV',
         value: formatCurrencyBR(kpis.cplpv),
-        helperText: 'Custo por Visualização de landing page.',
+        helperText: 'Custo por visualização da landing page.',
       },
       {
         title: 'Connect Rate',
@@ -1312,10 +1312,10 @@ export function TrafegoPagoSpike() {
       {
         title: 'Matriculados',
         value: formatNumberBR(kpis.matriculados),
-        helperText: 'Quantidade de matriculados.',
+        helperText: 'Quantidade total de matriculados.',
       },
       {
-        title: 'Custo por matricula',
+        title: 'Custo por matrícula',
         value: formatCurrencyBR(kpis.custo_por_matricula),
         helperText: 'Valor gasto para cada matrícula.',
       },
@@ -1488,7 +1488,7 @@ export function TrafegoPagoSpike() {
   if (error) {
     return (
       <EmptyState
-        title="Nao foi possivel carregar a campanha"
+        title="Não foi possível carregar a campanha"
         description={error}
         action={
           <button
@@ -1510,7 +1510,7 @@ export function TrafegoPagoSpike() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              TrÃ¡fego Pago - Spike
+              Tráfego Pago - Spike
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
               Visão consolidada da Campanha Euro 2026.2
@@ -1591,12 +1591,12 @@ export function TrafegoPagoSpike() {
       {rows.length === 0 ? (
         <EmptyState
           title="Nenhum dado encontrado"
-          description="A tabela campanha_euro_20262 nao retornou registros. Verifique se ela possui dados publicados no Supabase."
+          description="A tabela campanha_euro_20262 não retornou registros. Verifique se ela possui dados publicados no Supabase."
         />
       ) : filteredRows.length === 0 ? (
         <EmptyState
           title="Nenhum resultado para os filtros aplicados"
-          description="Ajuste o periodo ou o client_id para visualizar dados desta campanha."
+          description="Ajuste o período ou o client_id para visualizar os dados desta campanha."
         />
       ) : (
         <>
@@ -1643,7 +1643,7 @@ export function TrafegoPagoSpike() {
 
             <ChartContainer
               title="Impressões, alcance e cliques por dia"
-              description="Comparação diaria das métricas de volume e trafego."
+              description="Comparação diária das métricas de volume e tráfego."
             >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={groupedRows}>
@@ -1988,13 +1988,13 @@ export function TrafegoPagoSpike() {
 
             {clarityCards.length === 0 ? (
               <EmptyState
-                title="Sem dados do Clarity para o periodo atual"
-                description="Assim que as tabelas clarity_resumo_diario e clarity_devices_diario tiverem registros dentro do recorte, essa secao sera preenchida automaticamente."
+                title="Sem dados do Clarity para o período atual"
+                description="Assim que as tabelas clarity_resumo_diario e clarity_devices_diario tiverem registros dentro do recorte, esta seção será preenchida automaticamente."
               />
             ) : (
               <>
                 <div className="mb-4">
-                  <p className="text-sm font-semibold text-slate-900">Consolidado do periodo</p>
+                  <p className="text-sm font-semibold text-slate-900">Consolidado do período</p>
                   <p className="mt-1 text-sm text-slate-500">
                     Leitura geral do recorte filtrado para entender o tamanho da audiencia e a
                     qualidade media da navegacao.
@@ -2016,7 +2016,7 @@ export function TrafegoPagoSpike() {
                 <div className="mb-4 mt-8">
                   <p className="text-sm font-semibold text-slate-900">Última leitura disponível</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Foto mais recente do Clarity dentro do periodo para acompanhar o comportamento
+                    Foto mais recente do Clarity dentro do período para acompanhar o comportamento
                     mais atual da landing page.
                   </p>
                 </div>
@@ -2111,7 +2111,7 @@ export function TrafegoPagoSpike() {
                             />
                             <Bar
                               dataKey="averageUniqueUsers"
-                              name="Media de usuarios"
+                              name="Média de usuários"
                               fill="#0f172a"
                               radius={[0, 12, 12, 0]}
                             />

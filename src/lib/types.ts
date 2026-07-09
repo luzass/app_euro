@@ -21,6 +21,6 @@ export function formatRoleLabel(role?: Role | null) {
     case 'funcionario':
       return 'Captação'
     default:
-      return 'Sem role'
+      return 'Sem perfil'
   }
 }

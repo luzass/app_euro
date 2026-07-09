@@ -313,7 +313,7 @@ function normalizeString(value?: string | null) {
 
 function titleize(value?: string | null) {
   if (!value) {
-    return 'Nao informado'
+    return 'Não informado'
   }
 
   return value
@@ -375,7 +375,7 @@ function normalizeInscricaoStageDisplay(value?: string | null) {
     etapaNormalizada === 'APROVADO.MATRICULALIBERADA **' ||
     etapaNormalizada === 'APROVADO.MATRICULALIBERADA**'
   ) {
-    return 'Pre Matricula Pendente'
+    return 'Pré-matrícula pendente'
   }
 
   return titleize(value)
@@ -394,7 +394,7 @@ function normalizeInscricaoStage(row: Pick<InscritoRow, 'etapa_atual' | 'boleto_
     etapaOriginal === 'Aprovado.MatrículaLiberada **' ||
     etapaOriginal === 'Aprovado.MatrículaLiberada**'
   ) {
-    return 'Pre Matricula Pendente'
+    return 'Pré-matrícula pendente'
   }
 
   return titleize(row.etapa_atual)
@@ -729,7 +729,7 @@ function buildCountData<T>(
   const counts = new Map<string, number>()
 
   rows.forEach((row) => {
-    const value = getValue(row) || 'Nao informado'
+    const value = getValue(row) || 'Não informado'
     counts.set(value, (counts.get(value) ?? 0) + 1)
   })
 
@@ -883,7 +883,7 @@ function FilterPanel({
   return (
     <DashboardSection
       title={title}
-      description="Use o periodo para recalcular os indicadores e cruzar os graficos dentro da aba atual."
+      description="Use o período para recalcular os indicadores e cruzar os gráficos dentro da aba atual."
     >
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
         <label className="block">
@@ -1249,7 +1249,7 @@ export function DashboardEuro() {
       matriculados20252Response.error
     ) {
       setError(
-        'Nao foi possivel carregar as tabelas de inscritos ou matriculados de 2025.2 e 2026.2. Confira se as tabelas existem e se as permissoes de leitura no Supabase estao liberadas.',
+        'Não foi possível carregar as tabelas de inscritos ou matriculados de 2025.2 e 2026.2. Confira se as tabelas existem e se as permissões de leitura no Supabase estão liberadas.',
       )
       setLoading(false)
       return
@@ -1346,7 +1346,7 @@ export function DashboardEuro() {
         cursoLabel: titleize(row.curso),
         turnoLabel: titleize(row.turno),
         ingressoLabel: row.ingresso,
-        statusLabel: 'Nao informado',
+        statusLabel: 'Não informado',
         contratoLabel: 'Ativo',
       })),
     [],
@@ -1553,32 +1553,32 @@ export function DashboardEuro() {
   const matriculadosCards = useMemo(
     () => [
       {
-        title: 'Matriculas do dia',
+        title: 'Matrículas do dia',
         value: formatNumberBR(matriculadosTodayRows.length),
         helperText: `Base em ${formatDateBR(matriculadosReferenceDate)} pela data da baixa do pagamento.`,
         emphasis: 'primary' as const,
       },
       {
-        title: 'Matriculas do dia - Asa Sul',
+        title: 'Matrículas do dia - Asa Sul',
         value: formatNumberBR(
           matriculadosTodayRows.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
         helperText: 'Somente calouros com contrato ativo.',
       },
       {
-        title: 'Matriculas do dia - Águas Claras',
+        title: 'Matrículas do dia - Águas Claras',
         value: formatNumberBR(
           matriculadosTodayRows.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
         helperText: 'Somente calouros com contrato ativo.',
       },
       {
-        title: 'Matriculas no geral',
+        title: 'Matrículas no geral',
         value: formatNumberBR(matriculadosGeraisComAjustes.length),
         helperText: `${formatNumberBR(matriculadosGeraisComMedicina.length)} matriculados Medicina com contrato ativo.`,
       },
       {
-        title: 'Matriculas gerais - Asa Sul',
+        title: 'Matrículas gerais - Asa Sul',
         value: formatNumberBR(
           matriculadosGeraisComAjustes.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
@@ -1587,7 +1587,7 @@ export function DashboardEuro() {
         )} matriculados Medicina com contrato ativo.`,
       },
       {
-        title: 'Matriculas gerais - Águas Claras',
+        title: 'Matrículas gerais - Águas Claras',
         value: formatNumberBR(
           matriculadosGeraisComAjustes.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
@@ -1615,7 +1615,7 @@ export function DashboardEuro() {
         helperText: 'Base 26.2 da filial Águas Claras com contrato ativo, sem Medicina e sem os ajustes manuais.',
       },
       {
-        title: 'Matriculados + PROUNI 26.1 (Readmissao)',
+        title: 'Matriculados + PROUNI 26.1 (Readmissão)',
         value: formatNumberBR(matriculadosGeraisComReadmissao.length),
         helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo.',
       },
@@ -2255,7 +2255,7 @@ export function DashboardEuro() {
   if (error) {
     return (
       <EmptyState
-        title="Nao foi possivel carregar o Dashboard Euro"
+        title="Não foi possível carregar o Dashboard Euro"
         description={error}
         action={
           <button
@@ -2333,7 +2333,7 @@ export function DashboardEuro() {
           {inscritosFiltered.length === 0 ? (
             <EmptyState
               title="Nenhum inscrito para os filtros atuais"
-              description="Limpe as datas ou os filtros clicados para voltar a ver os graficos desta aba."
+              description="Limpe as datas ou os filtros clicados para voltar a visualizar os gráficos desta aba."
             />
           ) : (
             <>
@@ -2443,7 +2443,7 @@ export function DashboardEuro() {
           {matriculadosFiltered.length === 0 ? (
             <EmptyState
               title="Nenhum matriculado para os filtros atuais"
-              description="Pode ser que a data da baixa esteja vazia em parte da base, ou que algum filtro clicado tenha fechado demais o recorte."
+              description="Pode ser que a data da baixa esteja vazia em parte da base ou que algum filtro clicado tenha restringido demais o recorte."
             />
           ) : (
             <>
@@ -2461,8 +2461,8 @@ export function DashboardEuro() {
 
               <section className="grid gap-6 xl:grid-cols-2">
                 <InteractiveDistributionChart
-                  title="Matriculas por filial"
-                  description="Somente calouros, usando data_baixa_do_pagamento como referencia."
+                  title="Matrículas por filial"
+                  description="Somente calouros, usando data_baixa_do_pagamento como referência."
                   data={matriculadosCharts.filial}
                   selectedKey={matriculadosSelections.filial}
                   viewportWidth={viewportWidth}
@@ -2475,7 +2475,7 @@ export function DashboardEuro() {
                 />
                 <InteractiveDistributionChart
                   title="Matriculas por curso"
-                  description="Clique para focar um curso e recalcular os demais graficos."
+                  description="Clique para focar em um curso e recalcular os demais gráficos."
                   data={matriculadosCharts.cursos}
                   selectedKey={matriculadosSelections.curso}
                   viewportWidth={viewportWidth}
@@ -2641,7 +2641,7 @@ export function DashboardEuro() {
                       {table.rows.some((row) => row.manualAdjustmentCount > 0) ? (
                         <p className="mt-4 text-xs leading-5 text-slate-500">
                           * Inclui ajustes manuais fora da meta de vendedores. PROUNI referente a
-                          2026.1 com matricula realizada apenas em 2026.2.
+                          2026.1 com matrícula realizada apenas em 2026.2.
                         </p>
                       ) : null}
                     </div>
@@ -2702,7 +2702,7 @@ export function DashboardEuro() {
 
                 <p className="text-xs text-slate-500">
                   {comparativoRangeMode === 'to-date'
-                    ? `Comparando os semestres so ate ${formatMonthDayLabel(comparativoTodayMonthDayKey)} em cada ano.`
+                    ? `Comparando os semestres só até ${formatMonthDayLabel(comparativoTodayMonthDayKey)} em cada ano.`
                     : 'Comparando o semestre inteiro de 2025.2 e 2026.2.'}
                 </p>
               </div>
@@ -2718,8 +2718,8 @@ export function DashboardEuro() {
               }
               description={
                 comparativoBranchFilter === 'Todas'
-                  ? 'Assim que as tabelas inscritos_20252 e matriculados_20252 receberem dados, esta aba vai montar o comparativo automaticamente.'
-                  : 'Pode ser que essa filial ainda nao tenha registros publicados nas tabelas de 2025.2.'
+                  ? 'Assim que as tabelas inscritos_20252 e matriculados_20252 receberem dados, esta aba montará o comparativo automaticamente.'
+                  : 'Pode ser que essa filial ainda não tenha registros publicados nas tabelas de 2025.2.'
               }
             />
           ) : (
@@ -2827,7 +2827,7 @@ export function DashboardEuro() {
                       previousLabel="Matriculados 2025.2"
                       currentLabel="Matriculados 2026.2"
                       data={comparativoCampus.map((item) => ({
-                        label: `${item.unidade} - Matriculas`,
+                        label: `${item.unidade} - Matrículas`,
                         previousValue: item.matriculados_20252,
                         currentValue: item.matriculados_20262,
                       }))}
@@ -2950,7 +2950,7 @@ export function DashboardEuro() {
                 </DashboardSection>
 
                 <DashboardSection
-                  title="Cursos com mais matriculas"
+                  title="Cursos com mais matrículas"
                   description="Top cursos de calouros para comparar a forca de fechamento entre 2025.2 e 2026.2, exceto Medicina."
                 >
                   {viewportWidth < 640 ? (
@@ -3007,7 +3007,7 @@ export function DashboardEuro() {
                   <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                     <div className="space-y-3">
                       <p className="max-w-2xl text-sm leading-6 text-slate-500">
-                        Por padrao mostramos o mes atual de 2026.2. Troque o recorte para ver o
+                        Por padrão mostramos o mês atual de 2026.2. Troque o recorte para ver o
                         acumulado completo ou focar um mesmo momento do calendario entre os dois
                         semestres.
                       </p>
@@ -3018,7 +3018,7 @@ export function DashboardEuro() {
                         </span>
                         <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
                           {comparativoRangeMode === 'to-date'
-                            ? `Mesmo ponto do ano ate ${formatMonthDayLabel(comparativoTodayMonthDayKey)}`
+                            ? `Mesmo ponto do ano até ${formatMonthDayLabel(comparativoTodayMonthDayKey)}`
                             : 'Semestre completo'}
                         </span>
                       </div>
@@ -3097,7 +3097,7 @@ export function DashboardEuro() {
                 {comparativoDiaADiaFiltrado.length === 0 ? (
                   <EmptyState
                     title="Sem movimentos nesse recorte mensal"
-                    description="Troque o mes no filtro acima para ver outro periodo ou volte para todos os meses."
+                    description="Troque o mês no filtro acima para ver outro período ou volte para todos os meses."
                   />
                 ) : (
                   <div className="overflow-x-auto">

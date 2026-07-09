@@ -71,7 +71,7 @@ export function Login() {
 
                 {!isSupabaseConfigured ? (
                   <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-                    Configure o arquivo <code>.env</code> com a URL e a chave anonima do Supabase.
+                    Configure o arquivo <code>.env</code> com a URL e a chave anônima do Supabase.
                   </div>
                 ) : null}
 

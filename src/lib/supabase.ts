@@ -35,13 +35,13 @@ export function getSupabaseProjectHost() {
 }
 
 export function normalizeSupabaseError(error: unknown) {
-  const fallbackMessage = 'Nao foi possivel falar com o Supabase agora.'
+  const fallbackMessage = 'Não foi possível se comunicar com o Supabase agora.'
 
   if (error instanceof Error) {
     if (error.message.toLowerCase().includes('failed to fetch')) {
       return [
         'Falha de rede ao falar com o Supabase.',
-        'Se a URL e a anon key ja estao corretas, isso costuma apontar para projeto pausado, bloqueio do navegador, VPN, proxy ou firewall.',
+        'Se a URL e a chave anônima já estiverem corretas, isso costuma indicar projeto pausado, bloqueio do navegador, VPN, proxy ou firewall.',
       ].join(' ')
     }
 
@@ -56,7 +56,7 @@ export async function runSupabaseDiagnostics(): Promise<SupabaseDiagnosticResult
     return {
       ok: false,
       target: 'config',
-      summary: 'O .env ainda nao esta configurado por completo.',
+      summary: 'O arquivo .env ainda não foi configurado por completo.',
     }
   }
 
@@ -86,7 +86,7 @@ export async function runSupabaseDiagnostics(): Promise<SupabaseDiagnosticResult
       ok: true,
       target,
       status: response.status,
-      summary: 'Conexao com o endpoint publico de autenticacao funcionando.',
+      summary: 'Conexão com o endpoint público de autenticação funcionando.',
       detail: responseText.slice(0, 300),
     }
   } catch (error) {
