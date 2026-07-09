@@ -12,6 +12,7 @@ import { Login } from '../pages/Login'
 import { Metas } from '../pages/Metas'
 import { NotFound } from '../pages/NotFound'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
+import { VisaoCrm } from '../pages/VisaoCrm'
 
 function RootRedirect() {
   const { user, loading: authLoading } = useAuth()
@@ -85,6 +86,14 @@ export function AppRoutes() {
             element={
               <RequireRole allowedRoles={['admin', 'reitoria', 'captacao']}>
                 <Metas />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="visao-crm"
+            element={
+              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao']}>
+                <VisaoCrm />
               </RequireRole>
             }
           />

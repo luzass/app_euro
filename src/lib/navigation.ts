@@ -1,6 +1,7 @@
 import {
   BarChart3,
   type LucideIcon,
+  Building2,
   LayoutDashboard,
   Target,
   UserRoundPlus,
@@ -31,6 +32,12 @@ export const navItems: NavItem[] = [
     title: 'Metas',
     path: '/app/metas',
     icon: Target,
+    allowedRoles: ['admin', 'reitoria', 'captacao'],
+  },
+  {
+    title: 'Visao CRM',
+    path: '/app/visao-crm',
+    icon: Building2,
     allowedRoles: ['admin', 'reitoria', 'captacao'],
   },
   {
