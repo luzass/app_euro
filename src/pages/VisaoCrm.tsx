@@ -93,6 +93,18 @@ function normalizeString(value?: string | null) {
   return (value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/�/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+}
+
+function buildMatchString(value?: string | null) {
+  return decodeMojibake(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/�/g, ' ')
+    .replace(/[^A-Z0-9.]+/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toUpperCase()
@@ -214,10 +226,10 @@ function normalizeSeller(value?: string | null): Seller | null {
 }
 
 function normalizeCampus(...sources: Array<string | null | undefined>) {
-  const combined = normalizeString(sources.map((value) => decodeMojibake(value)).join(' '))
+  const combined = buildMatchString(sources.map((value) => decodeMojibake(value)).join(' '))
 
   if (combined.includes('AGUAS CLARAS') || combined.includes('GUAS CLARAS')) {
-    return 'Aguas Claras'
+    return 'Águas Claras'
   }
 
   if (combined.includes('ASA SUL')) {
@@ -243,7 +255,7 @@ function normalizeCourseLabel(value?: string | null) {
 
 function normalizeProcessLabel(value?: string | null) {
   const decoded = decodeMojibake(value)
-  const normalized = normalizeString(decoded)
+  const normalized = buildMatchString(decoded)
 
   if (!normalized) {
     return 'Nao informado'
@@ -260,17 +272,20 @@ function normalizeProcessLabel(value?: string | null) {
 
   let base = titleize(decoded)
 
-  if (normalized.includes('2A GRADUACAO')) {
+  if (
+    (normalized.includes('GRADUACAO') || normalized.includes('GRADU') || normalized.includes('2A')) &&
+    normalized.includes('2')
+  ) {
     base = '2a Graduacao'
   } else if (normalized.includes('VESTIBULAR DIGITAL')) {
     base = 'Vestibular Digital'
   } else if (normalized.includes('NOTA ENEM')) {
     base = 'Nota ENEM'
-  } else if (normalized.includes('TRANSFERENCIA EXTERNA')) {
+  } else if (normalized.includes('TRANSFERENCIA EXTERNA') || normalized.includes('TRANSFERENCIA')) {
     base = 'Transferencia Externa'
   } else if (normalized.includes('REINGRESSO')) {
     base = 'Reingresso'
-  } else if (normalized.includes('SEMIPRESENCIAIS')) {
+  } else if (normalized.includes('SEMIPRESENCIAIS') || normalized.includes('SEMIPRESENCIAL')) {
     base = 'Semipresencial'
   }
 
@@ -290,6 +305,72 @@ function buildCountData(rows: ActivityCrmPrepared[], getValue: (row: ActivityCrm
   return Array.from(map.values())
     .sort((currentItem, nextItem) => nextItem.value - currentItem.value || currentItem.label.localeCompare(nextItem.label))
     .slice(0, 10)
+}
+
+function wrapAxisLabel(label: string, maxLineLength = 18, maxLines = 3) {
+  if (!label) {
+    return ['']
+  }
+
+  const words = label.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let currentLine = ''
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word
+
+    if (nextLine.length <= maxLineLength) {
+      currentLine = nextLine
+      return
+    }
+
+    if (currentLine) {
+      lines.push(currentLine)
+    }
+
+    currentLine = word
+  })
+
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+
+  if (lines.length <= maxLines) {
+    return lines
+  }
+
+  const visibleLines = lines.slice(0, maxLines)
+  const lastLine = visibleLines[maxLines - 1] ?? ''
+  visibleLines[maxLines - 1] =
+    lastLine.length > maxLineLength - 3
+      ? `${lastLine.slice(0, Math.max(maxLineLength - 3, 1)).trim()}...`
+      : `${lastLine}...`
+
+  return visibleLines
+}
+
+function WrappedYAxisTick({
+  x = 0,
+  y = 0,
+  payload,
+}: {
+  x?: number
+  y?: number
+  payload?: { value?: string }
+}) {
+  const lines = wrapAxisLabel(payload?.value ?? '')
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={4} textAnchor="end" fill="#334155" fontSize={11}>
+        {lines.map((line, index) => (
+          <tspan key={`${line}-${index}`} x={0} dy={index === 0 ? 0 : 13}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  )
 }
 
 function applyFilters(row: ActivityCrmPrepared, filters: FilterState) {
@@ -382,10 +463,10 @@ function ChartCard({
   description: string
   data: CountDatum[]
 }) {
-  const chartHeight = Math.max(280, data.length * 44)
+  const chartHeight = Math.max(300, data.length * 58)
 
   return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
       <h3 className="text-xl font-semibold text-slate-950">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
 
@@ -394,20 +475,20 @@ function ChartCard({
           Sem dados para este grafico no recorte atual.
         </div>
       ) : (
-        <div className="mt-6 h-[280px] sm:h-[340px]">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+        <div className="mt-6 overflow-hidden" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={data}
               layout="vertical"
-              margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+              margin={{ top: 4, right: 20, left: 12, bottom: 4 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
               <XAxis type="number" tick={{ fill: '#64748b', fontSize: 12 }} />
               <YAxis
                 type="category"
                 dataKey="label"
-                width={150}
-                tick={{ fill: '#334155', fontSize: 12 }}
+                width={156}
+                tick={<WrappedYAxisTick />}
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
               <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]}>
@@ -575,6 +656,7 @@ export function VisaoCrm() {
   const [matriculadosRows, setMatriculadosRows] = useState<MatriculadoPrepared[]>([])
   const [filters, setFilters] = useState<FilterState>(initialFilters)
   const [cardFilters, setCardFilters] = useState<FilterState>(initialFilters)
+  const [candidatePage, setCandidatePage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -843,6 +925,26 @@ export function VisaoCrm() {
     [candidateSummaries, filteredActivityRows.length],
   )
 
+  const candidatesPerPage = 10
+  const candidatePageCount = Math.max(
+    1,
+    Math.ceil(cardCandidateSummaries.length / candidatesPerPage),
+  )
+  const paginatedCandidateSummaries = useMemo(() => {
+    const startIndex = (candidatePage - 1) * candidatesPerPage
+    return cardCandidateSummaries.slice(startIndex, startIndex + candidatesPerPage)
+  }, [candidatePage, cardCandidateSummaries])
+
+  useEffect(() => {
+    setCandidatePage(1)
+  }, [activeSeller, cardFilters])
+
+  useEffect(() => {
+    if (candidatePage > candidatePageCount) {
+      setCandidatePage(candidatePageCount)
+    }
+  }, [candidatePage, candidatePageCount])
+
   const charts = useMemo(
     () => ({
       campus: buildCountData(filteredActivityRows, (row) => row.campusLabel),
@@ -970,8 +1072,63 @@ export function VisaoCrm() {
           description="Limpe os filtros dos cards ou troque de vendedor para voltar a ver os candidatos desta visao."
         />
       ) : (
-        <section className="grid gap-4 xl:grid-cols-2">
-          {cardCandidateSummaries.map((candidate) => (
+        <>
+          <section className="rounded-[28px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">
+                Mostrando {formatNumberBR(paginatedCandidateSummaries.length)} de{' '}
+                {formatNumberBR(cardCandidateSummaries.length)} candidatos nesta pagina.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCandidatePage((currentValue) => Math.max(currentValue - 1, 1))}
+                  disabled={candidatePage === 1}
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Anterior
+                </button>
+
+                {Array.from({ length: candidatePageCount }, (_, index) => index + 1)
+                  .slice(
+                    Math.max(0, candidatePage - 3),
+                    Math.max(5, Math.min(candidatePageCount, candidatePage + 2)),
+                  )
+                  .map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      onClick={() => setCandidatePage(pageNumber)}
+                      className={cn(
+                        'rounded-2xl border px-3 py-2 text-sm font-semibold transition',
+                        candidatePage === pageNumber
+                          ? 'border-slate-950 bg-slate-950 text-white'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                      )}
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCandidatePage((currentValue) =>
+                      Math.min(currentValue + 1, candidatePageCount),
+                    )
+                  }
+                  disabled={candidatePage === candidatePageCount}
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Proxima
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            {paginatedCandidateSummaries.map((candidate) => (
             <article
               key={candidate.key}
               className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
@@ -1084,8 +1241,9 @@ export function VisaoCrm() {
                 <span>E-mail: {candidate.email || '--'}</span>
               </div>
             </article>
-          ))}
-        </section>
+            ))}
+          </section>
+        </>
       )}
     </div>
   )
