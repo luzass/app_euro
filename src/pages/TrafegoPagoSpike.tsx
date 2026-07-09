@@ -1810,7 +1810,7 @@ export function TrafegoPagoSpike() {
               </div>
             </section>
 
-            <section className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:h-[1120px]">
+            <section className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:h-[1220px]">
               <div className="mb-5">
                 <h3 className="text-lg font-semibold text-slate-950">Tabela detalhada</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
