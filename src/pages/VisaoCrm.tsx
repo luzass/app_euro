@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { ClipboardList, Eraser, RefreshCw, Users } from 'lucide-react'
 import {
   Bar,
@@ -26,6 +26,7 @@ type FilterState = {
   course: string
   campus: string
   process: string
+  status: string
   candidateName: string
 }
 
@@ -35,7 +36,14 @@ type CountDatum = {
   value: number
 }
 
-type ChartFilterKey = 'campus' | 'process' | 'course' | 'activity'
+type ChartFilterKey =
+  | 'campus'
+  | 'process'
+  | 'course'
+  | 'status'
+  | 'activity'
+  | 'objection'
+  | 'lossObservation'
 
 type ChartSelections = Record<ChartFilterKey, string[]>
 
@@ -56,6 +64,26 @@ type ActivityCrmPrepared = {
   dateCreatedKey: string
 }
 
+type RegistroCrmPrepared = {
+  id: number
+  identifier: string
+  externalCode: string
+  personCode: string
+  contactName: string
+  seller: Seller | null
+  email: string
+  cpf: string
+  courseLabel: string
+  processLabel: string
+  campusLabel: string
+  statusLabel: string
+  objectionLabel: string
+  lossObservationLabel: string
+  currentSummary: string
+  dateCreatedRaw: string
+  dateCreatedKey: string
+}
+
 type CandidateSummary = {
   key: string
   personCode: string
@@ -65,11 +93,17 @@ type CandidateSummary = {
   courseLabel: string
   campusLabel: string
   processLabel: string
+  statusLabel: string
+  objectionLabel: string
+  lossObservationLabel: string
+  currentSummary: string
   activityCount: number
   activities: string[]
   descriptions: string[]
   hasInscrito: boolean
   hasMatriculado: boolean
+  hasRegistro: boolean
+  hasActivity: boolean
   latestDateKey: string
 }
 
@@ -91,6 +125,7 @@ const initialFilters: FilterState = {
   course: '',
   campus: '',
   process: '',
+  status: '',
   candidateName: '',
 }
 
@@ -98,42 +133,24 @@ const initialChartSelections: ChartSelections = {
   campus: [],
   process: [],
   course: [],
+  status: [],
   activity: [],
+  objection: [],
+  lossObservation: [],
 }
 
 function normalizeString(value?: string | null) {
-  return (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/�/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase()
-}
-
-function buildMatchString(value?: string | null) {
   return decodeMojibake(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/�/g, ' ')
-    .replace(/[^A-Z0-9.]+/gi, ' ')
+    .replace(/[^A-Z0-9@.\s/-]+/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toUpperCase()
 }
 
-function cleanEmptyValue(value?: string | null) {
-  const normalized = normalizeString(value)
-
-  if (!normalized || normalized === '- - -' || normalized === '--' || normalized === '-') {
-    return ''
-  }
-
-  return (value ?? '').trim()
-}
-
 function decodeMojibake(value?: string | null) {
-  const text = cleanEmptyValue(value)
+  const text = String(value ?? '').trim()
 
   if (!text) {
     return ''
@@ -152,11 +169,11 @@ function decodeMojibake(value?: string | null) {
   }
 }
 
-function titleize(value?: string | null) {
+function titleize(value?: string | null, fallback = 'Não informado') {
   const text = decodeMojibake(value)
 
   if (!text) {
-    return 'Não informado'
+    return fallback
   }
 
   return text
@@ -167,16 +184,20 @@ function titleize(value?: string | null) {
     .join(' ')
 }
 
+function cleanText(value?: string | null) {
+  return decodeMojibake(value).replace(/\s+/g, ' ').trim()
+}
+
 function normalizeCpf(value?: string | null) {
-  return (value ?? '').replace(/\D/g, '')
+  return String(value ?? '').replace(/\D/g, '')
 }
 
 function normalizeEmail(value?: string | null) {
-  return cleanEmptyValue(value).toLowerCase()
+  return cleanText(value).toLowerCase()
 }
 
 function toDateKey(value?: string | null) {
-  const text = cleanEmptyValue(value)
+  const text = cleanText(value)
 
   if (!text) {
     return ''
@@ -208,7 +229,7 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
 }
 
 function normalizeSeller(value?: string | null): Seller | null {
-  const normalized = normalizeString(decodeMojibake(value))
+  const normalized = normalizeString(value)
 
   if (!normalized) {
     return null
@@ -238,7 +259,7 @@ function normalizeSeller(value?: string | null): Seller | null {
 }
 
 function normalizeCampus(...sources: Array<string | null | undefined>) {
-  const combined = buildMatchString(sources.map((value) => decodeMojibake(value)).join(' '))
+  const combined = normalizeString(sources.map((value) => cleanText(value)).join(' '))
 
   if (combined.includes('AGUAS CLARAS') || combined.includes('GUAS CLARAS')) {
     return 'Águas Claras'
@@ -252,7 +273,8 @@ function normalizeCampus(...sources: Array<string | null | undefined>) {
 }
 
 function normalizeCourseLabel(value?: string | null) {
-  const decoded = decodeMojibake(value)
+  const decoded = cleanText(value)
+
   if (!decoded) {
     return 'Não informado'
   }
@@ -266,8 +288,8 @@ function normalizeCourseLabel(value?: string | null) {
 }
 
 function normalizeProcessLabel(value?: string | null) {
-  const decoded = decodeMojibake(value)
-  const normalized = buildMatchString(decoded)
+  const decoded = cleanText(value)
+  const normalized = normalizeString(decoded)
 
   if (!normalized) {
     return 'Não informado'
@@ -278,7 +300,7 @@ function normalizeProcessLabel(value?: string | null) {
       normalized.includes('2')) ||
     normalized.includes('SEGUNDA GRADUACAO')
   ) {
-    return '2a Graduacao'
+    return '2ª Graduação'
   }
 
   if (normalized.includes('PROUNI')) {
@@ -301,7 +323,7 @@ function normalizeProcessLabel(value?: string | null) {
     return 'Vestibular'
   }
 
-  if (normalized.includes('SEMIPRESENCIAIS') || normalized.includes('SEMIPRESENCIAL')) {
+  if (normalized.includes('SEMIPRESENCIAL')) {
     return 'Semipresencial'
   }
 
@@ -312,43 +334,97 @@ function normalizeProcessLabel(value?: string | null) {
   return titleize(decoded)
 }
 
-function buildCountData(rows: ActivityCrmPrepared[], getValue: (row: ActivityCrmPrepared) => string) {
+function normalizeStatusLabel(value?: string | null) {
+  const decoded = cleanText(value)
+  const normalized = normalizeString(decoded)
+
+  if (!normalized) {
+    return 'Não informado'
+  }
+
+  if (normalized.includes('PERD')) {
+    return 'Perdido'
+  }
+
+  if (normalized.includes('GANH')) {
+    return 'Ganho'
+  }
+
+  if (
+    normalized.includes('ANDAMENTO') ||
+    normalized.includes('EM ANDAMENTO') ||
+    normalized.includes('ABERTO') ||
+    normalized.includes('ATIVO')
+  ) {
+    return 'Em andamento'
+  }
+
+  return titleize(decoded)
+}
+
+function normalizeObjectionLabel(value?: string | null) {
+  return titleize(value, 'Não informada')
+}
+
+function normalizeLossObservationLabel(value?: string | null) {
+  return cleanText(value) || 'Não informada'
+}
+
+function buildCountDataFromValues(values: string[]) {
   const map = new Map<string, CountDatum>()
 
-  rows.forEach((row) => {
-    const label = getValue(row) || 'Não informado'
+  values.forEach((labelValue) => {
+    const label = labelValue || 'Não informado'
     const current = map.get(label) ?? { key: label, label, value: 0 }
     current.value += 1
     map.set(label, current)
   })
 
   return Array.from(map.values())
-    .sort((currentItem, nextItem) => nextItem.value - currentItem.value || currentItem.label.localeCompare(nextItem.label))
+    .sort(
+      (currentItem, nextItem) =>
+        nextItem.value - currentItem.value || currentItem.label.localeCompare(nextItem.label),
+    )
     .slice(0, 10)
 }
 
-function hasActiveChartSelections(selections: ChartSelections) {
-  return Object.values(selections).some((items) => items.length > 0)
+function buildCandidateKeys(candidate: {
+  personCode?: string
+  cpf?: string
+  email?: string
+  contactName?: string
+}) {
+  const keys = new Set<string>()
+
+  if (candidate.personCode) {
+    keys.add(`code:${normalizeString(candidate.personCode)}`)
+  }
+
+  if (candidate.cpf) {
+    keys.add(`cpf:${normalizeCpf(candidate.cpf)}`)
+  }
+
+  if (candidate.email) {
+    keys.add(`email:${normalizeEmail(candidate.email)}`)
+  }
+
+  if (candidate.contactName) {
+    keys.add(`name:${normalizeString(candidate.contactName)}`)
+  }
+
+  return Array.from(keys).filter((value) => value && !value.endsWith(':'))
 }
 
-function applyChartSelections(row: ActivityCrmPrepared, selections: ChartSelections) {
-  if (selections.campus.length > 0 && !selections.campus.includes(row.campusLabel)) {
-    return false
-  }
-
-  if (selections.process.length > 0 && !selections.process.includes(row.processLabel)) {
-    return false
-  }
-
-  if (selections.course.length > 0 && !selections.course.includes(row.courseLabel)) {
-    return false
-  }
-
-  if (selections.activity.length > 0 && !selections.activity.includes(row.activity)) {
-    return false
-  }
-
-  return true
+function buildPrimaryCandidateKey(candidate: {
+  personCode?: string
+  cpf?: string
+  email?: string
+  contactName?: string
+}) {
+  return (
+    buildCandidateKeys(candidate)[0] ||
+    `fallback:${normalizeString(candidate.contactName || candidate.email || candidate.cpf || String(Math.random()))}`
+  )
 }
 
 function wrapAxisLabel(label: string, maxLineLength = 18, maxLines = 3) {
@@ -417,30 +493,42 @@ function WrappedYAxisTick({
   )
 }
 
-function applyFilters(row: ActivityCrmPrepared, filters: FilterState) {
-  if (filters.startDate && row.dateCreatedKey < filters.startDate) {
+function matchesFilterDate(dateKey: string, filters: FilterState) {
+  if (filters.startDate && dateKey < filters.startDate) {
     return false
   }
 
-  if (filters.endDate && row.dateCreatedKey > filters.endDate) {
+  if (filters.endDate && dateKey > filters.endDate) {
     return false
   }
 
-  if (filters.course && row.courseLabel !== filters.course) {
+  return true
+}
+
+function applyCandidateFilters(candidate: CandidateSummary, filters: FilterState) {
+  if (!matchesFilterDate(candidate.latestDateKey, filters)) {
     return false
   }
 
-  if (filters.campus && row.campusLabel !== filters.campus) {
+  if (filters.course && candidate.courseLabel !== filters.course) {
     return false
   }
 
-  if (filters.process && row.processLabel !== filters.process) {
+  if (filters.campus && candidate.campusLabel !== filters.campus) {
+    return false
+  }
+
+  if (filters.process && candidate.processLabel !== filters.process) {
+    return false
+  }
+
+  if (filters.status && candidate.statusLabel !== filters.status) {
     return false
   }
 
   if (
     filters.candidateName &&
-    !normalizeString(row.contactName).includes(normalizeString(filters.candidateName))
+    !normalizeString(candidate.contactName).includes(normalizeString(filters.candidateName))
   ) {
     return false
   }
@@ -448,19 +536,56 @@ function applyFilters(row: ActivityCrmPrepared, filters: FilterState) {
   return true
 }
 
-function buildCandidateKey(row: ActivityCrmPrepared) {
-  return row.personCode || row.cpf || row.email || normalizeString(row.contactName)
+function hasActiveChartSelections(selections: ChartSelections) {
+  return Object.values(selections).some((items) => items.length > 0)
 }
 
-function findFirstFilled(values: string[]) {
-  return values.find((value) => value && value !== 'Não informado') ?? 'Não informado'
+function applyChartSelections(candidate: CandidateSummary, selections: ChartSelections) {
+  if (selections.campus.length > 0 && !selections.campus.includes(candidate.campusLabel)) {
+    return false
+  }
+
+  if (selections.process.length > 0 && !selections.process.includes(candidate.processLabel)) {
+    return false
+  }
+
+  if (selections.course.length > 0 && !selections.course.includes(candidate.courseLabel)) {
+    return false
+  }
+
+  if (selections.status.length > 0 && !selections.status.includes(candidate.statusLabel)) {
+    return false
+  }
+
+  if (
+    selections.objection.length > 0 &&
+    !selections.objection.includes(candidate.objectionLabel)
+  ) {
+    return false
+  }
+
+  if (
+    selections.lossObservation.length > 0 &&
+    !selections.lossObservation.includes(candidate.lossObservationLabel)
+  ) {
+    return false
+  }
+
+  if (
+    selections.activity.length > 0 &&
+    !selections.activity.some((activity) => candidate.activities.includes(activity))
+  ) {
+    return false
+  }
+
+  return true
 }
 
 async function fetchAllRows(tableName: string, orderColumn: string, selectClause = '*') {
   if (!supabase) {
     return {
       data: null as Record<string, unknown>[] | null,
-      error: new Error('Supabase indisponivel.'),
+      error: new Error('Supabase indisponível.'),
     }
   }
 
@@ -536,12 +661,7 @@ function ChartCard({
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#64748b', fontSize: 12 }} />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={156}
-                  tick={<WrappedYAxisTick />}
-                />
+                <YAxis type="category" dataKey="label" width={156} tick={<WrappedYAxisTick />} />
                 <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
                 <Bar
                   dataKey="value"
@@ -595,15 +715,17 @@ function FilterPanel({
   courseOptions,
   campusOptions,
   processOptions,
+  statusOptions,
   candidateOptions,
 }: {
   title: string
   description: string
   filters: FilterState
-  setFilters: React.Dispatch<React.SetStateAction<FilterState>>
+  setFilters: Dispatch<SetStateAction<FilterState>>
   courseOptions: string[]
   campusOptions: string[]
   processOptions: string[]
+  statusOptions: string[]
   candidateOptions: string[]
 }) {
   return (
@@ -624,7 +746,7 @@ function FilterPanel({
         </button>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-700">Data inicial</span>
           <input
@@ -704,6 +826,24 @@ function FilterPanel({
         </label>
 
         <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Status</span>
+          <select
+            value={filters.status}
+            onChange={(event) =>
+              setFilters((currentValue) => ({ ...currentValue, status: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
+          >
+            <option value="">Todos</option>
+            {statusOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2 xl:col-span-2">
           <span className="text-sm font-medium text-slate-700">Nome do candidato</span>
           <input
             type="text"
@@ -732,6 +872,7 @@ function FilterPanel({
 export function VisaoCrm() {
   const [activeSeller, setActiveSeller] = useState<Seller>('Tony')
   const [crmRows, setCrmRows] = useState<ActivityCrmPrepared[]>([])
+  const [registroRows, setRegistroRows] = useState<RegistroCrmPrepared[]>([])
   const [inscritosRows, setInscritosRows] = useState<InscritoPrepared[]>([])
   const [matriculadosRows, setMatriculadosRows] = useState<MatriculadoPrepared[]>([])
   const [filters, setFilters] = useState<FilterState>(initialFilters)
@@ -751,15 +892,22 @@ export function VisaoCrm() {
     setLoading(true)
     setError(null)
 
-    const [crmResponse, inscritosResponse, matriculadosResponse] = await Promise.all([
-      fetchAllRows('atividade_crm', 'Data de criação'),
-      fetchAllRows('inscritos_20262', 'data_inscricao', 'cpf, candidato'),
-      fetchAllRows('matriculados_20262', 'data_baixa_do_pagamento', 'cpf, aluno'),
-    ])
+    const [crmResponse, registroResponse, inscritosResponse, matriculadosResponse] =
+      await Promise.all([
+        fetchAllRows('atividade_crm', 'Data de criação'),
+        fetchAllRows('registro_crm', 'Data da criação'),
+        fetchAllRows('inscritos_20262', 'data_inscricao', 'cpf, candidato'),
+        fetchAllRows('matriculados_20262', 'data_baixa_do_pagamento', 'cpf, aluno'),
+      ])
 
-    if (crmResponse.error || inscritosResponse.error || matriculadosResponse.error) {
+    if (
+      crmResponse.error ||
+      registroResponse.error ||
+      inscritosResponse.error ||
+      matriculadosResponse.error
+    ) {
       setError(
-        'Não foi possível carregar a base de CRM, inscritos e matriculados. Confira as tabelas e as permissões de leitura no Supabase.',
+        'Não foi possível carregar as bases de CRM, registros, inscritos e matriculados. Confira as tabelas e as permissões de leitura no Supabase.',
       )
       setLoading(false)
       return
@@ -774,17 +922,16 @@ export function VisaoCrm() {
 
       return {
         id: Number(row.id ?? 0),
-        schedulingCode: cleanEmptyValue(
+        schedulingCode: cleanText(
           readField(row, 'Código do agendamento', 'CÃ³digo do agendamento'),
         ),
         activity: titleize(readField(row, 'Atividade')),
-        description: decodeMojibake(readField(row, 'Descrição', 'DescriÃ§Ã£o')) || 'Sem descrição',
+        description:
+          cleanText(readField(row, 'Descrição', 'DescriÃ§Ã£o')) || 'Sem descrição',
         courseLabel: normalizeCourseLabel(courseSource),
         processLabel: normalizeProcessLabel(processSource),
         email: normalizeEmail(readField(row, 'E-mail')),
-        personCode: cleanEmptyValue(
-          readField(row, 'Código da pessoa', 'CÃ³digo da pessoa'),
-        ),
+        personCode: cleanText(readField(row, 'Código da pessoa', 'CÃ³digo da pessoa')),
         contactName: titleize(readField(row, 'Contato')),
         cpf: normalizeCpf(readField(row, 'CPF da pessoa')),
         seller: normalizeSeller(readField(row, 'Responsável', 'ResponsÃ¡vel')),
@@ -794,7 +941,42 @@ export function VisaoCrm() {
       } satisfies ActivityCrmPrepared
     })
 
+    const preparedRegistroRows = (registroResponse.data ?? []).map((row) => {
+      const dateCreatedRaw = readField(row, 'Data da criação', 'Data da criaÃ§Ã£o')
+      const courseSource = readField(row, 'Nome - Oferta de curso', 'Curso de interesse')
+      const unidadeSource = readField(row, 'Unidade', 'Unidade de Interesse')
+      const localOfferSource = readField(row, 'Local da oferta')
+      const processSource = readField(row, 'Processo seletivo')
+      const sellerSource = readField(
+        row,
+        'Vendedor',
+        'Nome do responsável',
+        'Nome do responsável2',
+      )
+
+      return {
+        id: Number(row.id ?? 0),
+        identifier: cleanText(readField(row, 'Identificador')),
+        externalCode: cleanText(readField(row, 'Código externo do registro')),
+        personCode: cleanText(readField(row, 'Identificador da pessoa')),
+        contactName: titleize(readField(row, 'Nome da pessoa')),
+        seller: normalizeSeller(sellerSource),
+        email: normalizeEmail(readField(row, 'E-mail da pessoa')),
+        cpf: normalizeCpf(readField(row, 'CPF')),
+        courseLabel: normalizeCourseLabel(courseSource),
+        processLabel: normalizeProcessLabel(processSource),
+        campusLabel: normalizeCampus(unidadeSource, localOfferSource, courseSource),
+        statusLabel: normalizeStatusLabel(readField(row, 'Status')),
+        objectionLabel: normalizeObjectionLabel(readField(row, 'Objeção')),
+        lossObservationLabel: normalizeLossObservationLabel(readField(row, 'Observações da perda')),
+        currentSummary: cleanText(readField(row, 'Resumo atual')) || 'Sem resumo atual',
+        dateCreatedRaw,
+        dateCreatedKey: toDateKey(dateCreatedRaw),
+      } satisfies RegistroCrmPrepared
+    })
+
     setCrmRows(preparedCrmRows)
+    setRegistroRows(preparedRegistroRows)
     setInscritosRows(
       (inscritosResponse.data ?? []).map((row) => ({
         cpf: normalizeCpf(readField(row, 'cpf')),
@@ -831,29 +1013,187 @@ export function VisaoCrm() {
     [matriculadosRows],
   )
 
-  const sellerRows = useMemo(
+  const sellerActivityRows = useMemo(
     () => crmRows.filter((row) => row.seller === activeSeller),
     [activeSeller, crmRows],
   )
+  const sellerRegistroRows = useMemo(
+    () => registroRows.filter((row) => row.seller === activeSeller),
+    [activeSeller, registroRows],
+  )
+
+  const allCandidates = useMemo(() => {
+    const activityIndex = new Map<string, number[]>()
+
+    sellerActivityRows.forEach((row, index) => {
+      buildCandidateKeys(row).forEach((key) => {
+        const currentItems = activityIndex.get(key) ?? []
+        currentItems.push(index)
+        activityIndex.set(key, currentItems)
+      })
+    })
+
+    const referencedActivityIndexes = new Set<number>()
+    const candidateMap = new Map<string, CandidateSummary>()
+
+    sellerRegistroRows.forEach((row) => {
+      const matchingIndexes = new Set<number>()
+
+      buildCandidateKeys(row).forEach((key) => {
+        const currentIndexes = activityIndex.get(key) ?? []
+        currentIndexes.forEach((index) => matchingIndexes.add(index))
+      })
+
+      const matchingActivities = Array.from(matchingIndexes).map((index) => sellerActivityRows[index])
+      matchingIndexes.forEach((index) => referencedActivityIndexes.add(index))
+
+      const activities = Array.from(
+        new Set(matchingActivities.map((item) => item.activity).filter(Boolean)),
+      )
+      const descriptions = Array.from(
+        new Set(matchingActivities.map((item) => item.description).filter(Boolean)),
+      )
+
+      const latestActivityDate = matchingActivities.reduce(
+        (latest, item) => (item.dateCreatedKey > latest ? item.dateCreatedKey : latest),
+        '',
+      )
+      const latestDateKey =
+        row.dateCreatedKey > latestActivityDate ? row.dateCreatedKey : latestActivityDate
+
+      const hasInscrito =
+        (row.cpf && inscritosCpfSet.has(row.cpf)) ||
+        inscritosNameSet.has(normalizeString(row.contactName))
+      const hasMatriculado =
+        (row.cpf && matriculadosCpfSet.has(row.cpf)) ||
+        matriculadosNameSet.has(normalizeString(row.contactName))
+
+      const primaryKey = buildPrimaryCandidateKey({
+        personCode: row.personCode,
+        cpf: row.cpf,
+        email: row.email,
+        contactName: row.contactName,
+      })
+
+      candidateMap.set(primaryKey, {
+        key: primaryKey,
+        personCode: row.personCode || 'Não informado',
+        contactName: row.contactName || 'Não informado',
+        cpf: row.cpf,
+        email: row.email,
+        courseLabel:
+          row.courseLabel !== 'Não informado'
+            ? row.courseLabel
+            : matchingActivities.find((item) => item.courseLabel !== 'Não informado')?.courseLabel ||
+              'Não informado',
+        campusLabel:
+          row.campusLabel !== 'Não informado'
+            ? row.campusLabel
+            : matchingActivities.find((item) => item.campusLabel !== 'Não informado')?.campusLabel ||
+              'Não informado',
+        processLabel:
+          row.processLabel !== 'Não informado'
+            ? row.processLabel
+            : matchingActivities.find((item) => item.processLabel !== 'Não informado')?.processLabel ||
+              'Não informado',
+        statusLabel: row.statusLabel,
+        objectionLabel: row.objectionLabel,
+        lossObservationLabel: row.lossObservationLabel,
+        currentSummary: row.currentSummary,
+        activityCount: matchingActivities.length,
+        activities,
+        descriptions,
+        hasInscrito,
+        hasMatriculado,
+        hasRegistro: true,
+        hasActivity: matchingActivities.length > 0,
+        latestDateKey,
+      })
+    })
+
+    sellerActivityRows.forEach((row, index) => {
+      if (referencedActivityIndexes.has(index)) {
+        return
+      }
+
+      const primaryKey = buildPrimaryCandidateKey({
+        personCode: row.personCode,
+        cpf: row.cpf,
+        email: row.email,
+        contactName: row.contactName,
+      })
+
+      const existingCandidate = candidateMap.get(primaryKey)
+
+      if (existingCandidate) {
+        return
+      }
+
+      const hasInscrito =
+        (row.cpf && inscritosCpfSet.has(row.cpf)) ||
+        inscritosNameSet.has(normalizeString(row.contactName))
+      const hasMatriculado =
+        (row.cpf && matriculadosCpfSet.has(row.cpf)) ||
+        matriculadosNameSet.has(normalizeString(row.contactName))
+
+      candidateMap.set(primaryKey, {
+        key: primaryKey,
+        personCode: row.personCode || 'Não informado',
+        contactName: row.contactName || 'Não informado',
+        cpf: row.cpf,
+        email: row.email,
+        courseLabel: row.courseLabel,
+        campusLabel: row.campusLabel,
+        processLabel: row.processLabel,
+        statusLabel: 'Não informado',
+        objectionLabel: 'Não informada',
+        lossObservationLabel: 'Não informada',
+        currentSummary: 'Sem resumo atual',
+        activityCount: 1,
+        activities: row.activity ? [row.activity] : [],
+        descriptions: row.description ? [row.description] : [],
+        hasInscrito,
+        hasMatriculado,
+        hasRegistro: false,
+        hasActivity: true,
+        latestDateKey: row.dateCreatedKey,
+      })
+    })
+
+    return Array.from(candidateMap.values()).sort((currentItem, nextItem) =>
+      currentItem.contactName.localeCompare(nextItem.contactName),
+    )
+  }, [
+    inscritosCpfSet,
+    inscritosNameSet,
+    matriculadosCpfSet,
+    matriculadosNameSet,
+    sellerActivityRows,
+    sellerRegistroRows,
+  ])
 
   const filterOptions = useMemo(() => {
     const courses = new Set<string>()
     const campuses = new Set<string>()
     const processes = new Set<string>()
+    const statuses = new Set<string>()
     const candidates = new Set<string>()
 
-    sellerRows.forEach((row) => {
-      if (row.courseLabel && row.courseLabel !== 'Não informado') {
-        courses.add(row.courseLabel)
+    allCandidates.forEach((candidate) => {
+      if (candidate.courseLabel && candidate.courseLabel !== 'Não informado') {
+        courses.add(candidate.courseLabel)
       }
-      if (row.campusLabel && row.campusLabel !== 'Não informado') {
-        campuses.add(row.campusLabel)
+      if (candidate.campusLabel && candidate.campusLabel !== 'Não informado') {
+        campuses.add(candidate.campusLabel)
       }
-      if (row.processLabel && row.processLabel !== 'Não informado') {
-        processes.add(row.processLabel)
+      if (candidate.processLabel && candidate.processLabel !== 'Não informado') {
+        processes.add(candidate.processLabel)
       }
-      if (row.contactName && row.contactName !== 'Não informado') {
-        candidates.add(row.contactName)
+      if (candidate.statusLabel && candidate.statusLabel !== 'Não informado') {
+        statuses.add(candidate.statusLabel)
+      }
+      if (candidate.contactName && candidate.contactName !== 'Não informado') {
+        candidates.add(candidate.contactName)
       }
     })
 
@@ -861,17 +1201,10 @@ export function VisaoCrm() {
       courses: Array.from(courses).sort(),
       campuses: Array.from(campuses).sort(),
       processes: Array.from(processes).sort(),
+      statuses: Array.from(statuses).sort(),
       candidates: Array.from(candidates).sort(),
     }
-  }, [sellerRows])
-
-  const filteredActivityRows = useMemo(
-    () =>
-      sellerRows
-        .filter((row) => applyFilters(row, filters))
-        .filter((row) => applyChartSelections(row, chartSelections)),
-    [chartSelections, filters, sellerRows],
-  )
+  }, [allCandidates])
 
   const handleChartSelection = (
     chartKey: ChartFilterKey,
@@ -920,150 +1253,121 @@ export function VisaoCrm() {
           label: 'Curso',
           value,
         })),
+        ...chartSelections.status.map((value) => ({
+          chartKey: 'status' as const,
+          label: 'Status',
+          value,
+        })),
         ...chartSelections.activity.map((value) => ({
           chartKey: 'activity' as const,
           label: 'Atividade',
+          value,
+        })),
+        ...chartSelections.objection.map((value) => ({
+          chartKey: 'objection' as const,
+          label: 'Objeção',
+          value,
+        })),
+        ...chartSelections.lossObservation.map((value) => ({
+          chartKey: 'lossObservation' as const,
+          label: 'Perda',
           value,
         })),
       ],
     [chartSelections],
   )
 
-  const candidateSummaries = useMemo(() => {
-    const groups = new Map<string, ActivityCrmPrepared[]>()
+  const filteredCandidates = useMemo(
+    () =>
+      allCandidates
+        .filter((candidate) => applyCandidateFilters(candidate, filters))
+        .filter((candidate) => applyChartSelections(candidate, chartSelections)),
+    [allCandidates, chartSelections, filters],
+  )
 
-    filteredActivityRows.forEach((row) => {
-      const key = buildCandidateKey(row)
-      const currentGroup = groups.get(key) ?? []
-      currentGroup.push(row)
-      groups.set(key, currentGroup)
-    })
-
-    return Array.from(groups.entries())
-      .map(([key, rows]) => {
-        const sortedRows = [...rows].sort((currentItem, nextItem) =>
-          nextItem.dateCreatedKey.localeCompare(currentItem.dateCreatedKey),
-        )
-        const latestRow = sortedRows[0]
-        const activities = Array.from(new Set(sortedRows.map((row) => row.activity).filter(Boolean)))
-        const descriptions = Array.from(
-          new Set(sortedRows.map((row) => row.description).filter(Boolean)),
-        )
-
-        const hasInscrito =
-          (latestRow.cpf && inscritosCpfSet.has(latestRow.cpf)) ||
-          inscritosNameSet.has(normalizeString(latestRow.contactName))
-        const hasMatriculado =
-          (latestRow.cpf && matriculadosCpfSet.has(latestRow.cpf)) ||
-          matriculadosNameSet.has(normalizeString(latestRow.contactName))
-
-        return {
-          key,
-          personCode: latestRow.personCode || 'Não informado',
-          contactName: latestRow.contactName,
-          cpf: latestRow.cpf,
-          email: latestRow.email,
-          courseLabel: findFirstFilled(sortedRows.map((row) => row.courseLabel)),
-          campusLabel: findFirstFilled(sortedRows.map((row) => row.campusLabel)),
-          processLabel: findFirstFilled(sortedRows.map((row) => row.processLabel)),
-          activityCount: sortedRows.length,
-          activities,
-          descriptions,
-          hasInscrito,
-          hasMatriculado,
-          latestDateKey: latestRow.dateCreatedKey,
-        } satisfies CandidateSummary
-      })
-      .sort((currentItem, nextItem) => currentItem.contactName.localeCompare(nextItem.contactName))
-  }, [
-    filteredActivityRows,
-    inscritosCpfSet,
-    inscritosNameSet,
-    matriculadosCpfSet,
-    matriculadosNameSet,
-  ])
-
-  const cardCandidateSummaries = useMemo(() => {
-    const groupedMap = new Map<string, ActivityCrmPrepared[]>()
-
-    sellerRows
-      .filter((row) => applyFilters(row, cardFilters))
-      .forEach((row) => {
-        const key = buildCandidateKey(row)
-        const currentGroup = groupedMap.get(key) ?? []
-        currentGroup.push(row)
-        groupedMap.set(key, currentGroup)
-      })
-
-    return Array.from(groupedMap.entries())
-      .map(([key, rows]) => {
-        const sortedRows = [...rows].sort((currentItem, nextItem) =>
-          nextItem.dateCreatedKey.localeCompare(currentItem.dateCreatedKey),
-        )
-        const latestRow = sortedRows[0]
-
-        return {
-          key,
-          personCode: latestRow.personCode || 'Não informado',
-          contactName: latestRow.contactName,
-          cpf: latestRow.cpf,
-          email: latestRow.email,
-          courseLabel: findFirstFilled(sortedRows.map((row) => row.courseLabel)),
-          campusLabel: findFirstFilled(sortedRows.map((row) => row.campusLabel)),
-          processLabel: findFirstFilled(sortedRows.map((row) => row.processLabel)),
-          activityCount: sortedRows.length,
-          activities: Array.from(new Set(sortedRows.map((row) => row.activity).filter(Boolean))),
-          descriptions: Array.from(
-            new Set(sortedRows.map((row) => row.description).filter(Boolean)),
-          ),
-          hasInscrito:
-            (latestRow.cpf && inscritosCpfSet.has(latestRow.cpf)) ||
-            inscritosNameSet.has(normalizeString(latestRow.contactName)),
-          hasMatriculado:
-            (latestRow.cpf && matriculadosCpfSet.has(latestRow.cpf)) ||
-            matriculadosNameSet.has(normalizeString(latestRow.contactName)),
-          latestDateKey: latestRow.dateCreatedKey,
-        } satisfies CandidateSummary
-      })
-      .sort((currentItem, nextItem) => currentItem.contactName.localeCompare(nextItem.contactName))
-  }, [
-    cardFilters,
-    inscritosCpfSet,
-    inscritosNameSet,
-    matriculadosCpfSet,
-    matriculadosNameSet,
-    sellerRows,
-  ])
+  const cardCandidateSummaries = useMemo(
+    () => allCandidates.filter((candidate) => applyCandidateFilters(candidate, cardFilters)),
+    [allCandidates, cardFilters],
+  )
 
   const kpiCards = useMemo(
     () => [
       {
-        title: 'Não inscritos/não matriculados',
+        title: 'Não inscritos e não matriculados',
         value: formatNumberBR(
-          candidateSummaries.filter((row) => !row.hasInscrito && !row.hasMatriculado).length,
+          filteredCandidates.filter((candidate) => !candidate.hasInscrito && !candidate.hasMatriculado)
+            .length,
         ),
-        helperText: 'Candidatos do vendedor sem correspondência em inscritos_20262 e matriculados_20262.',
+        helperText:
+          'Candidatos do vendedor sem correspondência nas bases de inscritos e matriculados.',
         emphasis: 'primary' as const,
       },
       {
         title: 'Inscritos',
-        value: formatNumberBR(candidateSummaries.filter((row) => row.hasInscrito).length),
-        helperText: 'Candidatos do recorte localizados na tabela inscritos_20262 por CPF ou nome.',
+        value: formatNumberBR(filteredCandidates.filter((candidate) => candidate.hasInscrito).length),
+        helperText: 'Candidatos do recorte localizados na tabela de inscritos.',
       },
       {
         title: 'Matriculados',
-        value: formatNumberBR(candidateSummaries.filter((row) => row.hasMatriculado).length),
+        value: formatNumberBR(
+          filteredCandidates.filter((candidate) => candidate.hasMatriculado).length,
+        ),
+        helperText: 'Candidatos do recorte localizados na tabela de matriculados.',
+      },
+      {
+        title: 'Em andamento',
+        value: formatNumberBR(
+          filteredCandidates.filter((candidate) => candidate.statusLabel === 'Em andamento').length,
+        ),
+        helperText: 'Registros com status em andamento dentro do recorte ativo.',
+      },
+      {
+        title: 'Perdidos',
+        value: formatNumberBR(
+          filteredCandidates.filter((candidate) => candidate.statusLabel === 'Perdido').length,
+        ),
+        helperText: 'Registros marcados como perdidos dentro do recorte ativo.',
+      },
+      {
+        title: 'Sem atividade agendada',
+        value: formatNumberBR(
+          filteredCandidates.filter((candidate) => candidate.hasRegistro && !candidate.hasActivity)
+            .length,
+        ),
         helperText:
-          'Candidatos do recorte localizados na tabela matriculados_20262 por CPF ou nome.',
+          'Registros presentes em registro_crm que ainda não possuem atividade correspondente.',
       },
       {
         title: 'Atividades agendadas',
-        value: formatNumberBR(filteredActivityRows.length),
-        helperText: 'Volume de atividades do vendedor dentro dos filtros ativos.',
+        value: formatNumberBR(
+          filteredCandidates.reduce(
+            (total, candidate) => total + candidate.activityCount,
+            0,
+          ),
+        ),
+        helperText: 'Quantidade total de atividades vinculadas aos candidatos do recorte.',
       },
     ],
-    [candidateSummaries, filteredActivityRows.length],
+    [filteredCandidates],
   )
+
+  const charts = useMemo(() => {
+    const activityLabels = filteredCandidates.flatMap((candidate) => candidate.activities)
+
+    return {
+      campus: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.campusLabel)),
+      process: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.processLabel)),
+      course: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.courseLabel)),
+      status: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.statusLabel)),
+      activity: buildCountDataFromValues(activityLabels),
+      objection: buildCountDataFromValues(
+        filteredCandidates.map((candidate) => candidate.objectionLabel),
+      ),
+      lossObservation: buildCountDataFromValues(
+        filteredCandidates.map((candidate) => candidate.lossObservationLabel),
+      ),
+    }
+  }, [filteredCandidates])
 
   const candidatesPerPage = 10
   const candidatePageCount = Math.max(
@@ -1085,16 +1389,6 @@ export function VisaoCrm() {
     }
   }, [candidatePage, candidatePageCount])
 
-  const charts = useMemo(
-    () => ({
-      campus: buildCountData(filteredActivityRows, (row) => row.campusLabel),
-      process: buildCountData(filteredActivityRows, (row) => row.processLabel),
-      course: buildCountData(filteredActivityRows, (row) => row.courseLabel),
-      activity: buildCountData(filteredActivityRows, (row) => row.activity),
-    }),
-    [filteredActivityRows],
-  )
-
   if (loading) {
     return <Loading message="Carregando a Visão CRM..." />
   }
@@ -1109,14 +1403,14 @@ export function VisaoCrm() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Operacao CRM
+              Operação CRM
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
               Visão CRM
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
-              A leitura cruza as atividades do CRM com inscritos_20262 e matriculados_20262,
-              usando CPF e nome como chaves praticas de validacao.
+              A leitura cruza a base de atividades com a base de registros do CRM usando
+              identificador da pessoa, CPF, e-mail e nome como chaves de apoio.
             </p>
           </div>
 
@@ -1157,6 +1451,7 @@ export function VisaoCrm() {
         courseOptions={filterOptions.courses}
         campusOptions={filterOptions.campuses}
         processOptions={filterOptions.processes}
+        statusOptions={filterOptions.statuses}
         candidateOptions={filterOptions.candidates}
       />
 
@@ -1218,7 +1513,7 @@ export function VisaoCrm() {
       <section className="grid gap-4 xl:grid-cols-2">
         <ChartCard
           title="Por campus"
-          description="Distribuicao das atividades por unidade padronizada."
+          description="Distribuição dos registros por unidade padronizada."
           data={charts.campus}
           chartKey="campus"
           selectedKeys={chartSelections.campus}
@@ -1226,7 +1521,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Por processo seletivo"
-          description="Leitura das atividades pelo processo normalizado do CRM."
+          description="Leitura dos registros pelo processo seletivo normalizado."
           data={charts.process}
           chartKey="process"
           selectedKeys={chartSelections.process}
@@ -1234,18 +1529,42 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Por curso"
-          description="Concentracao das atividades por curso, ignorando a unidade no nome da oferta."
+          description="Concentração dos registros por curso."
           data={charts.course}
           chartKey="course"
           selectedKeys={chartSelections.course}
           onSelect={handleChartSelection}
         />
         <ChartCard
+          title="Por status"
+          description="Situação atual dos registros dentro do recorte ativo."
+          data={charts.status}
+          chartKey="status"
+          selectedKeys={chartSelections.status}
+          onSelect={handleChartSelection}
+        />
+        <ChartCard
           title="Qual atividade"
-          description="Tipos de atividade mais recorrentes no recorte atual."
+          description="Atividades mais recorrentes entre os candidatos filtrados."
           data={charts.activity}
           chartKey="activity"
           selectedKeys={chartSelections.activity}
+          onSelect={handleChartSelection}
+        />
+        <ChartCard
+          title="Objeções"
+          description="Principais objeções registradas no CRM."
+          data={charts.objection}
+          chartKey="objection"
+          selectedKeys={chartSelections.objection}
+          onSelect={handleChartSelection}
+        />
+        <ChartCard
+          title="Observações da perda"
+          description="Motivos e anotações de perda mais recorrentes."
+          data={charts.lossObservation}
+          chartKey="lossObservation"
+          selectedKeys={chartSelections.lossObservation}
           onSelect={handleChartSelection}
         />
       </section>
@@ -1258,6 +1577,7 @@ export function VisaoCrm() {
         courseOptions={filterOptions.courses}
         campusOptions={filterOptions.campuses}
         processOptions={filterOptions.processes}
+        statusOptions={filterOptions.statuses}
         candidateOptions={filterOptions.candidates}
       />
 
@@ -1316,7 +1636,7 @@ export function VisaoCrm() {
                   disabled={candidatePage === candidatePageCount}
                   className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  Proxima
+                  Próxima
                 </button>
               </div>
             </div>
@@ -1324,113 +1644,152 @@ export function VisaoCrm() {
 
           <section className="grid gap-4 xl:grid-cols-2">
             {paginatedCandidateSummaries.map((candidate) => (
-            <article
-              key={candidate.key}
-              className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
-                      Candidato
-                    </p>
-                    <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                      {candidate.contactName}
-                    </h3>
+              <article
+                key={candidate.key}
+                className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                        Candidato
+                      </p>
+                      <h3 className="mt-2 text-xl font-semibold text-slate-950">
+                        {candidate.contactName}
+                      </h3>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          Curso
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-slate-900">
+                          {candidate.courseLabel}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          Campus
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-slate-900">
+                          {candidate.campusLabel}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          Processo seletivo
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-slate-900">
+                          {candidate.processLabel}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          Última movimentação
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-slate-900">
+                          {formatDateBR(candidate.latestDateKey)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        Curso
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-slate-900">
-                        {candidate.courseLabel}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        Campus
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-slate-900">
-                        {candidate.campusLabel}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        Processo seletivo
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-slate-900">
-                        {candidate.processLabel}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        Ultima atividade
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-slate-900">
-                        {formatDateBR(candidate.latestDateKey)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-                    {formatNumberBR(candidate.activityCount)} atividades
-                  </span>
-                  {candidate.hasInscrito ? (
-                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-                      Inscrito
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+                      {formatNumberBR(candidate.activityCount)} atividades
                     </span>
-                  ) : null}
-                  {candidate.hasMatriculado ? (
-                    <span className="inline-flex rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
-                      Matriculado
+                    <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700">
+                      {candidate.statusLabel}
                     </span>
-                  ) : null}
-                  {!candidate.hasInscrito && !candidate.hasMatriculado ? (
-                    <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
-                      Sem match
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4 text-slate-500" />
-                    <p className="text-sm font-semibold text-slate-900">Atividades</p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {candidate.activities.map((activity) => (
-                      <span
-                        key={`${candidate.key}-${activity}`}
-                        className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm"
-                      >
-                        {activity}
+                    {candidate.hasInscrito ? (
+                      <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                        Inscrito
                       </span>
-                    ))}
+                    ) : null}
+                    {candidate.hasMatriculado ? (
+                      <span className="inline-flex rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
+                        Matriculado
+                      </span>
+                    ) : null}
+                    {candidate.hasRegistro && !candidate.hasActivity ? (
+                      <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
+                        Sem atividade
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-slate-500" />
-                    <p className="text-sm font-semibold text-slate-900">Descricao</p>
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-slate-500" />
+                      <p className="text-sm font-semibold text-slate-900">Atividades</p>
+                    </div>
+                    {candidate.activities.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {candidate.activities.map((activity) => (
+                          <span
+                            key={`${candidate.key}-${activity}`}
+                            className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm"
+                          >
+                            {activity}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-slate-500">
+                        Nenhuma atividade agendada para este registro.
+                      </p>
+                    )}
                   </div>
-                  <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
-                    {candidate.descriptions.map((description) => (
-                      <li key={`${candidate.key}-${description}`} className="rounded-2xl bg-white px-3 py-2 shadow-sm">
-                        {description}
+
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-slate-500" />
+                      <p className="text-sm font-semibold text-slate-900">Resumos e descrições</p>
+                    </div>
+                    <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
+                      <li className="rounded-2xl bg-white px-3 py-2 shadow-sm">
+                        <strong>Resumo atual:</strong> {candidate.currentSummary}
                       </li>
-                    ))}
-                  </ul>
+                      {candidate.descriptions.map((description) => (
+                        <li
+                          key={`${candidate.key}-${description}`}
+                          className="rounded-2xl bg-white px-3 py-2 shadow-sm"
+                        >
+                          {description}
+                        </li>
+                      ))}
+                      {candidate.descriptions.length === 0 ? (
+                        <li className="rounded-2xl bg-white px-3 py-2 shadow-sm text-slate-500">
+                          Nenhuma descrição registrada nas atividades.
+                        </li>
+                      ) : null}
+                    </ul>
+                  </div>
                 </div>
-              </div>
 
-            </article>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Objeção
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-slate-900">
+                      {candidate.objectionLabel}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Observações da perda
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-slate-900">
+                      {candidate.lossObservationLabel}
+                    </p>
+                  </div>
+                </div>
+              </article>
             ))}
           </section>
         </>
