@@ -1750,7 +1750,7 @@ export function TrafegoPagoSpike() {
             </ChartContainer>
           </section>
 
-          <section className="grid items-stretch gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
+          <section className="grid items-stretch gap-6 xl:grid-cols-[460px_minmax(0,1fr)] xl:auto-rows-fr">
             <section className="h-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5">
                 <h3 className="text-lg font-semibold text-slate-950">Funil da campanha</h3>
@@ -1810,7 +1810,7 @@ export function TrafegoPagoSpike() {
               </div>
             </section>
 
-            <section className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:h-[1220px]">
+            <section className="flex h-full min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5">
                 <h3 className="text-lg font-semibold text-slate-950">Tabela detalhada</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
