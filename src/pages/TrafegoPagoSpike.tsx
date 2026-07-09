@@ -137,6 +137,19 @@ interface FunilGeralRow {
   matriculas: string | number | null
 }
 
+interface SpikeLeadResumoRow {
+  lead_id: string | number
+  data_referencia: string | null
+  cpf: string | null
+  telefone: string | null
+  nome: string | null
+  tem_inscricao: boolean | null
+  tem_matricula: boolean | null
+  status_crm: string | null
+  objecao: string | null
+  observacoes_perda: string | null
+}
+
 type LeadFocusFilter = 'all' | 'notConverted' | 'inscritos' | 'matriculados'
 
 interface LeadMatchedSummary {
@@ -606,6 +619,7 @@ export function TrafegoPagoSpike() {
   )
   const [rows, setRows] = useState<CampaignRow[]>([])
   const [leadRows, setLeadRows] = useState<GenericRow[]>([])
+  const [spikeLeadResumoRows, setSpikeLeadResumoRows] = useState<SpikeLeadResumoRow[]>([])
   const [inscritoRows, setInscritoRows] = useState<GenericRow[]>([])
   const [matriculadoRows, setMatriculadoRows] = useState<GenericRow[]>([])
   const [registroCrmRows, setRegistroCrmRows] = useState<GenericRow[]>([])
@@ -643,6 +657,7 @@ export function TrafegoPagoSpike() {
     const [
       campaignResponse,
       leadsResponse,
+      spikeLeadResumoResponse,
       inscritosResponse,
       matriculadosResponse,
       registroCrmResponse,
@@ -655,6 +670,12 @@ export function TrafegoPagoSpike() {
         .select('*')
         .order('data_inicio', { ascending: true }),
       supabase.from('leads_cursos').select('*'),
+      supabase
+        .from('spike_leads_resumo_20262')
+        .select(
+          'lead_id, data_referencia, cpf, telefone, nome, tem_inscricao, tem_matricula, status_crm, objecao, observacoes_perda',
+        )
+        .order('data_referencia', { ascending: true }),
       supabase.from('inscritos_20262').select('*'),
       supabase.from('matriculados_20262').select('*'),
       supabase.from('registro_crm').select('*'),
@@ -691,6 +712,7 @@ export function TrafegoPagoSpike() {
 
     setRows((campaignResponse.data as CampaignRow[]) ?? [])
     setLeadRows((leadsResponse.data as GenericRow[]) ?? [])
+    setSpikeLeadResumoRows((spikeLeadResumoResponse.data as SpikeLeadResumoRow[]) ?? [])
     setInscritoRows((inscritosResponse.data as GenericRow[]) ?? [])
     setMatriculadoRows((matriculadosResponse.data as GenericRow[]) ?? [])
     setRegistroCrmRows((registroCrmResponse.data as GenericRow[]) ?? [])
@@ -730,6 +752,12 @@ export function TrafegoPagoSpike() {
     if (registroCrmResponse.error) {
       console.warn('Não foi possível carregar a tabela registro_crm.', {
         registroCrmError: registroCrmResponse.error,
+      })
+    }
+
+    if (spikeLeadResumoResponse.error) {
+      console.warn('Não foi possível carregar a tabela spike_leads_resumo_20262.', {
+        spikeLeadResumoError: spikeLeadResumoResponse.error,
       })
     }
 
@@ -1089,20 +1117,81 @@ export function TrafegoPagoSpike() {
     [filters, leadRows],
   )
 
+  const filteredSpikeLeadResumoRows = useMemo(
+    () =>
+      applyGenericDateFilter(
+        spikeLeadResumoRows as unknown as GenericRow[],
+        filters,
+      ) as unknown as SpikeLeadResumoRow[],
+    [filters, spikeLeadResumoRows],
+  )
+
   const filteredInscritoRows = useMemo(
     () => applyGenericDateFilter(inscritoRows, filters),
     [filters, inscritoRows],
   )
 
+  const filteredMatriculadoRows = useMemo(
+    () =>
+      applyGenericDateFilter(matriculadoRows, filters).filter((row) => {
+        const tipoAluno = normalizeText(getRowField(row, 'tipo_aluno', 'Tipo Aluno'))
+        return !tipoAluno || tipoAluno === 'CALOURO'
+      }),
+    [filters, matriculadoRows],
+  )
+
+  const filteredRegistroCrmRows = useMemo(
+    () => applyGenericDateFilter(registroCrmRows, filters),
+    [filters, registroCrmRows],
+  )
+
+  const groupedRows = useMemo(() => agruparPorData(filteredRows), [filteredRows])
+  const baseKpis = useMemo(() => calcularKPIsCampanha(filteredRows), [filteredRows])
+  const kpis = useMemo<ExtendedCampaignKpis>(
+    () => expandCampaignKpis(baseKpis, matriculados),
+    [baseKpis, matriculados],
+  )
+
+  const operationalLeadsCount = useMemo(
+    () => filteredLeadRows.length,
+    [filteredLeadRows],
+  )
+  const inscritosGeradosNoPeriodo = useMemo(
+    () => countIntersectedCpfs(filteredLeadRows, filteredInscritoRows),
+    [filteredInscritoRows, filteredLeadRows],
+  )
+  const matriculadosGeradosNoPeriodo = useMemo(
+    () => countIntersectedCpfs(filteredLeadRows, filteredMatriculadoRows),
+    [filteredLeadRows, filteredMatriculadoRows],
+  )
+  const inscritosForTrafficCards = useMemo(
+    () =>
+      funilGeralRow && toNumber(funilGeralRow.inscritos) > 0
+        ? toNumber(funilGeralRow.inscritos)
+        : inscritosGeradosNoPeriodo,
+    [funilGeralRow, inscritosGeradosNoPeriodo],
+  )
+
   const spikeLeadSummaries = useMemo<LeadMatchedSummary[]>(() => {
-    const inscritosCpfSet = extractCpfSet(inscritoRows)
-    const matriculadosCpfSet = extractCpfSet(matriculadoRows)
+    if (filteredSpikeLeadResumoRows.length > 0) {
+      return filteredSpikeLeadResumoRows.map((row, index) => ({
+        key: String(row.lead_id ?? `lead-${index}`),
+        status: normalizeLeadStatus(row.status_crm),
+        objection: normalizeLeadObservation(row.objecao, 'Não informada'),
+        lossObservation: normalizeLeadObservation(row.observacoes_perda, 'Não informada'),
+        hasInscrito: Boolean(row.tem_inscricao),
+        hasMatriculado: Boolean(row.tem_matricula),
+      }))
+    }
+
+    const inscritosCpfSet = extractCpfSet(filteredInscritoRows)
+    const matriculadosCpfSet = extractCpfSet(filteredMatriculadoRows)
     const registroByMatchKey = new Map<
       string,
       { dateKey: string; status: string; objection: string; lossObservation: string }
     >()
 
-    registroCrmRows.forEach((row) => {
+    filteredRegistroCrmRows.forEach((row) => {
       const status = normalizeLeadStatus(getRowField(row, 'Status'))
       const objection = normalizeLeadObservation(getRowField(row, 'Objeção'), 'Não informada')
       const lossObservation = normalizeLeadObservation(
@@ -1170,7 +1259,13 @@ export function TrafegoPagoSpike() {
     })
 
     return Array.from(uniqueLeadMap.values())
-  }, [filteredLeadRows, inscritoRows, matriculadoRows, registroCrmRows])
+  }, [
+    filteredInscritoRows,
+    filteredLeadRows,
+    filteredMatriculadoRows,
+    filteredRegistroCrmRows,
+    filteredSpikeLeadResumoRows,
+  ])
 
   const focusedSpikeLeadSummaries = useMemo(() => {
     switch (leadFocusFilter) {
@@ -1185,28 +1280,41 @@ export function TrafegoPagoSpike() {
     }
   }, [leadFocusFilter, spikeLeadSummaries])
 
-  const groupedRows = useMemo(() => agruparPorData(filteredRows), [filteredRows])
-  const baseKpis = useMemo(() => calcularKPIsCampanha(filteredRows), [filteredRows])
-  const kpis = useMemo<ExtendedCampaignKpis>(
-    () => expandCampaignKpis(baseKpis, matriculados),
-    [baseKpis, matriculados],
+  const spikeRegistroStatusRows = useMemo(
+    () =>
+      filteredRegistroCrmRows.map((row, index) => ({
+        key: `registro-${index}`,
+        status: normalizeLeadStatus(getRowField(row, 'Status')),
+        objection: normalizeLeadObservation(getRowField(row, 'Objeção'), 'Não informada'),
+        lossObservation: normalizeLeadObservation(
+          getRowField(row, 'Observações da perda'),
+          'Não informada',
+        ),
+      })),
+    [filteredRegistroCrmRows],
   )
 
-  const operationalLeadsCount = useMemo(
-    () => filteredLeadRows.length,
-    [filteredLeadRows],
+  const spikeLeadHasResumoTable = filteredSpikeLeadResumoRows.length > 0
+  const spikeLeadCardsUseFallback = spikeLeadSummaries.length === 0
+  const spikeLeadFallbackBase = Math.round(funilGeralRow ? toNumber(funilGeralRow.leads) : operationalLeadsCount)
+  const spikeLeadFallbackInscritos = Math.round(
+    funilGeralRow ? toNumber(funilGeralRow.inscritos) : inscritosGeradosNoPeriodo,
   )
-  const inscritosGeradosNoPeriodo = useMemo(
-    () => countIntersectedCpfs(filteredLeadRows, filteredInscritoRows),
-    [filteredInscritoRows, filteredLeadRows],
+  const spikeLeadFallbackMatriculados = Math.round(
+    funilGeralRow ? toNumber(funilGeralRow.matriculas) : matriculadosGeradosNoPeriodo,
   )
-  const inscritosForTrafficCards = useMemo(
-    () =>
-      funilGeralRow && toNumber(funilGeralRow.inscritos) > 0
-        ? toNumber(funilGeralRow.inscritos)
-        : inscritosGeradosNoPeriodo,
-    [funilGeralRow, inscritosGeradosNoPeriodo],
-  )
+  const spikeLeadInscritosCount = spikeLeadHasResumoTable
+    ? spikeLeadSummaries.filter((row) => row.hasInscrito).length
+    : spikeLeadFallbackInscritos
+  const spikeLeadMatriculadosCount = spikeLeadHasResumoTable
+    ? spikeLeadSummaries.filter((row) => row.hasMatriculado).length
+    : spikeLeadFallbackMatriculados
+  const spikeLeadNotConvertedCount = spikeLeadHasResumoTable
+    ? spikeLeadSummaries.filter((row) => !row.hasInscrito && !row.hasMatriculado).length
+    : Math.max(spikeLeadFallbackBase - spikeLeadFallbackInscritos, 0)
+  const effectiveSpikeLeadStatusRows = spikeLeadCardsUseFallback
+    ? spikeRegistroStatusRows
+    : focusedSpikeLeadSummaries
 
   const funnelSteps = useMemo(
     () => [
@@ -1536,54 +1644,58 @@ export function TrafegoPagoSpike() {
       {
         key: 'notConverted' as const,
         title: 'Não se inscreveram nem se matricularam',
-        value: spikeLeadSummaries.filter((row) => !row.hasInscrito && !row.hasMatriculado).length,
+        value: spikeLeadNotConvertedCount,
         helperText: 'Leads sem correspondência nas bases de inscritos e matriculados.',
       },
       {
         key: 'inscritos' as const,
         title: 'Leads inscritos',
-        value: spikeLeadSummaries.filter((row) => row.hasInscrito).length,
+        value: spikeLeadInscritosCount,
         helperText: 'Leads encontrados na base de inscritos da campanha.',
       },
       {
         key: 'matriculados' as const,
         title: 'Leads matriculados',
-        value: spikeLeadSummaries.filter((row) => row.hasMatriculado).length,
+        value: spikeLeadMatriculadosCount,
         helperText: 'Leads encontrados também na base de matriculados.',
       },
     ],
-    [spikeLeadSummaries],
+    [
+      spikeLeadInscritosCount,
+      spikeLeadMatriculadosCount,
+      spikeLeadNotConvertedCount,
+    ],
   )
 
   const spikeLeadStatusCards = useMemo(
     () => [
       {
         title: 'Em andamento',
-        value: focusedSpikeLeadSummaries.filter((row) => row.status === 'Em andamento').length,
+        value: effectiveSpikeLeadStatusRows.filter((row) => row.status === 'Em andamento').length,
         helperText: 'Leads do recorte atual com registro ainda em andamento no CRM.',
       },
       {
         title: 'Perdido',
-        value: focusedSpikeLeadSummaries.filter((row) => row.status === 'Perdido').length,
+        value: effectiveSpikeLeadStatusRows.filter((row) => row.status === 'Perdido').length,
         helperText: 'Leads do recorte atual que já foram marcados como perdidos.',
       },
       {
         title: 'Ganho',
-        value: focusedSpikeLeadSummaries.filter((row) => row.status === 'Ganho').length,
+        value: effectiveSpikeLeadStatusRows.filter((row) => row.status === 'Ganho').length,
         helperText: 'Leads do recorte atual com status ganho no CRM.',
       },
     ],
-    [focusedSpikeLeadSummaries],
+    [effectiveSpikeLeadStatusRows],
   )
 
   const spikeLeadObjectionData = useMemo(
-    () => countByLabel(focusedSpikeLeadSummaries, (row) => row.objection, 10),
-    [focusedSpikeLeadSummaries],
+    () => countByLabel(effectiveSpikeLeadStatusRows, (row) => row.objection, 10),
+    [effectiveSpikeLeadStatusRows],
   )
 
   const spikeLeadLossObservationData = useMemo(
-    () => countByLabel(focusedSpikeLeadSummaries, (row) => row.lossObservation, 10),
-    [focusedSpikeLeadSummaries],
+    () => countByLabel(effectiveSpikeLeadStatusRows, (row) => row.lossObservation, 10),
+    [effectiveSpikeLeadStatusRows],
   )
 
   const selectedStoredReport = storedReports[selectedReportType] ?? null
