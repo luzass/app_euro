@@ -495,11 +495,6 @@ function normalizePhone(value: unknown) {
   return digits
 }
 
-function normalizeEmail(value: unknown) {
-  const cleanedValue = cleanPlaceholderText(value === undefined || value === null ? '' : String(value))
-  return cleanedValue ? cleanedValue.toLowerCase() : null
-}
-
 function extractCpfSet(rows: GenericRow[]) {
   const cpfs = new Set<string>()
 
@@ -515,35 +510,6 @@ function extractCpfSet(rows: GenericRow[]) {
   }
 
   return cpfs
-}
-
-function extractPhoneSet(rows: GenericRow[]) {
-  const phoneFieldCandidates = [
-    'telefone',
-    'Telefone',
-    'telefone_1',
-    'telefone_2',
-    'celular',
-    'whatsapp',
-    'fone',
-    'phone',
-    'Telefone da pessoa',
-    'Telefones secundários',
-  ]
-
-  const phones = new Set<string>()
-
-  for (const row of rows) {
-    for (const fieldName of phoneFieldCandidates) {
-      const normalizedPhone = normalizePhone(row[fieldName])
-
-      if (normalizedPhone) {
-        phones.add(normalizedPhone)
-      }
-    }
-  }
-
-  return phones
 }
 
 function normalizeLeadStatus(value?: string | null) {
@@ -1140,9 +1106,7 @@ export function TrafegoPagoSpike() {
 
   const spikeLeadSummaries = useMemo<LeadMatchedSummary[]>(() => {
     const inscritosCpfSet = extractCpfSet(filteredInscritoRows)
-    const inscritosPhoneSet = extractPhoneSet(filteredInscritoRows)
     const matriculadosCpfSet = extractCpfSet(filteredMatriculadoRows)
-    const matriculadosPhoneSet = extractPhoneSet(filteredMatriculadoRows)
     const registroByMatchKey = new Map<
       string,
       { dateKey: string; status: string; objection: string; lossObservation: string }
@@ -1160,16 +1124,12 @@ export function TrafegoPagoSpike() {
         getRowField(row, 'CPF', 'cpf', 'CPF da pessoa'),
       )
       const phone = normalizePhone(
-        getRowField(row, 'Telefone da pessoa', 'telefone', 'Telefone'),
-      )
-      const email = normalizeEmail(
-        getRowField(row, 'E-mail da pessoa', 'E-mail', 'email'),
+        getRowField(row, 'Telefone da pessoa', 'telefone', 'Telefone', 'Telefones secundários'),
       )
 
       ;[
         cpf ? `cpf:${cpf}` : null,
         phone ? `phone:${phone}` : null,
-        email ? `email:${email}` : null,
       ]
         .filter((value): value is string => Boolean(value))
         .forEach((key) => {
@@ -1186,37 +1146,40 @@ export function TrafegoPagoSpike() {
         })
     })
 
-    return filteredLeadRows.map((row, index) => {
+    const uniqueLeadMap = new Map<string, LeadMatchedSummary>()
+
+    filteredLeadRows.forEach((row, index) => {
       const cpf = normalizeCpf(getRowField(row, 'cpf', 'CPF', 'cpf_lead'))
       const phone = normalizePhone(
         getRowField(row, 'telefone', 'Telefone', 'telefone_1', 'celular', 'whatsapp', 'phone'),
       )
-      const email = normalizeEmail(getRowField(row, 'email', 'E-mail'))
       const matchKeys = [
         cpf ? `cpf:${cpf}` : null,
         phone ? `phone:${phone}` : null,
-        email ? `email:${email}` : null,
       ].filter((value): value is string => Boolean(value))
+
+      const leadKey = cpf ? `cpf:${cpf}` : phone ? `phone:${phone}` : `lead:${index}`
+
+      if (uniqueLeadMap.has(leadKey)) {
+        return
+      }
+
       const matchedRegistro =
         matchKeys
           .map((key) => registroByMatchKey.get(key))
           .find((value) => Boolean(value)) ?? null
 
-      const hasInscrito =
-        (cpf ? inscritosCpfSet.has(cpf) : false) || (phone ? inscritosPhoneSet.has(phone) : false)
-      const hasMatriculado =
-        (cpf ? matriculadosCpfSet.has(cpf) : false) ||
-        (phone ? matriculadosPhoneSet.has(phone) : false)
-
-      return {
-        key: `${cpf ?? phone ?? email ?? 'lead'}-${index}`,
+      uniqueLeadMap.set(leadKey, {
+        key: leadKey,
         status: matchedRegistro?.status ?? 'Não informado',
         objection: matchedRegistro?.objection ?? 'Não informada',
         lossObservation: matchedRegistro?.lossObservation ?? 'Não informada',
-        hasInscrito,
-        hasMatriculado,
-      }
+        hasInscrito: cpf ? inscritosCpfSet.has(cpf) : false,
+        hasMatriculado: cpf ? matriculadosCpfSet.has(cpf) : false,
+      })
     })
+
+    return Array.from(uniqueLeadMap.values())
   }, [filteredInscritoRows, filteredLeadRows, filteredMatriculadoRows, filteredRegistroCrmRows])
 
   const focusedSpikeLeadSummaries = useMemo(() => {
