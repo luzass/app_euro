@@ -217,11 +217,33 @@ function toDateKey(value?: string | null) {
   return ''
 }
 
+function canonicalizeFieldKey(value?: string | null) {
+  return decodeMojibake(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase()
+}
+
 function readField(row: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {
     const value = row[key]
     if (value !== undefined && value !== null) {
       return String(value)
+    }
+  }
+
+  const normalizedTargets = new Set(
+    keys.map((key) => canonicalizeFieldKey(key)).filter(Boolean),
+  )
+
+  for (const [currentKey, currentValue] of Object.entries(row)) {
+    if (
+      currentValue !== undefined &&
+      currentValue !== null &&
+      normalizedTargets.has(canonicalizeFieldKey(currentKey))
+    ) {
+      return String(currentValue)
     }
   }
 
@@ -350,16 +372,7 @@ function normalizeStatusLabel(value?: string | null) {
     return 'Ganho'
   }
 
-  if (
-    normalized.includes('ANDAMENTO') ||
-    normalized.includes('EM ANDAMENTO') ||
-    normalized.includes('ABERTO') ||
-    normalized.includes('ATIVO')
-  ) {
-    return 'Em andamento'
-  }
-
-  return titleize(decoded)
+  return 'Em andamento'
 }
 
 function normalizeObjectionLabel(value?: string | null) {
@@ -966,7 +979,9 @@ export function VisaoCrm() {
         courseLabel: normalizeCourseLabel(courseSource),
         processLabel: normalizeProcessLabel(processSource),
         campusLabel: normalizeCampus(unidadeSource, localOfferSource, courseSource),
-        statusLabel: normalizeStatusLabel(readField(row, 'Status')),
+        statusLabel: normalizeStatusLabel(
+          readField(row, 'Status', 'Status do registro', 'Resumo atual', 'Etapa'),
+        ),
         objectionLabel: normalizeObjectionLabel(readField(row, 'Objeção')),
         lossObservationLabel: normalizeLossObservationLabel(readField(row, 'Observações da perda')),
         currentSummary: cleanText(readField(row, 'Resumo atual')) || 'Sem resumo atual',
