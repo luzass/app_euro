@@ -185,7 +185,8 @@ function titleize(value?: string | null, fallback = 'Não informado') {
 }
 
 function cleanText(value?: string | null) {
-  return decodeMojibake(value).replace(/\s+/g, ' ').trim()
+  const normalized = decodeMojibake(value).replace(/\s+/g, ' ').trim()
+  return /^-\s*-\s*-$/.test(normalized) ? '' : normalized
 }
 
 function normalizeCpf(value?: string | null) {
@@ -229,7 +230,10 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {
     const value = row[key]
     if (value !== undefined && value !== null) {
-      return String(value)
+      const textValue = cleanText(String(value))
+      if (textValue) {
+        return textValue
+      }
     }
   }
 
@@ -243,7 +247,10 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
       currentValue !== null &&
       normalizedTargets.has(canonicalizeFieldKey(currentKey))
     ) {
-      return String(currentValue)
+      const textValue = cleanText(String(currentValue))
+      if (textValue) {
+        return textValue
+      }
     }
   }
 
