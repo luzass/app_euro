@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+﻿import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { ClipboardList, Eraser, RefreshCw, Users } from 'lucide-react'
 import {
   Bar,
@@ -156,7 +156,7 @@ function decodeMojibake(value?: string | null) {
     return ''
   }
 
-  if (!/[ÃÂ]/.test(text)) {
+  if (!/[ÃƒÃ‚]/.test(text)) {
     return text
   }
 
@@ -169,7 +169,7 @@ function decodeMojibake(value?: string | null) {
   }
 }
 
-function titleize(value?: string | null, fallback = 'Não informado') {
+function titleize(value?: string | null, fallback = 'NÃ£o informado') {
   const text = decodeMojibake(value)
 
   if (!text) {
@@ -291,21 +291,21 @@ function normalizeCampus(...sources: Array<string | null | undefined>) {
   const combined = normalizeString(sources.map((value) => cleanText(value)).join(' '))
 
   if (combined.includes('AGUAS CLARAS') || combined.includes('GUAS CLARAS')) {
-    return 'Águas Claras'
+    return 'Ãguas Claras'
   }
 
   if (combined.includes('ASA SUL')) {
     return 'Asa Sul'
   }
 
-  return 'Não informado'
+  return 'NÃ£o informado'
 }
 
 function normalizeCourseLabel(value?: string | null) {
   const decoded = cleanText(value)
 
   if (!decoded) {
-    return 'Não informado'
+    return 'NÃ£o informado'
   }
 
   const firstChunk = decoded
@@ -321,7 +321,7 @@ function normalizeProcessLabel(value?: string | null) {
   const normalized = normalizeString(decoded)
 
   if (!normalized) {
-    return 'Não informado'
+    return 'NÃ£o informado'
   }
 
   if (
@@ -329,7 +329,7 @@ function normalizeProcessLabel(value?: string | null) {
       normalized.includes('2')) ||
     normalized.includes('SEGUNDA GRADUACAO')
   ) {
-    return '2ª Graduação'
+    return '2Âª GraduaÃ§Ã£o'
   }
 
   if (normalized.includes('PROUNI')) {
@@ -368,7 +368,7 @@ function normalizeStatusLabel(value?: string | null) {
   const normalized = normalizeString(decoded)
 
   if (!normalized) {
-    return 'Não informado'
+    return 'NÃ£o informado'
   }
 
   if (normalized.includes('PERD')) {
@@ -383,18 +383,18 @@ function normalizeStatusLabel(value?: string | null) {
 }
 
 function normalizeObjectionLabel(value?: string | null) {
-  return titleize(value, 'Não informada')
+  return titleize(value, 'NÃ£o informada')
 }
 
 function normalizeLossObservationLabel(value?: string | null) {
-  return cleanText(value) || 'Não informada'
+  return cleanText(value) || 'NÃ£o informada'
 }
 
 function buildCountDataFromValues(values: string[]) {
   const map = new Map<string, CountDatum>()
 
   values.forEach((labelValue) => {
-    const label = labelValue || 'Não informado'
+    const label = labelValue || 'NÃ£o informado'
     const current = map.get(label) ?? { key: label, label, value: 0 }
     current.value += 1
     map.set(label, current)
@@ -605,7 +605,7 @@ async function fetchAllRows(tableName: string, orderColumn: string, selectClause
   if (!supabase) {
     return {
       data: null as Record<string, unknown>[] | null,
-      error: new Error('Supabase indisponível.'),
+      error: new Error('Supabase indisponÃ­vel.'),
     }
   }
 
@@ -668,7 +668,7 @@ function ChartCard({
 
       {data.length === 0 ? (
         <div className="mt-6 rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-          Sem dados para este gráfico no recorte atual.
+          Sem dados para este grÃ¡fico no recorte atual.
         </div>
       ) : (
         <div className="mt-6 overflow-y-auto pr-2" style={{ height: viewportHeight }}>
@@ -904,7 +904,7 @@ export function VisaoCrm() {
 
   const loadRows = async () => {
     if (!supabase) {
-      setError('Configure o Supabase antes de carregar a Visão CRM.')
+      setError('Configure o Supabase antes de carregar a VisÃ£o CRM.')
       setLoading(false)
       return
     }
@@ -914,8 +914,8 @@ export function VisaoCrm() {
 
     const [crmResponse, registroResponse, inscritosResponse, matriculadosResponse] =
       await Promise.all([
-        fetchAllRows('atividade_crm', 'Data de criação'),
-        fetchAllRows('registro_crm', 'Data da criação'),
+        fetchAllRows('atividade_crm', 'Data de criaÃ§Ã£o'),
+        fetchAllRows('registro_crm', 'Data da criaÃ§Ã£o'),
         fetchAllRows('inscritos_20262', 'data_inscricao', 'cpf, candidato'),
         fetchAllRows('matriculados_20262', 'data_baixa_do_pagamento', 'cpf, aluno'),
       ])
@@ -927,14 +927,14 @@ export function VisaoCrm() {
       matriculadosResponse.error
     ) {
       setError(
-        'Não foi possível carregar as bases de CRM, registros, inscritos e matriculados. Confira as tabelas e as permissões de leitura no Supabase.',
+        'NÃ£o foi possÃ­vel carregar as bases de CRM, registros, inscritos e matriculados. Confira as tabelas e as permissÃµes de leitura no Supabase.',
       )
       setLoading(false)
       return
     }
 
     const preparedCrmRows = (crmResponse.data ?? []).map((row) => {
-      const dateCreatedRaw = readField(row, 'Data de criação', 'Data de criaÃ§Ã£o')
+      const dateCreatedRaw = readField(row, 'Data de criaÃ§Ã£o', 'Data de criaÃƒÂ§ÃƒÂ£o')
       const courseSource = readField(row, 'Nome - Oferta de curso')
       const localOfferSource = readField(row, 'Nome - Local de oferta')
       const unidadeSource = readField(row, 'Unidade')
@@ -943,18 +943,18 @@ export function VisaoCrm() {
       return {
         id: Number(row.id ?? 0),
         schedulingCode: cleanText(
-          readField(row, 'Código do agendamento', 'CÃ³digo do agendamento'),
+          readField(row, 'CÃ³digo do agendamento', 'CÃƒÂ³digo do agendamento'),
         ),
         activity: titleize(readField(row, 'Atividade')),
         description:
-          cleanText(readField(row, 'Descrição', 'DescriÃ§Ã£o')) || 'Sem descrição',
+          cleanText(readField(row, 'DescriÃ§Ã£o', 'DescriÃƒÂ§ÃƒÂ£o')) || 'Sem descriÃ§Ã£o',
         courseLabel: normalizeCourseLabel(courseSource),
         processLabel: normalizeProcessLabel(processSource),
         email: normalizeEmail(readField(row, 'E-mail')),
-        personCode: cleanText(readField(row, 'Código da pessoa', 'CÃ³digo da pessoa')),
+        personCode: cleanText(readField(row, 'CÃ³digo da pessoa', 'CÃƒÂ³digo da pessoa')),
         contactName: titleize(readField(row, 'Contato')),
         cpf: normalizeCpf(readField(row, 'CPF da pessoa')),
-        seller: normalizeSeller(readField(row, 'Responsável', 'ResponsÃ¡vel')),
+        seller: normalizeSeller(readField(row, 'ResponsÃ¡vel', 'ResponsÃƒÂ¡vel')),
         campusLabel: normalizeCampus(localOfferSource, unidadeSource, courseSource),
         dateCreatedRaw,
         dateCreatedKey: toDateKey(dateCreatedRaw),
@@ -962,7 +962,7 @@ export function VisaoCrm() {
     })
 
     const preparedRegistroRows = (registroResponse.data ?? []).map((row) => {
-      const dateCreatedRaw = readField(row, 'Data da criação', 'Data da criaÃ§Ã£o')
+      const dateCreatedRaw = readField(row, 'Data da criaÃ§Ã£o', 'Data da criaÃƒÂ§ÃƒÂ£o')
       const courseSource = readField(row, 'Nome - Oferta de curso', 'Curso de interesse')
       const unidadeSource = readField(row, 'Unidade', 'Unidade de Interesse')
       const localOfferSource = readField(row, 'Local da oferta')
@@ -970,14 +970,14 @@ export function VisaoCrm() {
       const sellerSource = readField(
         row,
         'Vendedor',
-        'Nome do responsável',
-        'Nome do responsável2',
+        'Nome do responsÃ¡vel',
+        'Nome do responsÃ¡vel2',
       )
 
       return {
         id: Number(row.id ?? 0),
         identifier: cleanText(readField(row, 'Identificador')),
-        externalCode: cleanText(readField(row, 'Código externo do registro')),
+        externalCode: cleanText(readField(row, 'CÃ³digo externo do registro')),
         personCode: cleanText(readField(row, 'Identificador da pessoa')),
         contactName: titleize(readField(row, 'Nome da pessoa')),
         seller: normalizeSeller(sellerSource),
@@ -989,8 +989,10 @@ export function VisaoCrm() {
         statusLabel: normalizeStatusLabel(
           readField(row, 'Status', 'Status do registro', 'Resumo atual', 'Etapa'),
         ),
-        objectionLabel: normalizeObjectionLabel(readField(row, 'Objeção')),
-        lossObservationLabel: normalizeLossObservationLabel(readField(row, 'Observações da perda')),
+        objectionLabel: normalizeObjectionLabel(readField(row, 'ObjeÃ§Ã£o')),
+        lossObservationLabel: normalizeLossObservationLabel(
+          readField(row, 'ObservaÃ§Ãµes da perda'),
+        ),
         currentSummary: cleanText(readField(row, 'Resumo atual')) || 'Sem resumo atual',
         dateCreatedRaw,
         dateCreatedKey: toDateKey(dateCreatedRaw),
@@ -1099,25 +1101,25 @@ export function VisaoCrm() {
 
       candidateMap.set(primaryKey, {
         key: primaryKey,
-        personCode: row.personCode || 'Não informado',
-        contactName: row.contactName || 'Não informado',
+        personCode: row.personCode || 'NÃ£o informado',
+        contactName: row.contactName || 'NÃ£o informado',
         cpf: row.cpf,
         email: row.email,
         courseLabel:
-          row.courseLabel !== 'Não informado'
+          row.courseLabel !== 'NÃ£o informado'
             ? row.courseLabel
-            : matchingActivities.find((item) => item.courseLabel !== 'Não informado')?.courseLabel ||
-              'Não informado',
+            : matchingActivities.find((item) => item.courseLabel !== 'NÃ£o informado')?.courseLabel ||
+              'NÃ£o informado',
         campusLabel:
-          row.campusLabel !== 'Não informado'
+          row.campusLabel !== 'NÃ£o informado'
             ? row.campusLabel
-            : matchingActivities.find((item) => item.campusLabel !== 'Não informado')?.campusLabel ||
-              'Não informado',
+            : matchingActivities.find((item) => item.campusLabel !== 'NÃ£o informado')?.campusLabel ||
+              'NÃ£o informado',
         processLabel:
-          row.processLabel !== 'Não informado'
+          row.processLabel !== 'NÃ£o informado'
             ? row.processLabel
-            : matchingActivities.find((item) => item.processLabel !== 'Não informado')?.processLabel ||
-              'Não informado',
+            : matchingActivities.find((item) => item.processLabel !== 'NÃ£o informado')?.processLabel ||
+              'NÃ£o informado',
         statusLabel: row.statusLabel,
         objectionLabel: row.objectionLabel,
         lossObservationLabel: row.lossObservationLabel,
@@ -1160,16 +1162,16 @@ export function VisaoCrm() {
 
       candidateMap.set(primaryKey, {
         key: primaryKey,
-        personCode: row.personCode || 'Não informado',
-        contactName: row.contactName || 'Não informado',
+        personCode: row.personCode || 'NÃ£o informado',
+        contactName: row.contactName || 'NÃ£o informado',
         cpf: row.cpf,
         email: row.email,
         courseLabel: row.courseLabel,
         campusLabel: row.campusLabel,
         processLabel: row.processLabel,
-        statusLabel: 'Não informado',
-        objectionLabel: 'Não informada',
-        lossObservationLabel: 'Não informada',
+        statusLabel: 'NÃ£o informado',
+        objectionLabel: 'NÃ£o informada',
+        lossObservationLabel: 'NÃ£o informada',
         currentSummary: 'Sem resumo atual',
         activityCount: 1,
         activities: row.activity ? [row.activity] : [],
@@ -1202,19 +1204,19 @@ export function VisaoCrm() {
     const candidates = new Set<string>()
 
     allCandidates.forEach((candidate) => {
-      if (candidate.courseLabel && candidate.courseLabel !== 'Não informado') {
+      if (candidate.courseLabel && candidate.courseLabel !== 'NÃ£o informado') {
         courses.add(candidate.courseLabel)
       }
-      if (candidate.campusLabel && candidate.campusLabel !== 'Não informado') {
+      if (candidate.campusLabel && candidate.campusLabel !== 'NÃ£o informado') {
         campuses.add(candidate.campusLabel)
       }
-      if (candidate.processLabel && candidate.processLabel !== 'Não informado') {
+      if (candidate.processLabel && candidate.processLabel !== 'NÃ£o informado') {
         processes.add(candidate.processLabel)
       }
-      if (candidate.statusLabel && candidate.statusLabel !== 'Não informado') {
+      if (candidate.statusLabel && candidate.statusLabel !== 'NÃ£o informado') {
         statuses.add(candidate.statusLabel)
       }
-      if (candidate.contactName && candidate.contactName !== 'Não informado') {
+      if (candidate.contactName && candidate.contactName !== 'NÃ£o informado') {
         candidates.add(candidate.contactName)
       }
     })
@@ -1315,13 +1317,13 @@ export function VisaoCrm() {
   const kpiCards = useMemo(
     () => [
       {
-        title: 'Não inscritos e não matriculados',
+        title: 'NÃ£o inscritos e nÃ£o matriculados',
         value: formatNumberBR(
           filteredCandidates.filter((candidate) => !candidate.hasInscrito && !candidate.hasMatriculado)
             .length,
         ),
         helperText:
-          'Candidatos do vendedor sem correspondência nas bases de inscritos e matriculados.',
+          'Candidatos do vendedor sem correspondÃªncia nas bases de inscritos e matriculados.',
         emphasis: 'primary' as const,
       },
       {
@@ -1357,7 +1359,7 @@ export function VisaoCrm() {
             .length,
         ),
         helperText:
-          'Registros presentes em registro_crm que ainda não possuem atividade correspondente.',
+          'Registros presentes em registro_crm que ainda nÃ£o possuem atividade correspondente.',
       },
       {
         title: 'Atividades agendadas',
@@ -1412,11 +1414,11 @@ export function VisaoCrm() {
   }, [candidatePage, candidatePageCount])
 
   if (loading) {
-    return <Loading message="Carregando a Visão CRM..." />
+    return <Loading message="Carregando a VisÃ£o CRM..." />
   }
 
   if (error) {
-    return <EmptyState title="Não foi possível carregar a Visão CRM" description={error} />
+    return <EmptyState title="NÃ£o foi possÃ­vel carregar a VisÃ£o CRM" description={error} />
   }
 
   return (
@@ -1425,10 +1427,10 @@ export function VisaoCrm() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Operação CRM
+              OperaÃ§Ã£o CRM
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Visão CRM
+              VisÃ£o CRM
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
               A leitura cruza a base de atividades com a base de registros do CRM usando
@@ -1467,7 +1469,7 @@ export function VisaoCrm() {
 
       <FilterPanel
         title="Filtros operacionais"
-        description="Esses filtros controlam os indicadores e os gráficos do vendedor selecionado."
+        description="Esses filtros controlam os indicadores e os grÃ¡ficos do vendedor selecionado."
         filters={filters}
         setFilters={setFilters}
         courseOptions={filterOptions.courses}
@@ -1492,10 +1494,10 @@ export function VisaoCrm() {
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-950">Filtros pelos gráficos</h3>
+            <h3 className="text-lg font-semibold text-slate-950">Filtros pelos grÃ¡ficos</h3>
             <p className="mt-1 text-sm text-slate-500">
               Clique em uma barra para filtrar. Use <strong>Ctrl</strong> ou{' '}
-              <strong>Cmd</strong> para acumular mais de uma seleção.
+              <strong>Cmd</strong> para acumular mais de uma seleÃ§Ã£o.
             </p>
           </div>
 
@@ -1535,7 +1537,7 @@ export function VisaoCrm() {
       <section className="grid gap-4 xl:grid-cols-2">
         <ChartCard
           title="Por campus"
-          description="Distribuição dos registros por unidade padronizada."
+          description="DistribuiÃ§Ã£o dos registros por unidade padronizada."
           data={charts.campus}
           chartKey="campus"
           selectedKeys={chartSelections.campus}
@@ -1551,7 +1553,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Por curso"
-          description="Concentração dos registros por curso."
+          description="ConcentraÃ§Ã£o dos registros por curso."
           data={charts.course}
           chartKey="course"
           selectedKeys={chartSelections.course}
@@ -1559,7 +1561,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Por status"
-          description="Situação atual dos registros dentro do recorte ativo."
+          description="SituaÃ§Ã£o atual dos registros dentro do recorte ativo."
           data={charts.status}
           chartKey="status"
           selectedKeys={chartSelections.status}
@@ -1574,8 +1576,8 @@ export function VisaoCrm() {
           onSelect={handleChartSelection}
         />
         <ChartCard
-          title="Objeções"
-          description="Principais objeções registradas no CRM."
+          title="ObjeÃ§Ãµes"
+          description="Principais objeÃ§Ãµes registradas no CRM."
           data={charts.objection}
           chartKey="objection"
           selectedKeys={chartSelections.objection}
@@ -1583,7 +1585,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Observações da perda"
-          description="Motivos e anotações de perda mais recorrentes."
+          description="Motivos e anotaÃ§Ãµes de perda mais recorrentes."
           data={charts.lossObservation}
           chartKey="lossObservation"
           selectedKeys={chartSelections.lossObservation}
@@ -1593,7 +1595,7 @@ export function VisaoCrm() {
 
       <FilterPanel
         title="Cards de candidatos"
-        description="Esses filtros controlam apenas os cards abaixo e não alteram os indicadores superiores."
+        description="Esses filtros controlam apenas os cards abaixo e nÃ£o alteram os indicadores superiores."
         filters={cardFilters}
         setFilters={setCardFilters}
         courseOptions={filterOptions.courses}
@@ -1606,7 +1608,7 @@ export function VisaoCrm() {
       {cardCandidateSummaries.length === 0 ? (
         <EmptyState
           title="Nenhum candidato para os filtros atuais"
-          description="Limpe os filtros dos cards ou troque de vendedor para voltar a visualizar os candidatos desta visão."
+          description="Limpe os filtros dos cards ou troque de vendedor para voltar a visualizar os candidatos desta visÃ£o."
         />
       ) : (
         <>
@@ -1614,7 +1616,7 @@ export function VisaoCrm() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">
                 Mostrando {formatNumberBR(paginatedCandidateSummaries.length)} de{' '}
-                {formatNumberBR(cardCandidateSummaries.length)} candidatos nesta página.
+                {formatNumberBR(cardCandidateSummaries.length)} candidatos nesta pÃ¡gina.
               </p>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -1658,7 +1660,7 @@ export function VisaoCrm() {
                   disabled={candidatePage === candidatePageCount}
                   className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  Próxima
+                  PrÃ³xima
                 </button>
               </div>
             </div>
@@ -1708,34 +1710,34 @@ export function VisaoCrm() {
 
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
                         Curso
                       </p>
-                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
                         {candidate.courseLabel}
                       </p>
                     </div>
                     <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
                         Campus
                       </p>
-                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
                         {candidate.campusLabel}
                       </p>
                     </div>
                     <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
                         Processo seletivo
                       </p>
-                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
                         {candidate.processLabel}
                       </p>
                     </div>
                     <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        ?ltima movimenta??o
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
+                        {'Última movimentação'}
                       </p>
-                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
                         {formatDateBR(candidate.latestDateKey)}
                       </p>
                     </div>
@@ -1769,12 +1771,9 @@ export function VisaoCrm() {
                   <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-slate-500" />
-                      <p className="text-sm font-semibold text-slate-900">Resumos e descrições</p>
+                      <p className="text-sm font-semibold text-slate-900">Descrições</p>
                     </div>
                     <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
-                      <li className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-                        <strong>Resumo atual:</strong> {candidate.currentSummary}
-                      </li>
                       {candidate.descriptions.map((description) => (
                         <li
                           key={`${candidate.key}-${description}`}
@@ -1819,3 +1818,4 @@ export function VisaoCrm() {
     </div>
   )
 }
+
