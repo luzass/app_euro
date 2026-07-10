@@ -1681,36 +1681,36 @@ export function VisaoCrm() {
                       </h3>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="min-h-[92px] rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Curso
                         </p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">
+                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
                           {candidate.courseLabel}
                         </p>
                       </div>
-                      <div className="min-h-[92px] rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Campus
                         </p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">
+                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
                           {candidate.campusLabel}
                         </p>
                       </div>
-                      <div className="min-h-[92px] rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Processo seletivo
                         </p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">
+                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
                           {candidate.processLabel}
                         </p>
                       </div>
-                      <div className="min-h-[92px] rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Última movimentação
                         </p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">
+                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
                           {formatDateBR(candidate.latestDateKey)}
                         </p>
                       </div>
