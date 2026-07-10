@@ -1670,7 +1670,7 @@ export function VisaoCrm() {
                 key={candidate.key}
                 className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
               >
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
                   <div className="min-w-0 flex-1 space-y-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
@@ -1681,7 +1681,7 @@ export function VisaoCrm() {
                       </h3>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Curso
@@ -1717,7 +1717,7 @@ export function VisaoCrm() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 lg:max-w-[220px] lg:justify-end">
+                  <div className="flex flex-wrap gap-2 2xl:max-w-[220px] 2xl:justify-end">
                     <span className="inline-flex items-center rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
                       {formatNumberBR(candidate.activityCount)} atividades
                     </span>
