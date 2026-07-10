@@ -1670,9 +1670,9 @@ export function VisaoCrm() {
                 key={candidate.key}
                 className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
               >
-                <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
-                  <div className="min-w-0 flex-1 space-y-4">
-                    <div>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
                         Candidato
                       </p>
@@ -1681,64 +1681,64 @@ export function VisaoCrm() {
                       </h3>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Curso
-                        </p>
-                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
-                          {candidate.courseLabel}
-                        </p>
-                      </div>
-                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Campus
-                        </p>
-                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
-                          {candidate.campusLabel}
-                        </p>
-                      </div>
-                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Processo seletivo
-                        </p>
-                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
-                          {candidate.processLabel}
-                        </p>
-                      </div>
-                      <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Última movimentação
-                        </p>
-                        <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
-                          {formatDateBR(candidate.latestDateKey)}
-                        </p>
-                      </div>
+                    <div className="flex flex-wrap gap-2 xl:max-w-[240px] xl:justify-end">
+                      <span className="inline-flex items-center rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+                        {formatNumberBR(candidate.activityCount)} atividades
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700">
+                        {candidate.statusLabel}
+                      </span>
+                      {candidate.hasInscrito ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                          Inscrito
+                        </span>
+                      ) : null}
+                      {candidate.hasMatriculado ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
+                          Matriculado
+                        </span>
+                      ) : null}
+                      {candidate.hasRegistro && !candidate.hasActivity ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
+                          Sem atividade
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 2xl:max-w-[220px] 2xl:justify-end">
-                    <span className="inline-flex items-center rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-                      {formatNumberBR(candidate.activityCount)} atividades
-                    </span>
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700">
-                      {candidate.statusLabel}
-                    </span>
-                    {candidate.hasInscrito ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-                        Inscrito
-                      </span>
-                    ) : null}
-                    {candidate.hasMatriculado ? (
-                      <span className="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
-                        Matriculado
-                      </span>
-                    ) : null}
-                    {candidate.hasRegistro && !candidate.hasActivity ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
-                        Sem atividade
-                      </span>
-                    ) : null}
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Curso
+                      </p>
+                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                        {candidate.courseLabel}
+                      </p>
+                    </div>
+                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Campus
+                      </p>
+                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                        {candidate.campusLabel}
+                      </p>
+                    </div>
+                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Processo seletivo
+                      </p>
+                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                        {candidate.processLabel}
+                      </p>
+                    </div>
+                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        ?ltima movimenta??o
+                      </p>
+                      <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-900">
+                        {formatDateBR(candidate.latestDateKey)}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
