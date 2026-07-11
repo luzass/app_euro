@@ -18,7 +18,7 @@ import { formatDateBR, formatNumberBR } from '../lib/formatters'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
-type Seller = 'Tony' | 'William' | 'Gustavo' | 'Jordana'
+type Seller = 'Agestone' | 'William' | 'Gustavo' | 'Jordana'
 
 type FilterState = {
   startDate: string
@@ -117,7 +117,7 @@ type MatriculadoPrepared = {
   name: string
 }
 
-const sellers: Seller[] = ['Tony', 'William', 'Gustavo', 'Jordana']
+const sellers: Seller[] = ['Agestone', 'William', 'Gustavo', 'Jordana']
 
 const initialFilters: FilterState = {
   startDate: '',
@@ -264,8 +264,12 @@ function normalizeSeller(value?: string | null): Seller | null {
     return null
   }
 
-  if (normalized.includes('TONY')) {
-    return 'Tony'
+  if (
+    normalized.includes('TONY') ||
+    normalized.includes('AGESTONE') ||
+    normalized.includes('FRANCISCO ALVES DA SILVA')
+  ) {
+    return 'Agestone'
   }
 
   if (
@@ -736,7 +740,6 @@ function FilterPanel({
   campusOptions,
   processOptions,
   statusOptions,
-  candidateOptions,
 }: {
   title: string
   description: string
@@ -746,7 +749,6 @@ function FilterPanel({
   campusOptions: string[]
   processOptions: string[]
   statusOptions: string[]
-  candidateOptions: string[]
 }) {
   return (
     <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
@@ -867,7 +869,6 @@ function FilterPanel({
           <span className="text-sm font-medium text-slate-700">Nome do candidato</span>
           <input
             type="text"
-            list={`${title}-candidates`}
             value={filters.candidateName}
             onChange={(event) =>
               setFilters((currentValue) => ({
@@ -878,11 +879,6 @@ function FilterPanel({
             placeholder="Digite para buscar"
             className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
           />
-          <datalist id={`${title}-candidates`}>
-            {candidateOptions.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
         </label>
       </div>
     </section>
@@ -890,7 +886,7 @@ function FilterPanel({
 }
 
 export function VisaoCrm() {
-  const [activeSeller, setActiveSeller] = useState<Seller>('Tony')
+  const [activeSeller, setActiveSeller] = useState<Seller>('Agestone')
   const [crmRows, setCrmRows] = useState<ActivityCrmPrepared[]>([])
   const [registroRows, setRegistroRows] = useState<RegistroCrmPrepared[]>([])
   const [inscritosRows, setInscritosRows] = useState<InscritoPrepared[]>([])
@@ -1325,7 +1321,7 @@ export function VisaoCrm() {
             .length,
         ),
         helperText:
-          'Candidatos do vendedor sem correspondÃªncia nas bases de inscritos e matriculados.',
+          'Candidatos do vendedor sem correspondência nas bases de inscritos e matriculados.',
         emphasis: 'primary' as const,
       },
       {
@@ -1478,7 +1474,6 @@ export function VisaoCrm() {
         campusOptions={filterOptions.campuses}
         processOptions={filterOptions.processes}
         statusOptions={filterOptions.statuses}
-        candidateOptions={filterOptions.candidates}
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1604,7 +1599,6 @@ export function VisaoCrm() {
         campusOptions={filterOptions.campuses}
         processOptions={filterOptions.processes}
         statusOptions={filterOptions.statuses}
-        candidateOptions={filterOptions.candidates}
       />
 
       {cardCandidateSummaries.length === 0 ? (
@@ -1618,7 +1612,7 @@ export function VisaoCrm() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">
                 Mostrando {formatNumberBR(paginatedCandidateSummaries.length)} de{' '}
-                {formatNumberBR(cardCandidateSummaries.length)} candidatos nesta pÃ¡gina.
+                {formatNumberBR(cardCandidateSummaries.length)} candidatos nesta página.
               </p>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -1662,7 +1656,7 @@ export function VisaoCrm() {
                   disabled={candidatePage === candidatePageCount}
                   className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  PrÃ³xima
+                  Próxima
                 </button>
               </div>
             </div>
