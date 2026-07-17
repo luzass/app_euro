@@ -234,18 +234,16 @@ function toDateKey(value?: string | null) {
     return ''
   }
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text
+  const isoDateMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (isoDateMatch) {
+    const [, year, month, day] = isoDateMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
-  const brDateMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+\d{2}:\d{2}(?::\d{2})?)?$/)
+  const brDateMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?/)
   if (brDateMatch) {
     const [, day, month, year] = brDateMatch
-    return `${year}-${month}-${day}`
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}[ T]/.test(text)) {
-    return text.slice(0, 10)
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
   return ''
