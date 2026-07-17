@@ -2,6 +2,7 @@ import type { Profile } from './types'
 
 export type Seller = 'Agestone' | 'William' | 'Gustavo' | 'Jordana'
 export type GoalMonthKey = '05' | '06' | '07' | '08' | '09'
+export type ActiveTeamSize = 2 | 3 | 4
 
 export interface GoalStage {
   label: string
@@ -11,23 +12,41 @@ export interface GoalStage {
 
 export const sellers: Seller[] = ['Agestone', 'William', 'Gustavo', 'Jordana']
 
-export const monthConfig: Record<
-  GoalMonthKey,
-  {
-    label: string
-    normalTargets: number[]
-  }
-> = {
-  '05': { label: 'Maio', normalTargets: [14, 15, 16, 18] },
-  '06': { label: 'Junho', normalTargets: [21, 22, 23, 27] },
-  '07': { label: 'Julho', normalTargets: [47, 49, 52, 60] },
-  '08': { label: 'Agosto', normalTargets: [106, 110, 115, 134] },
-  '09': { label: 'Setembro', normalTargets: [35, 36, 38, 44] },
+export const monthConfig: Record<GoalMonthKey, { label: string }> = {
+  '05': { label: 'Maio' },
+  '06': { label: 'Junho' },
+  '07': { label: 'Julho' },
+  '08': { label: 'Agosto' },
+  '09': { label: 'Setembro' },
 }
 
 export const normalRewards = [20, 30, 40, 60]
 export const prouniTargets = [138, 150, 156]
 export const prouniRewards = [20, 30, 40]
+
+export const policyNormalTargets: Record<ActiveTeamSize, Record<GoalMonthKey, number[]>> = {
+  2: {
+    '05': [7, 8, 9, 10],
+    '06': [10, 11, 12, 13],
+    '07': [24, 25, 26, 30],
+    '08': [53, 55, 58, 67],
+    '09': [17, 18, 19, 22],
+  },
+  3: {
+    '05': [5, 6, 7, 8],
+    '06': [7, 8, 9, 10],
+    '07': [16, 17, 18, 20],
+    '08': [35, 37, 38, 45],
+    '09': [12, 13, 14, 15],
+  },
+  4: {
+    '05': [4, 5, 6, 7],
+    '06': [6, 7, 8, 9],
+    '07': [12, 13, 14, 15],
+    '08': [27, 28, 29, 34],
+    '09': [9, 10, 11, 12],
+  },
+}
 
 export function normalizeSellerString(value?: string | null) {
   return (value ?? '')
@@ -94,19 +113,17 @@ export function getCurrentGoalMonthKey(): GoalMonthKey {
   return '07'
 }
 
-export function getVendorThresholds(targets: number[]) {
-  return targets.map((target, index) => ({
-    label: `Meta ${String(index + 1).padStart(2, '0')}`,
-    target: Math.ceil(target / sellers.length),
-  }))
+export function getDefaultActiveTeamSize(): ActiveTeamSize {
+  return 4
 }
 
-export function buildNormalStages(monthKey: GoalMonthKey): GoalStage[] {
-  const vendorTargets = getVendorThresholds(monthConfig[monthKey].normalTargets)
-
-  return vendorTargets.map((item, index) => ({
-    label: item.label,
-    target: item.target,
+export function buildNormalStages(
+  monthKey: GoalMonthKey,
+  teamSize: ActiveTeamSize = getDefaultActiveTeamSize(),
+): GoalStage[] {
+  return policyNormalTargets[teamSize][monthKey].map((target, index) => ({
+    label: `Meta ${String(index + 1).padStart(2, '0')}`,
+    target,
     reward: normalRewards[index] ?? 0,
   }))
 }

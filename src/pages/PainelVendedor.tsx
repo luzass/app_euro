@@ -149,8 +149,28 @@ const initialManualLeadForm: ManualLeadFormState = {
   dataAcao: '',
 }
 
+function decodeMojibake(value?: string | null) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return ''
+  }
+
+  if (!/[ÃƒÃ‚]/.test(text)) {
+    return text
+  }
+
+  try {
+    const bytes = Uint8Array.from(Array.from(text).map((character) => character.charCodeAt(0)))
+    const decoded = new TextDecoder('utf-8').decode(bytes).trim()
+    return decoded || text
+  } catch {
+    return text
+  }
+}
+
 function normalizeString(value?: string | null) {
-  return String(value ?? '')
+  return decodeMojibake(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Z0-9@.\s/-]+/gi, ' ')
@@ -160,7 +180,7 @@ function normalizeString(value?: string | null) {
 }
 
 function cleanText(value?: string | null) {
-  return String(value ?? '').replace(/\s+/g, ' ').trim()
+  return decodeMojibake(value).replace(/\s+/g, ' ').trim()
 }
 
 function normalizeCpf(value?: string | null) {
@@ -204,6 +224,46 @@ function toDateKey(value?: string | null) {
 
   if (/^\d{4}-\d{2}-\d{2}[ T]/.test(text)) {
     return text.slice(0, 10)
+  }
+
+  return ''
+}
+
+function canonicalizeFieldKey(value?: string | null) {
+  return decodeMojibake(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase()
+}
+
+function readField(row: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = row[key]
+
+    if (value !== undefined && value !== null) {
+      const textValue = cleanText(String(value))
+
+      if (textValue) {
+        return textValue
+      }
+    }
+  }
+
+  const normalizedTargets = new Set(keys.map((key) => canonicalizeFieldKey(key)).filter(Boolean))
+
+  for (const [currentKey, currentValue] of Object.entries(row)) {
+    if (
+      currentValue !== undefined &&
+      currentValue !== null &&
+      normalizedTargets.has(canonicalizeFieldKey(currentKey))
+    ) {
+      const textValue = cleanText(String(currentValue))
+
+      if (textValue) {
+        return textValue
+      }
+    }
   }
 
   return ''
@@ -674,13 +734,16 @@ export function PainelVendedor() {
   const sellerRegistroRows = useMemo(() => {
     return registroRows.filter((row) => {
       const seller = normalizeSellerValue(
-        String(
-          row['Vendedor'] ??
-            row['Nome do responsável'] ??
-            row['Nome do responsável2'] ??
-            '',
+        readField(
+          row,
+          'Vendedor',
+          'Nome do responsável',
+          'Nome do responsável2',
+          'Nome do responsÃ¡vel',
+          'Nome do responsÃ¡vel2',
         ),
       )
+
       return seller === selectedSeller
     })
   }, [registroRows, selectedSeller])
@@ -707,10 +770,10 @@ export function PainelVendedor() {
     const map = new Map<string, CandidateSummary>()
 
     sellerRegistroRows.forEach((row) => {
-      const personCode = cleanText(String(row['Identificador da pessoa'] ?? ''))
-      const cpf = normalizeCpf(String(row['CPF'] ?? ''))
-      const email = normalizeEmail(String(row['E-mail da pessoa'] ?? ''))
-      const name = cleanText(String(row['Nome da pessoa'] ?? ''))
+      const personCode = cleanText(readField(row, 'Identificador da pessoa'))
+      const cpf = normalizeCpf(readField(row, 'CPF'))
+      const email = normalizeEmail(readField(row, 'E-mail da pessoa'))
+      const name = cleanText(readField(row, 'Nome da pessoa'))
       const keys = buildCandidateKeys({ personCode, cpf, email, name })
       const primaryKey = buildPrimaryCandidateKey({ personCode, cpf, email, name })
       const dateCreatedKey =
@@ -728,14 +791,14 @@ export function PainelVendedor() {
         name: titleize(name),
         cpf,
         email,
-        course: normalizeCourse(String(row['Nome - Oferta de curso'] ?? row['Curso de interesse'] ?? '')),
+        course: normalizeCourse(readField(row, 'Nome - Oferta de curso', 'Curso de interesse')),
         campus: normalizeCampus(
           String(row['Unidade'] ?? ''),
           String(row['Local da oferta'] ?? ''),
           String(row['Unidade de Interesse'] ?? ''),
         ),
-        process: normalizeProcess(String(row['Processo seletivo'] ?? '')),
-        status: normalizeStatus(String(row['Status'] ?? '')),
+        process: normalizeProcess(readField(row, 'Processo seletivo')),
+        status: normalizeStatus(readField(row, 'Status', 'Resumo atual', 'Etapa')),
         objection: normalizeObjection(String(row['Objeção'] ?? '')),
         lossObservation: normalizeLossObservation(String(row['Observações da perda'] ?? '')),
         latestDateKey:
