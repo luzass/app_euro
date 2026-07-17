@@ -480,39 +480,6 @@ async function fetchAllRows<T = Record<string, unknown>>(
   }
 }
 
-function SummaryCard({
-  title,
-  value,
-  helper,
-  active = false,
-  onClick,
-}: {
-  title: string
-  value: string
-  helper: string
-  active?: boolean
-  onClick?: () => void
-}) {
-  const Element = onClick ? 'button' : 'div'
-
-  return (
-    <Element
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      className={cn(
-        'w-full rounded-3xl border bg-white p-5 text-left shadow-sm transition',
-        active
-          ? 'border-sky-200 bg-gradient-to-br from-white via-white to-sky-50'
-          : 'border-slate-200 hover:border-slate-300',
-      )}
-    >
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">{value}</p>
-      <p className="mt-3 text-xs leading-5 text-slate-500">{helper}</p>
-    </Element>
-  )
-}
-
 function StageCard({
   label,
   target,
@@ -612,7 +579,7 @@ export function PainelVendedor() {
     resolvedProfileSeller ?? sellers[0],
   )
   const [selectedMonth, setSelectedMonth] = useState<GoalMonthKey>(getCurrentGoalMonthKey())
-  const [leadFilter, setLeadFilter] = useState<LeadFilterKey>('all')
+  const [leadFilter] = useState<LeadFilterKey>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -706,7 +673,14 @@ export function PainelVendedor() {
 
   const sellerRegistroRows = useMemo(() => {
     return registroRows.filter((row) => {
-      const seller = normalizeSellerValue(String(row['Vendedor'] ?? row['Nome do responsável'] ?? ''))
+      const seller = normalizeSellerValue(
+        String(
+          row['Vendedor'] ??
+            row['Nome do responsável'] ??
+            row['Nome do responsável2'] ??
+            '',
+        ),
+      )
       return seller === selectedSeller
     })
   }, [registroRows, selectedSeller])
@@ -1223,9 +1197,9 @@ export function PainelVendedor() {
           helperText="Registros do CRM que batem com a base de inscritos 2026.2."
         />
         <KpiCard
-          title="Matrículas"
+          title="Matrículas atribuídas"
           value={formatNumberBR(sellerAllMatriculas.length)}
-          helperText="Base da visão de metas, usando somente calouros sem Medicina."
+          helperText="Total acumulado do vendedor na base de metas, usando somente calouros sem Medicina."
         />
         <KpiCard
           title="Mês selecionado"
@@ -1327,133 +1301,6 @@ export function PainelVendedor() {
               />
             ))}
           </div>
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-950">Resumo dos leads</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              A leitura cruza os registros do CRM com inscritos e matrículas, reaproveitando a mesma
-              lógica-base do restante do projeto.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {leadFilterOptions.map((filterItem) => (
-              <button
-                key={filterItem.key}
-                type="button"
-                onClick={() => setLeadFilter(filterItem.key)}
-                className={cn(
-                  'rounded-2xl border px-4 py-2.5 text-sm font-semibold transition',
-                  leadFilter === filterItem.key
-                    ? 'border-slate-950 bg-slate-950 text-white'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
-                )}
-              >
-                {filterItem.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 xl:grid-cols-3">
-          <SummaryCard
-            title="Não se inscreveram nem se matricularam"
-            value={formatNumberBR(leadSummary.notConverted)}
-            helper="Leads do vendedor ainda sem correspondência nas duas bases."
-            active={leadFilter === 'not-converted'}
-            onClick={() => setLeadFilter('not-converted')}
-          />
-          <SummaryCard
-            title="Leads inscritos"
-            value={formatNumberBR(leadSummary.inscritos)}
-            helper="Leads do vendedor encontrados na base de inscritos 2026.2."
-            active={leadFilter === 'inscritos'}
-            onClick={() => setLeadFilter('inscritos')}
-          />
-          <SummaryCard
-            title="Leads matriculados"
-            value={formatNumberBR(leadSummary.matriculados)}
-            helper="Leads do vendedor encontrados também na base de matrículas."
-            active={leadFilter === 'matriculados'}
-            onClick={() => setLeadFilter('matriculados')}
-          />
-        </div>
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-3">
-          <KpiCard
-            title="Em andamento"
-            value={formatNumberBR(leadSummary.emAndamento)}
-            helperText="Status puxado dos registros do CRM dentro do recorte clicado."
-            emphasis={leadSummary.emAndamento > 0 ? 'primary' : 'neutral'}
-          />
-          <KpiCard
-            title="Perdido"
-            value={formatNumberBR(leadSummary.perdido)}
-            helperText="Leads deste vendedor já marcados como perdidos no CRM."
-          />
-          <KpiCard
-            title="Ganho"
-            value={formatNumberBR(leadSummary.ganho)}
-            helperText="Leads deste vendedor com status ganho no CRM."
-          />
-        </div>
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-            <h4 className="text-lg font-semibold text-slate-950">Objeções</h4>
-            <p className="mt-1 text-sm text-slate-500">
-              Principais objeções dentro do recorte selecionado acima.
-            </p>
-            <div className="mt-4 space-y-3">
-              {leadSummary.objections.length > 0 ? (
-                leadSummary.objections.map(([label, count]) => (
-                  <div
-                    key={`${label}-${count}`}
-                    className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3"
-                  >
-                    <p className="pr-4 text-sm text-slate-700">{label}</p>
-                    <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-white">
-                      {formatNumberBR(count)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-                  Nenhuma objeção encontrada para este recorte.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-            <h4 className="text-lg font-semibold text-slate-950">Observações da perda</h4>
-            <p className="mt-1 text-sm text-slate-500">
-              Motivos e anotações mais recorrentes do CRM para este recorte.
-            </p>
-            <div className="mt-4 space-y-3">
-              {leadSummary.lossObservations.length > 0 ? (
-                leadSummary.lossObservations.map(([label, count]) => (
-                  <div
-                    key={`${label}-${count}`}
-                    className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3"
-                  >
-                    <p className="pr-4 text-sm text-slate-700">{label}</p>
-                    <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-white">
-                      {formatNumberBR(count)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-                  Nenhuma observação de perda encontrada para este recorte.
-                </div>
-              )}
-            </div>
-          </section>
         </div>
       </section>
 
