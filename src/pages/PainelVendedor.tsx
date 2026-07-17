@@ -1,4 +1,4 @@
-import {
+﻿import {
   CalendarDays,
   GripVertical,
   Plus,
@@ -132,7 +132,7 @@ type ManualLeadFormState = {
 
 const leadFilterOptions = [
   { key: 'all', label: 'Todos' },
-  { key: 'not-converted', label: 'Não convertidos' },
+  { key: 'not-converted', label: 'NÃ£o convertidos' },
   { key: 'inscritos', label: 'Inscritos' },
   { key: 'matriculados', label: 'Matriculados' },
 ] as const
@@ -158,7 +158,7 @@ function decodeMojibake(value?: string | null) {
     return ''
   }
 
-  if (!/[ÃƒÃ‚]/.test(text)) {
+  if (!/[ÃƒÆ’Ãƒâ€š]/.test(text)) {
     return text
   }
 
@@ -193,7 +193,7 @@ function normalizeEmail(value?: string | null) {
   return cleanText(value).toLowerCase()
 }
 
-function titleize(value?: string | null, fallback = 'Não informado') {
+function titleize(value?: string | null, fallback = 'NÃ£o informado') {
   const text = cleanText(value)
 
   if (!text) {
@@ -273,23 +273,20 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
 
 function normalizeCampus(...values: Array<string | null | undefined>) {
   const combined = normalizeString(values.join(' '))
-
   if (combined.includes('AGUAS CLARAS') || combined.includes('GUAS CLARAS')) {
-    return 'Águas Claras'
+    return '?guas Claras'
   }
-
   if (combined.includes('ASA SUL')) {
     return 'Asa Sul'
   }
-
-  return 'Não informado'
+  return 'N?o informado'
 }
 
 function normalizeProcess(value?: string | null) {
   const normalized = normalizeString(value)
 
   if (!normalized) {
-    return 'Não informado'
+    return 'NÃ£o informado'
   }
 
   if (normalized.includes('PROUNI')) {
@@ -309,7 +306,7 @@ function normalizeProcess(value?: string | null) {
     normalized.includes('SEGUNDA GRADUACAO') ||
     normalized.includes('GRADUACAO')
   ) {
-    return '2ª Graduação'
+    return '2Âª GraduaÃ§Ã£o'
   }
 
   if (normalized.includes('VESTIBULAR')) {
@@ -335,20 +332,27 @@ function normalizeStatus(value?: string | null) {
 
 function normalizeObjection(value?: string | null) {
   const text = cleanText(value)
-  return !text || /^-\s*-\s*-$/.test(text) ? 'Não informada' : text
+  return !text || /^-\s*-\s*-$/.test(text) ? 'NÃ£o informada' : text
 }
 
 function normalizeLossObservation(value?: string | null) {
   const text = cleanText(value)
-  return !text || /^-\s*-\s*-$/.test(text) ? 'Não informada' : text
+  return !text || /^-\s*-\s*-$/.test(text) ? 'NÃ£o informada' : text
 }
 
 function normalizeCourse(value?: string | null) {
   const text = cleanText(value)
   if (!text) {
-    return 'Não informado'
+    return 'N?o informado'
   }
-
+  const normalized = normalizeString(text)
+  const compact = normalized.replace(/\s+/g, '')
+  if (compact.includes('EDUCA') && (compact.includes('FISICA') || compact.includes('FSICA'))) {
+    return 'Educa??o F?sica'
+  }
+  if (compact.includes('ANALISE') && compact.includes('DESENVOLVIMENTO') && compact.includes('SISTEMAS')) {
+    return 'An?lise E Desenvolvimento De Sistemas'
+  }
   return titleize(text.split(' - ')[0] ?? text)
 }
 
@@ -403,7 +407,7 @@ function uniqueCountSummary(values: string[]) {
   const counts = new Map<string, number>()
 
   values.forEach((value) => {
-    const label = value || 'Não informado'
+    const label = value || 'NÃ£o informado'
     counts.set(label, (counts.get(label) ?? 0) + 1)
   })
 
@@ -504,7 +508,7 @@ async function fetchAllRows<T = Record<string, unknown>>(
   if (!supabase) {
     return {
       data: null as T[] | null,
-      error: new Error('Supabase indisponível.'),
+      error: new Error('Supabase indisponÃ­vel.'),
     }
   }
 
@@ -579,11 +583,11 @@ function StageCard({
 
       <div className="mt-4 space-y-2 text-sm text-slate-600">
         <p>
-          Já fez <strong className="text-slate-950">{formatNumberBR(current)}</strong> matrículas.
+          JÃ¡ fez <strong className="text-slate-950">{formatNumberBR(current)}</strong> matrÃ­culas.
         </p>
         <p>
           {hit
-            ? 'Faixa batida neste mês.'
+            ? 'Faixa batida neste mÃªs.'
             : `Faltam ${formatNumberBR(remaining)} para chegar nesta faixa.`}
         </p>
       </div>
@@ -635,7 +639,7 @@ function OpportunityModal({
 export function PainelVendedor() {
   const { profile } = useProfile()
   const resolvedProfileSeller = resolveSellerFromProfile(profile)
-  const canChooseSeller = profile?.role === 'admin' || profile?.role === 'reitoria' || profile?.role === 'captacao'
+  const canChooseSeller = profile?.role === 'admin' || profile?.role === 'reitoria'
 
   const [selectedSeller, setSelectedSeller] = useState<Seller>(
     resolvedProfileSeller ?? sellers[0],
@@ -697,7 +701,7 @@ export function PainelVendedor() {
 
     if (registroResponse.error || inscritosResponse.error || matriculadosResponse.error) {
       setError(
-        'Não foi possível carregar CRM, inscritos ou matrículas. Confere se as tabelas e permissões de leitura estão liberadas no Supabase.',
+        'NÃ£o foi possÃ­vel carregar CRM, inscritos ou matrÃ­culas. Confere se as tabelas e permissÃµes de leitura estÃ£o liberadas no Supabase.',
       )
       setLoading(false)
       return
@@ -706,7 +710,7 @@ export function PainelVendedor() {
     if (opportunitiesResponse.error) {
       setOpportunityTableAvailable(false)
       setNotice(
-        'A tabela vendedor_oportunidades ainda não existe no Supabase. O painel principal já funciona, mas o quadro de oportunidades só libera depois de rodar o SQL novo.',
+        'A tabela vendedor_oportunidades ainda nÃ£o existe no Supabase. O painel principal jÃ¡ funciona, mas o quadro de oportunidades sÃ³ libera depois de rodar o SQL novo.',
       )
       setOpportunities([])
     } else {
@@ -742,10 +746,10 @@ export function PainelVendedor() {
         readField(
           row,
           'Vendedor',
-          'Nome do responsável',
-          'Nome do responsável2',
           'Nome do responsÃ¡vel',
           'Nome do responsÃ¡vel2',
+          'Nome do responsÃƒÂ¡vel',
+          'Nome do responsÃƒÂ¡vel2',
         ),
       )
 
@@ -782,7 +786,7 @@ export function PainelVendedor() {
       const keys = buildCandidateKeys({ personCode, cpf, email, name })
       const primaryKey = buildPrimaryCandidateKey({ personCode, cpf, email, name })
       const dateCreatedKey =
-        toDateKey(String(row['Data da criação'] ?? '')) ||
+        toDateKey(String(row['Data da criaÃ§Ã£o'] ?? '')) ||
         toDateKey(String(row['Data da atividade'] ?? ''))
 
       const currentCandidate = map.get(primaryKey)
@@ -804,9 +808,9 @@ export function PainelVendedor() {
         ),
         process: normalizeProcess(readField(row, 'Processo seletivo')),
         status: normalizeStatus(readField(row, 'Status', 'Resumo atual', 'Etapa')),
-        objection: normalizeObjection(readField(row, 'Objeção', 'ObjeÃ§Ã£o')),
+        objection: normalizeObjection(readField(row, 'ObjeÃ§Ã£o', 'ObjeÃƒÂ§ÃƒÂ£o')),
         lossObservation: normalizeLossObservation(
-          readField(row, 'Observações da perda', 'ObservaÃ§Ãµes da perda'),
+          readField(row, 'ObservaÃ§Ãµes da perda', 'ObservaÃƒÂ§ÃƒÂµes da perda'),
         ),
         latestDateKey:
           !currentCandidate || dateCreatedKey >= currentCandidate.latestDateKey
@@ -959,7 +963,7 @@ export function PainelVendedor() {
       .single()
 
     if (insertError) {
-      setNotice('Não consegui salvar este lead no quadro do vendedor.')
+      setNotice('NÃ£o consegui salvar este lead no quadro do vendedor.')
       setSaving(false)
       return
     }
@@ -1011,7 +1015,7 @@ export function PainelVendedor() {
       .single()
 
     if (updateError) {
-      setNotice('Não consegui registrar a nova ação deste lead.')
+      setNotice('NÃ£o consegui registrar a nova aÃ§Ã£o deste lead.')
       setSaving(false)
       return
     }
@@ -1030,7 +1034,7 @@ export function PainelVendedor() {
     setActionDate('')
     setActionStep('')
     setSaving(false)
-    setNotice('Nova ação adicionada com sucesso.')
+    setNotice('Nova aÃ§Ã£o adicionada com sucesso.')
   }
 
   const handleDropOpportunity = async (temperature: OpportunityTemperature) => {
@@ -1057,7 +1061,7 @@ export function PainelVendedor() {
       .eq('id', draggedOpportunityId)
 
     if (updateError) {
-      setNotice('Não consegui mover este card agora. Tenta novamente.')
+      setNotice('NÃ£o consegui mover este card agora. Tenta novamente.')
       setOpportunities((currentValue) =>
         currentValue.map((row) =>
           row.id === draggedOpportunityId ? currentOpportunity : row,
@@ -1082,7 +1086,7 @@ export function PainelVendedor() {
     const extension = file.name.split('.').pop()?.toLowerCase()
 
     if (extension === 'xls' || extension === 'xlsx') {
-      setNotice('Por enquanto a importação está pronta para CSV. Se quiser, eu depois encaixo o leitor de Excel também.')
+      setNotice('Por enquanto a importaÃ§Ã£o estÃ¡ pronta para CSV. Se quiser, eu depois encaixo o leitor de Excel tambÃ©m.')
       event.target.value = ''
       return
     }
@@ -1091,13 +1095,13 @@ export function PainelVendedor() {
     const rows = parseDelimitedFile(content)
 
     if (rows.length === 0) {
-      setNotice('A planilha veio vazia ou sem linhas válidas.')
+      setNotice('A planilha veio vazia ou sem linhas vÃ¡lidas.')
       event.target.value = ''
       return
     }
 
     if (!supabase || !opportunityTableAvailable) {
-      setNotice('Rode primeiro o SQL da tabela vendedor_oportunidades para liberar as importações.')
+      setNotice('Rode primeiro o SQL da tabela vendedor_oportunidades para liberar as importaÃ§Ãµes.')
       event.target.value = ''
       return
     }
@@ -1116,8 +1120,8 @@ export function PainelVendedor() {
           row.get('FORMA DE INGRESSO') ?? row.get('FORMA INGRESSO') ?? '',
         )
         const campus = cleanText(row.get('CAMPUS') ?? '')
-        const step = cleanText(row.get('PROXIMO PASSO') ?? row.get('PRÓXIMO PASSO') ?? '')
-        const date = cleanText(row.get('DATA DA ACAO') ?? row.get('DATA DA AÇÃO') ?? '')
+        const step = cleanText(row.get('PROXIMO PASSO') ?? row.get('PRÃ“XIMO PASSO') ?? '')
+        const date = cleanText(row.get('DATA DA ACAO') ?? row.get('DATA DA AÃ‡ÃƒO') ?? '')
         const rawTemperature = cleanText(
           row.get('TERMOMETRO DA OPORTUNIDADE') ?? row.get('TEMPERATURA') ?? '',
         )
@@ -1155,7 +1159,7 @@ export function PainelVendedor() {
     })
 
     if (payload.length === 0) {
-      setNotice('A planilha não trouxe nenhum lead válido para importar.')
+      setNotice('A planilha nÃ£o trouxe nenhum lead vÃ¡lido para importar.')
       event.target.value = ''
       return
     }
@@ -1170,7 +1174,7 @@ export function PainelVendedor() {
       )
 
     if (importError) {
-      setNotice('Não consegui importar essa planilha agora.')
+      setNotice('NÃ£o consegui importar essa planilha agora.')
       setSaving(false)
       event.target.value = ''
       return
@@ -1195,14 +1199,14 @@ export function PainelVendedor() {
   }
 
   if (error) {
-    return <EmptyState title="Não foi possível carregar o painel do vendedor" description={error} />
+    return <EmptyState title="NÃ£o foi possÃ­vel carregar o painel do vendedor" description={error} />
   }
 
   if (!resolvedProfileSeller && !canShowSellerPicker) {
     return (
       <EmptyState
-        title="Seu acesso ainda não está ligado a um vendedor"
-        description="Ajuste o nome do perfil no Supabase para Agestone, William, Gustavo ou Jordana para liberar este painel próprio."
+        title="Seu acesso ainda nÃ£o estÃ¡ ligado a um vendedor"
+        description="Ajuste o nome do perfil no Supabase para Agestone, William, Gustavo ou Jordana para liberar este painel prÃ³prio."
       />
     )
   }
@@ -1219,8 +1223,8 @@ export function PainelVendedor() {
               {canShowSellerPicker ? `Painel do vendedor - ${selectedSeller}` : `Meu painel - ${selectedSeller}`}
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
-              Aqui a gente cruza registros do CRM, inscritos, matrículas e o quadro de oportunidades
-              do vendedor em uma visão só.
+              Aqui a gente cruza registros do CRM, inscritos, matrÃ­culas e o quadro de oportunidades
+              do vendedor em uma visÃ£o sÃ³.
             </p>
           </div>
 
@@ -1261,7 +1265,7 @@ export function PainelVendedor() {
         <KpiCard
           title="Leads com o vendedor"
           value={formatNumberBR(leadSummary.total)}
-          helperText="Leitura única dos registros do CRM ligados a este vendedor."
+          helperText="Leitura Ãºnica dos registros do CRM ligados a este vendedor."
           emphasis="primary"
         />
         <KpiCard
@@ -1270,37 +1274,37 @@ export function PainelVendedor() {
           helperText="Registros do CRM que batem com a base de inscritos 2026.2."
         />
         <KpiCard
-          title="Matrículas do mês"
+          title="MatrÃ­culas do mÃªs"
           value={formatNumberBR(sellerMonthMatriculas.length)}
-          helperText="Total do vendedor no mês selecionado, usando somente calouros sem Medicina."
+          helperText="Total do vendedor no mÃªs selecionado, usando somente calouros sem Medicina."
         />
         <KpiCard
-          title="Mês selecionado"
+          title="MÃªs selecionado"
           value={monthConfig[selectedMonth].label}
-          helperText="O bloco de metas e comissão abaixo segue este recorte mensal."
+          helperText="O bloco de metas e comissÃ£o abaixo segue este recorte mensal."
         />
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-950">Meta do mês</h3>
+            <h3 className="text-lg font-semibold text-slate-950">Meta do mÃªs</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Acompanhe o mês atual ou troque o recorte para comparar a corrida de metas do vendedor.
+              Acompanhe o mÃªs atual ou troque o recorte para comparar a corrida de metas do vendedor.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 lg:items-end">
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-700">Equipe ativa no mês</span>
+              <span className="text-sm font-semibold text-slate-700">Equipe ativa no mÃªs</span>
               <select
                 value={selectedTeamSize}
                 onChange={(event) => setSelectedTeamSize(Number(event.target.value) as ActiveTeamSize)}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-400"
               >
-                <option value={2}>02 funcionários</option>
-                <option value={3}>03 funcionários</option>
-                <option value={4}>04 funcionários</option>
+                <option value={2}>02 funcionÃ¡rios</option>
+                <option value={3}>03 funcionÃ¡rios</option>
+                <option value={4}>04 funcionÃ¡rios</option>
               </select>
             </label>
 
@@ -1333,7 +1337,7 @@ export function PainelVendedor() {
                   {formatNumberBR(sellerMonthMatriculas.length)}
                 </p>
                 <p className="mt-3 text-sm text-slate-600">
-                  Matrículas do vendedor no mês selecionado.
+                  MatrÃ­culas do vendedor no mÃªs selecionado.
                 </p>
               </div>
 
@@ -1352,17 +1356,17 @@ export function PainelVendedor() {
                   <p className="text-sm font-semibold">Faixa atual</p>
                 </div>
                 <p className="mt-3 text-xl font-semibold text-slate-950">
-                  {monthResolution.achieved?.label ?? 'Ainda não bateu a Meta 01'}
+                  {monthResolution.achieved?.label ?? 'Ainda nÃ£o bateu a Meta 01'}
                 </p>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center gap-2 text-slate-700">
                   <TrendingUp className="h-4 w-4" />
-                  <p className="text-sm font-semibold">Próxima meta</p>
+                  <p className="text-sm font-semibold">PrÃ³xima meta</p>
                 </div>
                 <p className="mt-3 text-xl font-semibold text-slate-950">
-                  {monthResolution.next?.label ?? 'Última faixa já alcançada'}
+                  {monthResolution.next?.label ?? 'Ãšltima faixa jÃ¡ alcanÃ§ada'}
                 </p>
               </div>
 
@@ -1397,8 +1401,8 @@ export function PainelVendedor() {
           <div>
             <h3 className="text-lg font-semibold text-slate-950">Quadro de oportunidades</h3>
             <p className="mt-1 text-sm text-slate-500">
-              O vendedor acompanha aqui os leads em aberto e o supervisor alimenta a coluna de matrículas
-              pela visão de metas.
+              O vendedor acompanha aqui os leads em aberto e o supervisor alimenta a coluna de matrÃ­culas
+              pela visÃ£o de metas.
             </p>
           </div>
 
@@ -1475,18 +1479,18 @@ export function PainelVendedor() {
                           {titleize(row.forma_ingresso)}
                         </p>
                         <p>
-                          <strong className="text-slate-900">Próximo passo:</strong>{' '}
-                          {row.proximo_passo || 'Ainda não definido'}
+                          <strong className="text-slate-900">PrÃ³ximo passo:</strong>{' '}
+                          {row.proximo_passo || 'Ainda nÃ£o definido'}
                         </p>
                         <p>
-                          <strong className="text-slate-900">Data da ação:</strong>{' '}
+                          <strong className="text-slate-900">Data da aÃ§Ã£o:</strong>{' '}
                           {formatDateBR(row.data_acao)}
                         </p>
                       </div>
 
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                          Histórico
+                          HistÃ³rico
                         </p>
                         <div className="mt-3 space-y-2">
                           {(row.historico ?? []).slice(0, 3).map((action) => (
@@ -1496,7 +1500,7 @@ export function PainelVendedor() {
                             </div>
                           ))}
                           {(row.historico ?? []).length === 0 ? (
-                            <p className="text-xs text-slate-500">Nenhuma ação registrada ainda.</p>
+                            <p className="text-xs text-slate-500">Nenhuma aÃ§Ã£o registrada ainda.</p>
                           ) : null}
                         </div>
                       </div>
@@ -1511,7 +1515,7 @@ export function PainelVendedor() {
                         className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
                       >
                         <CalendarDays className="h-3.5 w-3.5" />
-                        Nova ação
+                        Nova aÃ§Ã£o
                       </button>
                     </article>
                   ))
@@ -1547,7 +1551,7 @@ export function PainelVendedor() {
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-950">{titleize(row.aluno)}</p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {titleize(row.curso)} - {titleize(row.filial)}
+                          {normalizeCourse(row.curso)} - {normalizeCampus(row.filial)}
                         </p>
                       </div>
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
@@ -1569,7 +1573,7 @@ export function PainelVendedor() {
                 ))
               ) : (
                 <div className="rounded-[24px] border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-                  Ainda não há matrículas deste vendedor no mês selecionado.
+                  Ainda nÃ£o hÃ¡ matrÃ­culas deste vendedor no mÃªs selecionado.
                 </div>
               )}
             </div>
@@ -1583,17 +1587,17 @@ export function PainelVendedor() {
               <KpiCard
                 title="Frio"
                 value={formatNumberBR(opportunitiesByTemperature.Frio.length)}
-                helperText="Oportunidades que ainda precisam ganhar tração."
+                helperText="Oportunidades que ainda precisam ganhar traÃ§Ã£o."
               />
               <KpiCard
                 title="Morno"
                 value={formatNumberBR(opportunitiesByTemperature.Morno.length)}
-                helperText="Oportunidades já aquecidas para avanço comercial."
+                helperText="Oportunidades jÃ¡ aquecidas para avanÃ§o comercial."
               />
               <KpiCard
                 title="Quente"
                 value={formatNumberBR(opportunitiesByTemperature.Quente.length)}
-                helperText="Oportunidades muito próximas de matrícula."
+                helperText="Oportunidades muito prÃ³ximas de matrÃ­cula."
               />
             </div>
           </section>
@@ -1609,14 +1613,14 @@ export function PainelVendedor() {
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{stage.label}</p>
                     <p className="text-xs text-slate-500">
-                      Faltam {formatNumberBR(Math.max(stage.target - sellerMonthMatriculas.length, 0))} matrículas
+                      Faltam {formatNumberBR(Math.max(stage.target - sellerMonthMatriculas.length, 0))} matrÃ­culas
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-slate-950">
                       {formatNumberBR(sellerMonthMatriculas.length)}/{formatNumberBR(stage.target)}
                     </p>
-                    <p className="text-xs text-slate-500">{formatCurrencyBR(stage.reward)} por matrícula</p>
+                    <p className="text-xs text-slate-500">{formatCurrencyBR(stage.reward)} por matrÃ­cula</p>
                   </div>
                 </div>
               ))}
@@ -1694,7 +1698,7 @@ export function PainelVendedor() {
             </label>
 
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Termômetro da oportunidade</span>
+              <span className="text-sm font-medium text-slate-700">TermÃ´metro da oportunidade</span>
               <select
                 value={manualLeadForm.temperatura}
                 onChange={(event) =>
@@ -1714,7 +1718,7 @@ export function PainelVendedor() {
             </label>
 
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Data da ação</span>
+              <span className="text-sm font-medium text-slate-700">Data da aÃ§Ã£o</span>
               <input
                 type="date"
                 value={manualLeadForm.dataAcao}
@@ -1730,7 +1734,7 @@ export function PainelVendedor() {
           </div>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Próximo passo</span>
+            <span className="text-sm font-medium text-slate-700">PrÃ³ximo passo</span>
             <textarea
               value={manualLeadForm.proximoPasso}
               onChange={(event) =>
@@ -1766,13 +1770,13 @@ export function PainelVendedor() {
 
       <OpportunityModal
         open={Boolean(actionModalTarget)}
-        title={actionModalTarget ? `Nova ação - ${titleize(actionModalTarget.nome)}` : 'Nova ação'}
+        title={actionModalTarget ? `Nova aÃ§Ã£o - ${titleize(actionModalTarget.nome)}` : 'Nova aÃ§Ã£o'}
         onClose={() => setActionModalTarget(null)}
       >
         <form className="space-y-4" onSubmit={handleAddAction}>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Data da ação</span>
+              <span className="text-sm font-medium text-slate-700">Data da aÃ§Ã£o</span>
               <input
                 type="date"
                 value={actionDate}
@@ -1784,7 +1788,7 @@ export function PainelVendedor() {
           </div>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Próximo passo</span>
+            <span className="text-sm font-medium text-slate-700">PrÃ³ximo passo</span>
             <textarea
               value={actionStep}
               onChange={(event) => setActionStep(event.target.value)}
@@ -1808,7 +1812,7 @@ export function PainelVendedor() {
               className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <CalendarDays className="h-4 w-4" />
-              {saving ? 'Salvando...' : 'Salvar ação'}
+              {saving ? 'Salvando...' : 'Salvar aÃ§Ã£o'}
             </button>
           </div>
         </form>
@@ -1816,3 +1820,4 @@ export function PainelVendedor() {
     </div>
   )
 }
+
