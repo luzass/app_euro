@@ -583,12 +583,14 @@ function StageCard({
 
       <div className="mt-4 space-y-2 text-sm text-slate-600">
         <p>
-          J\u00e1 fez <strong className="text-slate-950">{formatNumberBR(current)}</strong> matr\u00edculas.
+          {'Já foram realizadas '}
+          <strong className="text-slate-950">{formatNumberBR(current)}</strong>
+          {' matrículas.'}
         </p>
         <p>
           {hit
-            ? 'Faixa batida neste m\u00eas.'
-            : `Faltam ${formatNumberBR(remaining)} matr?culas para atingir esta faixa.`}
+            ? 'Faixa batida neste mês.'
+            : `Faltam ${formatNumberBR(remaining)} matrículas para atingir esta faixa.`}
         </p>
       </div>
     </article>
@@ -1217,14 +1219,13 @@ export function PainelVendedor() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Vis?o individual
+              {'Visão individual'}
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
               {canShowSellerPicker ? `Painel do vendedor - ${selectedSeller}` : `Meu painel - ${selectedSeller}`}
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
-              Aqui a gente cruza registros do CRM, inscritos, matr\u00edculas e o quadro de oportunidades
-              do vendedor em uma vis\u00e3o s\u00f3.
+              {'Aqui cruzamos os registros do CRM, os inscritos, as matrículas e o quadro de oportunidades do vendedor em uma única visão.'}
             </p>
           </div>
 
@@ -1265,46 +1266,46 @@ export function PainelVendedor() {
         <KpiCard
           title="Leads do vendedor"
           value={formatNumberBR(leadSummary.total)}
-          helperText="Leitura \u00fanica dos registros do CRM ligados a este vendedor."
+          helperText={'Leitura consolidada dos registros do CRM vinculados a este vendedor.'}
           emphasis="primary"
         />
         <KpiCard
           title="Inscritos"
           value={formatNumberBR(leadSummary.inscritos)}
-          helperText="Registros do CRM com correspond?ncia na base de inscritos de 2026.2."
+          helperText={'Registros do CRM com correspondência na base de inscritos de 2026.2.'}
         />
         <KpiCard
-          title="Matr\u00edculas do m\u00eas"
+          title={'Matrículas do mês'}
           value={formatNumberBR(sellerMonthMatriculas.length)}
-          helperText="Total do vendedor no m\u00eas selecionado, usando somente calouros sem Medicina."
+          helperText={'Total de matrículas do vendedor no mês selecionado, considerando apenas calouros e excluindo Medicina.'}
         />
         <KpiCard
-          title="M\u00eas selecionado"
+          title={'Mês selecionado'}
           value={monthConfig[selectedMonth].label}
-          helperText="O bloco de metas e comiss\u00e3o abaixo segue este recorte mensal."
+          helperText={'O bloco de metas e comissão abaixo segue este recorte mensal.'}
         />
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-950">Meta do m\u00eas</h3>
+            <h3 className="text-lg font-semibold text-slate-950">{'Meta do mês'}</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Acompanhe o m\u00eas atual ou troque o recorte para comparar a corrida de metas do vendedor.
+              {'Acompanhe o mês atual ou altere o recorte para comparar o desempenho do vendedor.'}
             </p>
           </div>
 
           <div className="flex flex-col gap-3 lg:items-end">
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-700">Equipe ativa no m\u00eas</span>
+              <span className="text-sm font-semibold text-slate-700">{'Equipe ativa no mês'}</span>
               <select
                 value={selectedTeamSize}
                 onChange={(event) => setSelectedTeamSize(Number(event.target.value) as ActiveTeamSize)}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-400"
               >
-                <option value={2}>02 funcion\u00e1rios</option>
-                <option value={3}>03 funcion\u00e1rios</option>
-                <option value={4}>04 funcion\u00e1rios</option>
+                <option value={2}>{'02 funcionários'}</option>
+                <option value={3}>{'03 funcionários'}</option>
+                <option value={4}>{'04 funcionários'}</option>
               </select>
             </label>
 
@@ -1337,7 +1338,7 @@ export function PainelVendedor() {
                   {formatNumberBR(sellerMonthMatriculas.length)}
                 </p>
                 <p className="mt-3 text-sm text-slate-600">
-                  Matr\u00edculas do vendedor no m\u00eas selecionado.
+                  {'Matrículas do vendedor no mês selecionado.'}
                 </p>
               </div>
 
@@ -1356,17 +1357,17 @@ export function PainelVendedor() {
                   <p className="text-sm font-semibold">Faixa atual</p>
                 </div>
                 <p className="mt-3 text-xl font-semibold text-slate-950">
-                  {monthResolution.achieved?.label ?? 'Ainda n\u00e3o bateu a Meta 01'}
+                  {monthResolution.achieved?.label ?? 'Ainda não atingiu a Meta 01'}
                 </p>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center gap-2 text-slate-700">
                   <TrendingUp className="h-4 w-4" />
-                  <p className="text-sm font-semibold">Pr\u00f3xima meta</p>
+                  <p className="text-sm font-semibold">{'Próxima meta'}</p>
                 </div>
                 <p className="mt-3 text-xl font-semibold text-slate-950">
-                  {monthResolution.next?.label ?? '\u00daltima faixa j\u00e1 alcan\u00e7ada'}
+                  {monthResolution.next?.label ?? 'Última faixa já alcançada'}
                 </p>
               </div>
 
@@ -1401,8 +1402,7 @@ export function PainelVendedor() {
           <div>
             <h3 className="text-lg font-semibold text-slate-950">Quadro de oportunidades</h3>
             <p className="mt-1 text-sm text-slate-500">
-              O vendedor acompanha aqui os leads em aberto e o supervisor alimenta a coluna de matr\u00edculas
-              pela vis\u00e3o de metas.
+              {'O vendedor acompanha aqui os leads em aberto, enquanto o supervisor alimenta a coluna de matrículas por meio da visão de metas.'}
             </p>
           </div>
 
@@ -1532,7 +1532,7 @@ export function PainelVendedor() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Matriculados
+                  {'Matriculados'}
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-slate-950">
                   {formatNumberBR(sellerMonthMatriculas.length)}
@@ -1573,7 +1573,7 @@ export function PainelVendedor() {
                 ))
               ) : (
                 <div className="rounded-[24px] border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-                  Ainda n\u00e3o h\u00e1 matr\u00edculas deste vendedor no m\u00eas selecionado.
+                  {'Ainda não há matrículas deste vendedor no mês selecionado.'}
                 </div>
               )}
             </div>
@@ -1587,17 +1587,17 @@ export function PainelVendedor() {
               <KpiCard
                 title="Frio"
                 value={formatNumberBR(opportunitiesByTemperature.Frio.length)}
-                helperText="Oportunidades que ainda precisam ganhar tra\u00e7\u00e3o."
+                helperText={'Oportunidades que ainda precisam evoluir.'}
               />
               <KpiCard
                 title="Morno"
                 value={formatNumberBR(opportunitiesByTemperature.Morno.length)}
-                helperText="Oportunidades j\u00e1 aquecidas para avan\u00e7o comercial."
+                helperText={'Oportunidades já aquecidas para avanço comercial.'}
               />
               <KpiCard
                 title="Quente"
                 value={formatNumberBR(opportunitiesByTemperature.Quente.length)}
-                helperText="Oportunidades muito pr\u00f3ximas de matr\u00edcula."
+                helperText={'Oportunidades com maior chance de matrícula.'}
               />
             </div>
           </section>
@@ -1613,14 +1613,19 @@ export function PainelVendedor() {
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{stage.label}</p>
                     <p className="text-xs text-slate-500">
-                      Faltam {formatNumberBR(Math.max(stage.target - sellerMonthMatriculas.length, 0))} matr\u00edculas
+                      {'Faltam '}
+                      {formatNumberBR(Math.max(stage.target - sellerMonthMatriculas.length, 0))}
+                      {' matrículas'}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-slate-950">
                       {formatNumberBR(sellerMonthMatriculas.length)}/{formatNumberBR(stage.target)}
                     </p>
-                    <p className="text-xs text-slate-500">{formatCurrencyBR(stage.reward)} por matr\u00edcula</p>
+                    <p className="text-xs text-slate-500">
+                      {formatCurrencyBR(stage.reward)}
+                      {' por matrícula'}
+                    </p>
                   </div>
                 </div>
               ))}
