@@ -588,7 +588,7 @@ function StageCard({
         <p>
           {hit
             ? 'Faixa batida neste m\u00eas.'
-            : `Faltam ${formatNumberBR(remaining)} para chegar nesta faixa.`}
+            : `Faltam ${formatNumberBR(remaining)} matr?culas para atingir esta faixa.`}
         </p>
       </div>
     </article>
@@ -1217,7 +1217,7 @@ export function PainelVendedor() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Painel individual
+              Vis?o individual
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
               {canShowSellerPicker ? `Painel do vendedor - ${selectedSeller}` : `Meu painel - ${selectedSeller}`}
@@ -1263,7 +1263,7 @@ export function PainelVendedor() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          title="Leads com o vendedor"
+          title="Leads do vendedor"
           value={formatNumberBR(leadSummary.total)}
           helperText="Leitura \u00fanica dos registros do CRM ligados a este vendedor."
           emphasis="primary"
@@ -1271,7 +1271,7 @@ export function PainelVendedor() {
         <KpiCard
           title="Inscritos"
           value={formatNumberBR(leadSummary.inscritos)}
-          helperText="Registros do CRM que batem com a base de inscritos 2026.2."
+          helperText="Registros do CRM com correspond?ncia na base de inscritos de 2026.2."
         />
         <KpiCard
           title="Matr\u00edculas do m\u00eas"
@@ -1532,7 +1532,7 @@ export function PainelVendedor() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Matriculado
+                  Matriculados
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-slate-950">
                   {formatNumberBR(sellerMonthMatriculas.length)}
