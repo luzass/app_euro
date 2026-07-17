@@ -61,6 +61,7 @@ type ActivityCrmRow = {
 type InscritoRow = {
   cpf: string | null
   candidato: string | null
+  data_inscricao: string | null
 }
 
 type MatriculadoRow = {
@@ -131,6 +132,8 @@ type CandidateSummary = {
   objection: string
   lossObservation: string
   createdDateKey: string
+  inscritoDateKeys: string[]
+  matriculadoDateKeys: string[]
   latestDateKey: string
   hasInscrito: boolean
   hasMatriculado: boolean
@@ -235,8 +238,9 @@ function toDateKey(value?: string | null) {
     return text
   }
 
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
-    const [day, month, year] = text.split('/')
+  const brDateMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+\d{2}:\d{2}(?::\d{2})?)?$/)
+  if (brDateMatch) {
+    const [, day, month, year] = brDateMatch
     return `${year}-${month}-${day}`
   }
 
@@ -706,7 +710,7 @@ export function PainelVendedor() {
       await Promise.all([
         fetchAllRows<Record<string, unknown>>('atividade_crm', 'Data de criação'),
         fetchAllRows<RegistroRow>('registro_crm', 'id'),
-        fetchAllRows<InscritoRow>('inscritos_20262', 'id', 'cpf, candidato'),
+        fetchAllRows<InscritoRow>('inscritos_20262', 'id', 'cpf, candidato, data_inscricao'),
         fetchAllRows<MatriculadoRow>(
           'matriculados_20262',
           'id',
@@ -808,22 +812,44 @@ export function PainelVendedor() {
   }, [crmRows, selectedSeller])
 
   const sellerCandidates = useMemo(() => {
-    const inscritosCpfSet = new Set(inscritosRows.map((row) => normalizeCpf(row.cpf)).filter(Boolean))
-    const inscritosNameSet = new Set(
-      inscritosRows.map((row) => normalizeString(titleize(row.candidato))).filter(Boolean),
-    )
-    const matriculadosCpfSet = new Set(
-      matriculadosRows
-        .filter((row) => isCalouro(row) && !isMedicina(row))
-        .map((row) => normalizeCpf(row.cpf))
-        .filter(Boolean),
-    )
-    const matriculadosNameSet = new Set(
-      matriculadosRows
-        .filter((row) => isCalouro(row) && !isMedicina(row))
-        .map((row) => normalizeString(titleize(row.aluno)))
-        .filter(Boolean),
-    )
+    const inscritosKeyDates = new Map<string, string[]>()
+    inscritosRows.forEach((row) => {
+      const dateKey = toDateKey(row.data_inscricao)
+      buildCandidateKeys({
+        cpf: row.cpf ?? '',
+        name: row.candidato ?? '',
+      }).forEach((key) => {
+        if (!key) {
+          return
+        }
+
+        const currentItems = inscritosKeyDates.get(key) ?? []
+        if (dateKey) {
+          currentItems.push(dateKey)
+        }
+        inscritosKeyDates.set(key, currentItems)
+      })
+    })
+
+    const matriculadosBaseRows = matriculadosRows.filter((row) => isCalouro(row) && !isMedicina(row))
+    const matriculadosKeyDates = new Map<string, string[]>()
+    matriculadosBaseRows.forEach((row) => {
+      const dateKey = toDateKey(row.data_baixa_do_pagamento)
+      buildCandidateKeys({
+        cpf: row.cpf ?? '',
+        name: row.aluno ?? '',
+      }).forEach((key) => {
+        if (!key) {
+          return
+        }
+
+        const currentItems = matriculadosKeyDates.get(key) ?? []
+        if (dateKey) {
+          currentItems.push(dateKey)
+        }
+        matriculadosKeyDates.set(key, currentItems)
+      })
+    })
 
     const activityIndex = new Map<string, number[]>()
 
@@ -885,10 +911,18 @@ export function PainelVendedor() {
       const createdDateKey = dateCreatedKey || earliestActivityDate
       const latestDateKey = dateCreatedKey > latestActivityDate ? dateCreatedKey : latestActivityDate
 
-      const hasInscrito =
-        (cpf && inscritosCpfSet.has(cpf)) || inscritosNameSet.has(normalizeString(name))
-      const hasMatriculado =
-        (cpf && matriculadosCpfSet.has(cpf)) || matriculadosNameSet.has(normalizeString(name))
+      const inscritoDateKeys = Array.from(
+        new Set(
+          rowKeys.flatMap((key) => inscritosKeyDates.get(key) ?? []).filter(Boolean),
+        ),
+      )
+      const matriculadoDateKeys = Array.from(
+        new Set(
+          rowKeys.flatMap((key) => matriculadosKeyDates.get(key) ?? []).filter(Boolean),
+        ),
+      )
+      const hasInscrito = inscritoDateKeys.length > 0
+      const hasMatriculado = matriculadoDateKeys.length > 0
 
       map.set(primaryKey, {
         key: primaryKey,
@@ -923,6 +957,8 @@ export function PainelVendedor() {
           readField(row, 'Observações da perda', 'ObservaÃ§Ãµes da perda'),
         ),
         createdDateKey,
+        inscritoDateKeys,
+        matriculadoDateKeys,
         latestDateKey,
         hasInscrito,
         hasMatriculado,
@@ -945,12 +981,24 @@ export function PainelVendedor() {
         return
       }
 
-      const hasInscrito =
-        (row.cpf && inscritosCpfSet.has(row.cpf)) ||
-        inscritosNameSet.has(normalizeString(row.contactName))
-      const hasMatriculado =
-        (row.cpf && matriculadosCpfSet.has(row.cpf)) ||
-        matriculadosNameSet.has(normalizeString(row.contactName))
+      const rowKeys = buildCandidateKeys({
+        personCode: row.personCode,
+        cpf: row.cpf,
+        email: row.email,
+        name: row.contactName,
+      })
+      const inscritoDateKeys = Array.from(
+        new Set(
+          rowKeys.flatMap((key) => inscritosKeyDates.get(key) ?? []).filter(Boolean),
+        ),
+      )
+      const matriculadoDateKeys = Array.from(
+        new Set(
+          rowKeys.flatMap((key) => matriculadosKeyDates.get(key) ?? []).filter(Boolean),
+        ),
+      )
+      const hasInscrito = inscritoDateKeys.length > 0
+      const hasMatriculado = matriculadoDateKeys.length > 0
 
       map.set(primaryKey, {
         key: primaryKey,
@@ -965,6 +1013,8 @@ export function PainelVendedor() {
         objection: row.objection,
         lossObservation: row.lossObservation,
         createdDateKey: row.latestDateKey,
+        inscritoDateKeys,
+        matriculadoDateKeys,
         latestDateKey: row.latestDateKey,
         hasInscrito,
         hasMatriculado,
@@ -977,6 +1027,12 @@ export function PainelVendedor() {
   const sellerMonthCandidates = useMemo(() => {
     return sellerCandidates.filter((candidate) =>
       candidate.createdDateKey.startsWith(`2026-${selectedMonth}`),
+    )
+  }, [selectedMonth, sellerCandidates])
+
+  const sellerMonthInscritos = useMemo(() => {
+    return sellerCandidates.filter((candidate) =>
+      candidate.inscritoDateKeys.some((dateKey) => dateKey.startsWith(`2026-${selectedMonth}`)),
     )
   }, [selectedMonth, sellerCandidates])
 
@@ -999,7 +1055,7 @@ export function PainelVendedor() {
     const notConverted = sellerMonthCandidates.filter(
       (candidate) => !candidate.hasInscrito && !candidate.hasMatriculado,
     ).length
-    const inscritos = sellerMonthCandidates.filter((candidate) => candidate.hasInscrito).length
+    const inscritos = sellerMonthInscritos.length
     const matriculados = sellerMonthCandidates.filter((candidate) => candidate.hasMatriculado).length
     const emAndamento = filteredLeadCandidates.filter(
       (candidate) => candidate.status === 'Em andamento',
@@ -1020,7 +1076,7 @@ export function PainelVendedor() {
         filteredLeadCandidates.map((candidate) => candidate.lossObservation),
       ),
     }
-  }, [filteredLeadCandidates, sellerMonthCandidates])
+  }, [filteredLeadCandidates, sellerMonthCandidates, sellerMonthInscritos])
 
   const sellerAllMatriculas = useMemo(() => {
     return matriculadosRows.filter(
