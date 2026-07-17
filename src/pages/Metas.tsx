@@ -79,10 +79,6 @@ function normalizeString(value?: string | null) {
     .toUpperCase()
 }
 
-function normalizeCpf(value?: string | null) {
-  return (value ?? '').replace(/\D/g, '')
-}
-
 function normalizeSellerValue(value?: string | null): Seller | null {
   const normalized = normalizeString(value)
 
@@ -518,20 +514,13 @@ export function Metas() {
       return
     }
 
-    const cpf = normalizeCpf(row.cpf)
-
-    if (!cpf) {
-      setSaveMessage('Esta matrícula não possui CPF válido para salvar o vendedor.')
-      return
-    }
-
     setSavingRowId(rowId)
     setSaveMessage(null)
 
     const { data: updatedRows, error: updateError } = await supabase
       .from('matriculados_20262')
       .update({ vendedor: selectedSeller })
-      .eq('cpf', row.cpf ?? cpf)
+      .eq('id', row.id)
       .select('id, cpf, vendedor')
 
     if (updateError) {
@@ -548,7 +537,7 @@ export function Metas() {
 
     setRows((currentValue) =>
       currentValue.map((currentRow) =>
-        normalizeCpf(currentRow.cpf) === cpf
+        currentRow.id === row.id
           ? { ...currentRow, vendedor: selectedSeller }
           : currentRow,
       ),
