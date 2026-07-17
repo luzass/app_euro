@@ -703,11 +703,7 @@ export function PainelVendedor() {
 
     const [crmResponse, registroResponse, inscritosResponse, matriculadosResponse, opportunitiesResponse] =
       await Promise.all([
-        fetchAllRows<Record<string, unknown>>(
-          'atividade_crm',
-          'Data de criação',
-          'Responsável, Código da pessoa, Contato, CPF da pessoa, E-mail, Nome - Oferta de curso, Nome - Processo seletivo, Nome - Local de oferta, Unidade, Data de criação, Atividade, Descrição',
-        ),
+        fetchAllRows<Record<string, unknown>>('atividade_crm', 'Data de criação'),
         fetchAllRows<RegistroRow>('registro_crm', 'id'),
         fetchAllRows<InscritoRow>('inscritos_20262', 'id', 'cpf, candidato'),
         fetchAllRows<MatriculadoRow>(
