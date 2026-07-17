@@ -22,7 +22,7 @@ export const navItems: NavItem[] = [
     title: 'Meu painel',
     path: '/app/painel-vendedor',
     icon: MonitorCog,
-    allowedRoles: ['admin', 'reitoria', 'captacao', 'funcionario'],
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
     title: 'Tráfego Pago - Spike',
@@ -34,19 +34,19 @@ export const navItems: NavItem[] = [
     title: 'Dashboard - Euro',
     path: '/app/dashboard-euro',
     icon: LayoutDashboard,
-    allowedRoles: ['admin', 'reitoria', 'captacao', 'funcionario'],
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
     title: 'Metas',
     path: '/app/metas',
     icon: Target,
-    allowedRoles: ['admin', 'reitoria', 'captacao'],
+    allowedRoles: ['admin', 'reitoria', 'captacao_gerente'],
   },
   {
     title: 'Visão CRM',
     path: '/app/visao-crm',
     icon: Building2,
-    allowedRoles: ['admin', 'reitoria', 'captacao'],
+    allowedRoles: ['admin', 'reitoria', 'captacao_gerente'],
   },
   {
     title: 'Criar Usuário',
@@ -61,7 +61,12 @@ export function getDefaultRoute(role?: Role | null) {
     return '/app/spike'
   }
 
-  if (role === 'captacao' || role === 'funcionario' || role === 'reitoria') {
+  if (
+    role === 'captacao' ||
+    role === 'captacao_gerente' ||
+    role === 'funcionario' ||
+    role === 'reitoria'
+  ) {
     return '/app/dashboard-euro'
   }
 

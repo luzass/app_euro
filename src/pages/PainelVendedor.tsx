@@ -641,7 +641,7 @@ function OpportunityModal({
 export function PainelVendedor() {
   const { profile } = useProfile()
   const resolvedProfileSeller = resolveSellerFromProfile(profile)
-  const canChooseSeller = profile?.role === 'admin' || profile?.role === 'reitoria'
+  const canChooseSeller = profile?.role === 'admin' || profile?.role === 'reitoria' || profile?.role === 'captacao_gerente'
 
   const [selectedSeller, setSelectedSeller] = useState<Seller>(
     resolvedProfileSeller ?? sellers[0],

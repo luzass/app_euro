@@ -1,4 +1,10 @@
-export type Role = 'admin' | 'reitoria' | 'spike' | 'captacao' | 'funcionario'
+export type Role =
+  | 'admin'
+  | 'reitoria'
+  | 'spike'
+  | 'captacao'
+  | 'captacao_gerente'
+  | 'funcionario'
 
 export interface Profile {
   id: string
@@ -18,6 +24,8 @@ export function formatRoleLabel(role?: Role | null) {
       return 'Spike'
     case 'captacao':
       return 'Captação'
+    case 'captacao_gerente':
+      return 'Gerente de Captação'
     case 'funcionario':
       return 'Captação'
     default:

@@ -69,7 +69,9 @@ export function AppRoutes() {
           <Route
             path="painel-vendedor"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'funcionario']}>
+              <RequireRole
+                allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
+              >
                 <PainelVendedor />
               </RequireRole>
             }
@@ -85,7 +87,9 @@ export function AppRoutes() {
           <Route
             path="dashboard-euro"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'funcionario']}>
+              <RequireRole
+                allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
+              >
                 <DashboardEuro />
               </RequireRole>
             }
@@ -93,7 +97,7 @@ export function AppRoutes() {
           <Route
             path="metas"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao']}>
+              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao_gerente']}>
                 <Metas />
               </RequireRole>
             }
@@ -101,7 +105,7 @@ export function AppRoutes() {
           <Route
             path="visao-crm"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao']}>
+              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao_gerente']}>
                 <VisaoCrm />
               </RequireRole>
             }

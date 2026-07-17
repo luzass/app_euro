@@ -71,9 +71,8 @@ export function CriarUsuario() {
               Criar novo usuário
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
-              O cadastro é feito por uma Edge Function protegida no Supabase. Assim,
-              a tela continua simples para o administrador e a criação real fica segura no
-              backend.
+              O cadastro é feito por uma Edge Function protegida no Supabase. Assim, a tela
+              continua simples para o administrador e a criação real fica segura no backend.
             </p>
           </div>
 
@@ -167,10 +166,11 @@ export function CriarUsuario() {
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 disabled={submitting}
               >
-                <option value="admin">admin</option>
+                <option value="admin">Admin</option>
                 <option value="reitoria">Reitoria</option>
                 <option value="spike">Spike</option>
-                <option value="captacao">Captação</option>
+                <option value="captacao">Captação - Vendedor</option>
+                <option value="captacao_gerente">Captação - Gerente</option>
               </select>
             </label>
 
@@ -191,9 +191,9 @@ export function CriarUsuario() {
           </div>
           <h3 className="mt-4 text-lg font-semibold text-amber-950">Fluxo seguro</h3>
           <p className="mt-3 text-sm leading-7 text-amber-900/80">
-            O frontend envia os dados do novo acesso, a Edge Function valida se o
-            usuário atual é administrador, cria o login no Auth e registra o perfil na
-            tabela profiles.
+            O frontend envia os dados do novo acesso, a Edge Function valida se o usuário
+            atual é administrador, cria o login no Auth e registra o perfil na tabela
+            `profiles`.
           </p>
         </aside>
       </div>
