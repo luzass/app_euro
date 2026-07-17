@@ -1897,7 +1897,7 @@ export function PainelVendedor() {
             </label>
 
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Term\u00f4metro da oportunidade</span>
+              <span className="text-sm font-medium text-slate-700">Termômetro da oportunidade</span>
               <select
                 value={manualLeadForm.temperatura}
                 onChange={(event) =>
@@ -1917,7 +1917,7 @@ export function PainelVendedor() {
             </label>
 
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Data da a\u00e7\u00e3o</span>
+              <span className="text-sm font-medium text-slate-700">Data da ação</span>
               <input
                 type="date"
                 value={manualLeadForm.dataAcao}
@@ -1933,7 +1933,7 @@ export function PainelVendedor() {
           </div>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Pr\u00f3ximo passo</span>
+            <span className="text-sm font-medium text-slate-700">Próximo passo</span>
             <textarea
               value={manualLeadForm.proximoPasso}
               onChange={(event) =>
