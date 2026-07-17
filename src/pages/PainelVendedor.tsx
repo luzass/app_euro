@@ -43,6 +43,21 @@ import { cn } from '../lib/utils'
 
 type RegistroRow = Record<string, unknown>
 
+type ActivityCrmRow = {
+  seller: Seller | null
+  personCode: string
+  contactName: string
+  cpf: string
+  email: string
+  course: string
+  campus: string
+  process: string
+  status: 'Em andamento'
+  objection: string
+  lossObservation: string
+  latestDateKey: string
+}
+
 type InscritoRow = {
   cpf: string | null
   candidato: string | null
@@ -643,6 +658,7 @@ export function PainelVendedor() {
   const resolvedProfileSeller = resolveSellerFromProfile(profile)
   const canChooseSeller = profile?.role === 'admin' || profile?.role === 'reitoria' || profile?.role === 'captacao_gerente'
 
+  const [crmRows, setCrmRows] = useState<ActivityCrmRow[]>([])
   const [selectedSeller, setSelectedSeller] = useState<Seller>(
     resolvedProfileSeller ?? sellers[0],
   )
@@ -685,8 +701,13 @@ export function PainelVendedor() {
     setError(null)
     setNotice(null)
 
-    const [registroResponse, inscritosResponse, matriculadosResponse, opportunitiesResponse] =
+    const [crmResponse, registroResponse, inscritosResponse, matriculadosResponse, opportunitiesResponse] =
       await Promise.all([
+        fetchAllRows<Record<string, unknown>>(
+          'atividade_crm',
+          'Data de criação',
+          'Responsável, Código da pessoa, Contato, CPF da pessoa, E-mail, Nome - Oferta de curso, Nome - Processo seletivo, Nome - Local de oferta, Unidade, Data de criação, Atividade, Descrição',
+        ),
         fetchAllRows<RegistroRow>('registro_crm', 'id'),
         fetchAllRows<InscritoRow>('inscritos_20262', 'id', 'cpf, candidato'),
         fetchAllRows<MatriculadoRow>(
@@ -701,7 +722,7 @@ export function PainelVendedor() {
         ),
       ])
 
-    if (registroResponse.error || inscritosResponse.error || matriculadosResponse.error) {
+    if (crmResponse.error || registroResponse.error || inscritosResponse.error || matriculadosResponse.error) {
       setError(
         'N\u00e3o foi poss\u00edvel carregar CRM, inscritos ou matr\u00edculas. Confere se as tabelas e permiss\u00f5es de leitura est\u00e3o liberadas no Supabase.',
       )
@@ -727,6 +748,32 @@ export function PainelVendedor() {
       )
     }
 
+    setCrmRows(
+      ((crmResponse.data ?? []) as Record<string, unknown>[]).map((row) => ({
+        seller: normalizeSellerValue(
+          readField(row, 'Responsável', 'Responsavel', 'ResponsÃ¡vel', 'ResponsÃƒÂ¡vel'),
+        ),
+        personCode: cleanText(
+          readField(row, 'Código da pessoa', 'Codigo da pessoa', 'CÃ³digo da pessoa', 'CÃƒÂ³digo da pessoa'),
+        ),
+        contactName: titleize(readField(row, 'Contato')),
+        cpf: normalizeCpf(readField(row, 'CPF da pessoa')),
+        email: normalizeEmail(readField(row, 'E-mail')),
+        course: normalizeCourse(readField(row, 'Nome - Oferta de curso')),
+        campus: normalizeCampus(
+          readField(row, 'Nome - Local de oferta'),
+          readField(row, 'Unidade'),
+          readField(row, 'Nome - Oferta de curso'),
+        ),
+        process: normalizeProcess(readField(row, 'Nome - Processo seletivo')),
+        status: 'Em andamento',
+        objection: 'Não informada',
+        lossObservation: 'Não informada',
+        latestDateKey: toDateKey(
+          readField(row, 'Data de criação', 'Data de criacao', 'Data de criaÃ§Ã£o', 'Data de criaÃƒÂ§ÃƒÂ£o'),
+        ),
+      })),
+    )
     setRegistroRows(registroResponse.data ?? [])
     setInscritosRows(inscritosResponse.data ?? [])
     setMatriculadosRows(
@@ -759,88 +806,159 @@ export function PainelVendedor() {
     })
   }, [registroRows, selectedSeller])
 
+  const sellerActivityRows = useMemo(() => {
+    return crmRows.filter((row) => row.seller === selectedSeller)
+  }, [crmRows, selectedSeller])
+
   const sellerCandidates = useMemo(() => {
-    const inscritoKeys = new Set<string>()
-    inscritosRows.forEach((row) => {
+    const inscritosCpfSet = new Set(inscritosRows.map((row) => normalizeCpf(row.cpf)).filter(Boolean))
+    const inscritosNameSet = new Set(
+      inscritosRows.map((row) => normalizeString(titleize(row.candidato))).filter(Boolean),
+    )
+    const matriculadosCpfSet = new Set(
+      matriculadosRows
+        .filter((row) => isCalouro(row) && !isMedicina(row))
+        .map((row) => normalizeCpf(row.cpf))
+        .filter(Boolean),
+    )
+    const matriculadosNameSet = new Set(
+      matriculadosRows
+        .filter((row) => isCalouro(row) && !isMedicina(row))
+        .map((row) => normalizeString(titleize(row.aluno)))
+        .filter(Boolean),
+    )
+
+    const activityIndex = new Map<string, number[]>()
+
+    sellerActivityRows.forEach((row, index) => {
       buildCandidateKeys({
-        cpf: row.cpf ?? '',
-        name: row.candidato ?? '',
-      }).forEach((key) => inscritoKeys.add(key))
+        personCode: row.personCode,
+        cpf: row.cpf,
+        email: row.email,
+        name: row.contactName,
+      }).forEach((key) => {
+        const currentItems = activityIndex.get(key) ?? []
+        currentItems.push(index)
+        activityIndex.set(key, currentItems)
+      })
     })
 
-    const matriculadoKeys = new Set<string>()
-    matriculadosRows
-      .filter((row) => isCalouro(row) && !isMedicina(row))
-      .forEach((row) => {
-        buildCandidateKeys({
-          cpf: row.cpf ?? '',
-          name: row.aluno ?? '',
-        }).forEach((key) => matriculadoKeys.add(key))
-      })
-
+    const referencedActivityIndexes = new Set<number>()
     const map = new Map<string, CandidateSummary>()
 
     sellerRegistroRows.forEach((row) => {
       const personCode = cleanText(readField(row, 'Identificador da pessoa'))
       const cpf = normalizeCpf(readField(row, 'CPF'))
       const email = normalizeEmail(readField(row, 'E-mail da pessoa'))
-      const name = cleanText(readField(row, 'Nome da pessoa'))
-      const keys = buildCandidateKeys({ personCode, cpf, email, name })
+      const name = titleize(readField(row, 'Nome da pessoa'))
       const primaryKey = buildPrimaryCandidateKey({ personCode, cpf, email, name })
+      const rowKeys = buildCandidateKeys({ personCode, cpf, email, name })
+
+      const matchingIndexes = new Set<number>()
+      rowKeys.forEach((key) => {
+        const indexes = activityIndex.get(key) ?? []
+        indexes.forEach((index) => matchingIndexes.add(index))
+      })
+
+      const matchingActivities = Array.from(matchingIndexes).map((index) => sellerActivityRows[index])
+      matchingIndexes.forEach((index) => referencedActivityIndexes.add(index))
+
       const dateCreatedKey =
-        toDateKey(String(row['Data da criaÃ§Ã£o'] ?? '')) ||
-        toDateKey(String(row['Data da atividade'] ?? ''))
+        toDateKey(readField(row, 'Data da criação', 'Data da criacao', 'Data da criaÃ§Ã£o')) ||
+        toDateKey(readField(row, 'Data da atividade'))
 
-      const currentCandidate = map.get(primaryKey)
+      const latestActivityDate = matchingActivities.reduce(
+        (latest, item) => (item.latestDateKey > latest ? item.latestDateKey : latest),
+        '',
+      )
+      const latestDateKey = dateCreatedKey > latestActivityDate ? dateCreatedKey : latestActivityDate
 
-      const hasInscrito = keys.some((key) => inscritoKeys.has(key))
-      const hasMatriculado = keys.some((key) => matriculadoKeys.has(key))
-
-      const nextCandidate: CandidateSummary = {
-        key: primaryKey,
-        personCode,
-        name: titleize(name),
-        cpf,
-        email,
-        course: normalizeCourse(readField(row, 'Nome - Oferta de curso', 'Curso de interesse')),
-        campus: normalizeCampus(
-          String(row['Unidade'] ?? ''),
-          String(row['Local da oferta'] ?? ''),
-          String(row['Unidade de Interesse'] ?? ''),
-        ),
-        process: normalizeProcess(readField(row, 'Processo seletivo')),
-        status: normalizeStatus(readField(row, 'Status', 'Resumo atual', 'Etapa')),
-        objection: normalizeObjection(readField(row, 'ObjeÃ§Ã£o', 'ObjeÃƒÂ§ÃƒÂ£o')),
-        lossObservation: normalizeLossObservation(
-          readField(row, 'ObservaÃ§Ãµes da perda', 'ObservaÃƒÂ§ÃƒÂµes da perda'),
-        ),
-        latestDateKey:
-          !currentCandidate || dateCreatedKey >= currentCandidate.latestDateKey
-            ? dateCreatedKey
-            : currentCandidate.latestDateKey,
-        hasInscrito: currentCandidate?.hasInscrito || hasInscrito,
-        hasMatriculado: currentCandidate?.hasMatriculado || hasMatriculado,
-      }
-
-      if (!currentCandidate) {
-        map.set(primaryKey, nextCandidate)
-        return
-      }
-
-      if (dateCreatedKey >= currentCandidate.latestDateKey) {
-        map.set(primaryKey, nextCandidate)
-        return
-      }
+      const hasInscrito =
+        (cpf && inscritosCpfSet.has(cpf)) || inscritosNameSet.has(normalizeString(name))
+      const hasMatriculado =
+        (cpf && matriculadosCpfSet.has(cpf)) || matriculadosNameSet.has(normalizeString(name))
 
       map.set(primaryKey, {
-        ...currentCandidate,
-        hasInscrito: currentCandidate.hasInscrito || hasInscrito,
-        hasMatriculado: currentCandidate.hasMatriculado || hasMatriculado,
+        key: primaryKey,
+        personCode,
+        name: name || 'Não informado',
+        cpf,
+        email,
+        course:
+          normalizeCourse(readField(row, 'Nome - Oferta de curso', 'Curso de interesse')) !==
+          'Não informado'
+            ? normalizeCourse(readField(row, 'Nome - Oferta de curso', 'Curso de interesse'))
+            : matchingActivities.find((item) => item.course !== 'Não informado')?.course || 'Não informado',
+        campus:
+          normalizeCampus(
+            readField(row, 'Unidade'),
+            readField(row, 'Local da oferta'),
+            readField(row, 'Unidade de Interesse'),
+          ) !== 'Não informado'
+            ? normalizeCampus(
+                readField(row, 'Unidade'),
+                readField(row, 'Local da oferta'),
+                readField(row, 'Unidade de Interesse'),
+              )
+            : matchingActivities.find((item) => item.campus !== 'Não informado')?.campus || 'Não informado',
+        process:
+          normalizeProcess(readField(row, 'Processo seletivo')) !== 'Não informado'
+            ? normalizeProcess(readField(row, 'Processo seletivo'))
+            : matchingActivities.find((item) => item.process !== 'Não informado')?.process || 'Não informado',
+        status: normalizeStatus(readField(row, 'Status', 'Status do registro', 'Resumo atual', 'Etapa')),
+        objection: normalizeObjection(readField(row, 'Objeção', 'ObjeÃ§Ã£o')),
+        lossObservation: normalizeLossObservation(
+          readField(row, 'Observações da perda', 'ObservaÃ§Ãµes da perda'),
+        ),
+        latestDateKey,
+        hasInscrito,
+        hasMatriculado,
       })
     })
 
-    return Array.from(map.values())
-  }, [inscritosRows, matriculadosRows, sellerRegistroRows])
+    sellerActivityRows.forEach((row, index) => {
+      if (referencedActivityIndexes.has(index)) {
+        return
+      }
+
+      const primaryKey = buildPrimaryCandidateKey({
+        personCode: row.personCode,
+        cpf: row.cpf,
+        email: row.email,
+        name: row.contactName,
+      })
+
+      if (map.has(primaryKey)) {
+        return
+      }
+
+      const hasInscrito =
+        (row.cpf && inscritosCpfSet.has(row.cpf)) ||
+        inscritosNameSet.has(normalizeString(row.contactName))
+      const hasMatriculado =
+        (row.cpf && matriculadosCpfSet.has(row.cpf)) ||
+        matriculadosNameSet.has(normalizeString(row.contactName))
+
+      map.set(primaryKey, {
+        key: primaryKey,
+        personCode: row.personCode || 'Não informado',
+        name: row.contactName || 'Não informado',
+        cpf: row.cpf,
+        email: row.email,
+        course: row.course,
+        campus: row.campus,
+        process: row.process,
+        status: row.status,
+        objection: row.objection,
+        lossObservation: row.lossObservation,
+        latestDateKey: row.latestDateKey,
+        hasInscrito,
+        hasMatriculado,
+      })
+    })
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [inscritosRows, matriculadosRows, sellerActivityRows, sellerRegistroRows])
 
   const filteredLeadCandidates = useMemo(() => {
     switch (leadFilter) {
