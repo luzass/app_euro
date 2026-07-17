@@ -1270,9 +1270,9 @@ export function PainelVendedor() {
           helperText="Registros do CRM que batem com a base de inscritos 2026.2."
         />
         <KpiCard
-          title="Matrículas atribuídas"
-          value={formatNumberBR(sellerAllMatriculas.length)}
-          helperText="Total acumulado do vendedor na base de metas, usando somente calouros sem Medicina."
+          title="Matrículas do mês"
+          value={formatNumberBR(sellerMonthMatriculas.length)}
+          helperText="Total do vendedor no mês selecionado, usando somente calouros sem Medicina."
         />
         <KpiCard
           title="Mês selecionado"
