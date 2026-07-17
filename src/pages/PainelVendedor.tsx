@@ -28,11 +28,13 @@ import {
   buildNormalStages,
   buildPayout,
   getCurrentGoalMonthKey,
+  getDefaultActiveTeamSize,
   monthConfig,
   normalizeSellerValue,
   resolveGoalStage,
   resolveSellerFromProfile,
   sellers,
+  type ActiveTeamSize,
   type GoalMonthKey,
   type Seller,
 } from '../lib/sellers'
@@ -639,6 +641,9 @@ export function PainelVendedor() {
     resolvedProfileSeller ?? sellers[0],
   )
   const [selectedMonth, setSelectedMonth] = useState<GoalMonthKey>(getCurrentGoalMonthKey())
+  const [selectedTeamSize, setSelectedTeamSize] = useState<ActiveTeamSize>(
+    getDefaultActiveTeamSize(),
+  )
   const [leadFilter] = useState<LeadFilterKey>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -799,8 +804,10 @@ export function PainelVendedor() {
         ),
         process: normalizeProcess(readField(row, 'Processo seletivo')),
         status: normalizeStatus(readField(row, 'Status', 'Resumo atual', 'Etapa')),
-        objection: normalizeObjection(String(row['Objeção'] ?? '')),
-        lossObservation: normalizeLossObservation(String(row['Observações da perda'] ?? '')),
+        objection: normalizeObjection(readField(row, 'Objeção', 'ObjeÃ§Ã£o')),
+        lossObservation: normalizeLossObservation(
+          readField(row, 'Observações da perda', 'ObservaÃ§Ãµes da perda'),
+        ),
         latestDateKey:
           !currentCandidate || dateCreatedKey >= currentCandidate.latestDateKey
             ? dateCreatedKey
@@ -881,7 +888,10 @@ export function PainelVendedor() {
     )
   }, [selectedMonth, sellerAllMatriculas])
 
-  const normalStages = useMemo(() => buildNormalStages(selectedMonth), [selectedMonth])
+  const normalStages = useMemo(
+    () => buildNormalStages(selectedMonth, selectedTeamSize),
+    [selectedMonth, selectedTeamSize],
+  )
   const monthResolution = useMemo(
     () => resolveGoalStage(sellerMonthMatriculas.length, normalStages),
     [normalStages, sellerMonthMatriculas.length],
@@ -1280,22 +1290,37 @@ export function PainelVendedor() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(monthConfig) as GoalMonthKey[]).map((monthKey) => (
-              <button
-                key={monthKey}
-                type="button"
-                onClick={() => setSelectedMonth(monthKey)}
-                className={cn(
-                  'rounded-2xl border px-4 py-2.5 text-sm font-semibold transition',
-                  selectedMonth === monthKey
-                    ? 'border-slate-950 bg-slate-950 text-white'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
-                )}
+          <div className="flex flex-col gap-3 lg:items-end">
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <span className="text-sm font-semibold text-slate-700">Equipe ativa no mês</span>
+              <select
+                value={selectedTeamSize}
+                onChange={(event) => setSelectedTeamSize(Number(event.target.value) as ActiveTeamSize)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-400"
               >
-                {monthConfig[monthKey].label}
-              </button>
-            ))}
+                <option value={2}>02 funcionários</option>
+                <option value={3}>03 funcionários</option>
+                <option value={4}>04 funcionários</option>
+              </select>
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(monthConfig) as GoalMonthKey[]).map((monthKey) => (
+                <button
+                  key={monthKey}
+                  type="button"
+                  onClick={() => setSelectedMonth(monthKey)}
+                  className={cn(
+                    'rounded-2xl border px-4 py-2.5 text-sm font-semibold transition',
+                    selectedMonth === monthKey
+                      ? 'border-slate-950 bg-slate-950 text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                  )}
+                >
+                  {monthConfig[monthKey].label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
