@@ -1441,7 +1441,7 @@ export function PainelVendedor() {
               key={column}
               onDragOver={(event) => event.preventDefault()}
               onDrop={() => void handleDropOpportunity(column)}
-              className="min-h-[320px] rounded-[28px] border border-slate-200 bg-slate-50 p-4"
+              className="flex h-[420px] min-h-[320px] flex-col rounded-[28px] border border-slate-200 bg-slate-50 p-4 lg:h-[720px]"
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -1454,7 +1454,7 @@ export function PainelVendedor() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
                 {opportunitiesByTemperature[column].length > 0 ? (
                   opportunitiesByTemperature[column].map((row) => (
                     <article
@@ -1528,7 +1528,7 @@ export function PainelVendedor() {
             </div>
           ))}
 
-          <div className="min-h-[320px] rounded-[28px] border border-slate-200 bg-slate-50 p-4">
+          <div className="flex h-[420px] min-h-[320px] flex-col rounded-[28px] border border-slate-200 bg-slate-50 p-4 lg:h-[720px]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -1540,7 +1540,7 @@ export function PainelVendedor() {
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
               {sellerMonthMatriculas.length > 0 ? (
                 sellerMonthMatriculas.map((row) => (
                   <article
