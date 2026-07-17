@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar'
 import { Loading } from '../UI/Loading'
 import { useAuth } from '../../hooks/useAuth'
 import { useProfile } from '../../hooks/useProfile'
-import { canAccessPath, getDefaultRoute, getPageTitle } from '../../lib/navigation'
+import { canAccessPath, getDefaultRouteForProfile, getPageTitle } from '../../lib/navigation'
 
 export function ProtectedLayout() {
   const location = useLocation()
@@ -40,7 +40,7 @@ export function ProtectedLayout() {
   }
 
   if (profile && !canAccessPath(location.pathname, profile.role)) {
-    return <Navigate to={getDefaultRoute(profile.role)} replace />
+    return <Navigate to={getDefaultRouteForProfile(profile)} replace />
   }
 
   return (

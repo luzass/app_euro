@@ -25,7 +25,7 @@ interface MatriculadoMetaRow {
   vendedor?: string | null
 }
 
-type Seller = 'Tony' | 'William' | 'Gustavo' | 'Jordana'
+type Seller = 'Agestone' | 'William' | 'Gustavo' | 'Jordana'
 type MonthKey = '05' | '06' | '07' | '08' | '09'
 
 interface GoalStage {
@@ -51,7 +51,7 @@ interface SellerCardData {
   normalGateCurrent: number
 }
 
-const sellers: Seller[] = ['Tony', 'William', 'Gustavo', 'Jordana']
+const sellers: Seller[] = ['Agestone', 'William', 'Gustavo', 'Jordana']
 
 const monthConfig: Record<
   MonthKey,
@@ -81,6 +81,40 @@ function normalizeString(value?: string | null) {
 
 function normalizeCpf(value?: string | null) {
   return (value ?? '').replace(/\D/g, '')
+}
+
+function normalizeSellerValue(value?: string | null): Seller | null {
+  const normalized = normalizeString(value)
+
+  if (!normalized) {
+    return null
+  }
+
+  if (
+    normalized.includes('TONY') ||
+    normalized.includes('AGESTONE') ||
+    normalized.includes('FRANCISCO ALVES DA SILVA')
+  ) {
+    return 'Agestone'
+  }
+
+  if (
+    normalized.includes('WILLIAM') ||
+    normalized.includes('WILLAM') ||
+    normalized.includes('SIDOU')
+  ) {
+    return 'William'
+  }
+
+  if (normalized.includes('GUSTAVO')) {
+    return 'Gustavo'
+  }
+
+  if (normalized.includes('JORDANA')) {
+    return 'Jordana'
+  }
+
+  return null
 }
 
 function titleize(value?: string | null) {
@@ -294,7 +328,12 @@ export function Metas() {
       }
 
       setVendorColumnAvailable(false)
-      setRows((fallback.data as MatriculadoMetaRow[]) ?? [])
+      setRows(
+        (((fallback.data as MatriculadoMetaRow[]) ?? []).map((row) => ({
+          ...row,
+          vendedor: normalizeSellerValue(row.vendedor) ?? row.vendedor ?? null,
+        }))),
+      )
       setLoading(false)
       return
     }
@@ -302,7 +341,12 @@ export function Metas() {
     setVendorColumnAvailable(
       Boolean(data && data.length > 0 ? Object.prototype.hasOwnProperty.call(data[0], 'vendedor') : true),
     )
-    setRows((data as MatriculadoMetaRow[]) ?? [])
+    setRows(
+      (((data as MatriculadoMetaRow[]) ?? []).map((row) => ({
+        ...row,
+        vendedor: normalizeSellerValue(row.vendedor) ?? row.vendedor ?? null,
+      }))),
+    )
     setLoading(false)
   }
 

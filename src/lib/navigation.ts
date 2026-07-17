@@ -3,10 +3,12 @@ import {
   type LucideIcon,
   Building2,
   LayoutDashboard,
+  MonitorCog,
   Target,
   UserRoundPlus,
 } from 'lucide-react'
-import type { Role } from './types'
+import { resolveSellerFromProfile } from './sellers'
+import type { Profile, Role } from './types'
 
 export interface NavItem {
   title: string
@@ -16,6 +18,12 @@ export interface NavItem {
 }
 
 export const navItems: NavItem[] = [
+  {
+    title: 'Meu painel',
+    path: '/app/painel-vendedor',
+    icon: MonitorCog,
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'funcionario'],
+  },
   {
     title: 'Tráfego Pago - Spike',
     path: '/app/spike',
@@ -58,6 +66,16 @@ export function getDefaultRoute(role?: Role | null) {
   }
 
   return '/app/spike'
+}
+
+export function getDefaultRouteForProfile(profile?: Profile | null) {
+  const seller = resolveSellerFromProfile(profile)
+
+  if (seller && (profile?.role === 'captacao' || profile?.role === 'funcionario')) {
+    return '/app/painel-vendedor'
+  }
+
+  return getDefaultRoute(profile?.role)
 }
 
 export function getAllowedNavItems(role?: Role | null) {

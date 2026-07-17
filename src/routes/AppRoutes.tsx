@@ -4,13 +4,14 @@ import { ProtectedLayout } from '../components/Layout/ProtectedLayout'
 import { Loading } from '../components/UI/Loading'
 import { useAuth } from '../hooks/useAuth'
 import { useProfile } from '../hooks/useProfile'
-import { getDefaultRoute } from '../lib/navigation'
+import { getDefaultRouteForProfile } from '../lib/navigation'
 import type { Role } from '../lib/types'
 import { CriarUsuario } from '../pages/CriarUsuario'
 import { DashboardEuro } from '../pages/DashboardEuro'
 import { Login } from '../pages/Login'
 import { Metas } from '../pages/Metas'
 import { NotFound } from '../pages/NotFound'
+import { PainelVendedor } from '../pages/PainelVendedor'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
 import { VisaoCrm } from '../pages/VisaoCrm'
 
@@ -26,7 +27,7 @@ function RootRedirect() {
     return <Navigate to="/login" replace />
   }
 
-  return <Navigate to={profile ? getDefaultRoute(profile.role) : '/app'} replace />
+  return <Navigate to={profile ? getDefaultRouteForProfile(profile) : '/app'} replace />
 }
 
 function RoleHomeRedirect() {
@@ -36,7 +37,7 @@ function RoleHomeRedirect() {
     return <Loading message="Definindo página inicial..." />
   }
 
-  return <Navigate to={getDefaultRoute(profile?.role)} replace />
+  return <Navigate to={getDefaultRouteForProfile(profile)} replace />
 }
 
 function RequireRole({
@@ -50,7 +51,7 @@ function RequireRole({
   }
 
   if (!profile || !allowedRoles.includes(profile.role)) {
-    return <Navigate to={getDefaultRoute(profile?.role)} replace />
+    return <Navigate to={getDefaultRouteForProfile(profile)} replace />
   }
 
   return <>{children}</>
@@ -65,6 +66,14 @@ export function AppRoutes() {
 
         <Route path="/app" element={<ProtectedLayout />}>
           <Route index element={<RoleHomeRedirect />} />
+          <Route
+            path="painel-vendedor"
+            element={
+              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'funcionario']}>
+                <PainelVendedor />
+              </RequireRole>
+            }
+          />
           <Route
             path="spike"
             element={
