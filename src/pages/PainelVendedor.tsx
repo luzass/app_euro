@@ -130,6 +130,7 @@ type CandidateSummary = {
   status: 'Em andamento' | 'Perdido' | 'Ganho'
   objection: string
   lossObservation: string
+  createdDateKey: string
   latestDateKey: string
   hasInscrito: boolean
   hasMatriculado: boolean
@@ -867,6 +868,21 @@ export function PainelVendedor() {
         (latest, item) => (item.latestDateKey > latest ? item.latestDateKey : latest),
         '',
       )
+      const earliestActivityDate = matchingActivities.reduce(
+        (earliest, item) => {
+          if (!item.latestDateKey) {
+            return earliest
+          }
+
+          if (!earliest) {
+            return item.latestDateKey
+          }
+
+          return item.latestDateKey < earliest ? item.latestDateKey : earliest
+        },
+        '',
+      )
+      const createdDateKey = dateCreatedKey || earliestActivityDate
       const latestDateKey = dateCreatedKey > latestActivityDate ? dateCreatedKey : latestActivityDate
 
       const hasInscrito =
@@ -906,6 +922,7 @@ export function PainelVendedor() {
         lossObservation: normalizeLossObservation(
           readField(row, 'Observações da perda', 'ObservaÃ§Ãµes da perda'),
         ),
+        createdDateKey,
         latestDateKey,
         hasInscrito,
         hasMatriculado,
@@ -947,6 +964,7 @@ export function PainelVendedor() {
         status: row.status,
         objection: row.objection,
         lossObservation: row.lossObservation,
+        createdDateKey: row.latestDateKey,
         latestDateKey: row.latestDateKey,
         hasInscrito,
         hasMatriculado,
@@ -956,25 +974,33 @@ export function PainelVendedor() {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [inscritosRows, matriculadosRows, sellerActivityRows, sellerRegistroRows])
 
+  const sellerMonthCandidates = useMemo(() => {
+    return sellerCandidates.filter((candidate) =>
+      candidate.createdDateKey.startsWith(`2026-${selectedMonth}`),
+    )
+  }, [selectedMonth, sellerCandidates])
+
   const filteredLeadCandidates = useMemo(() => {
     switch (leadFilter) {
       case 'not-converted':
-        return sellerCandidates.filter((candidate) => !candidate.hasInscrito && !candidate.hasMatriculado)
+        return sellerMonthCandidates.filter(
+          (candidate) => !candidate.hasInscrito && !candidate.hasMatriculado,
+        )
       case 'inscritos':
-        return sellerCandidates.filter((candidate) => candidate.hasInscrito)
+        return sellerMonthCandidates.filter((candidate) => candidate.hasInscrito)
       case 'matriculados':
-        return sellerCandidates.filter((candidate) => candidate.hasMatriculado)
+        return sellerMonthCandidates.filter((candidate) => candidate.hasMatriculado)
       default:
-        return sellerCandidates
+        return sellerMonthCandidates
     }
-  }, [leadFilter, sellerCandidates])
+  }, [leadFilter, sellerMonthCandidates])
 
   const leadSummary = useMemo(() => {
-    const notConverted = sellerCandidates.filter(
+    const notConverted = sellerMonthCandidates.filter(
       (candidate) => !candidate.hasInscrito && !candidate.hasMatriculado,
     ).length
-    const inscritos = sellerCandidates.filter((candidate) => candidate.hasInscrito).length
-    const matriculados = sellerCandidates.filter((candidate) => candidate.hasMatriculado).length
+    const inscritos = sellerMonthCandidates.filter((candidate) => candidate.hasInscrito).length
+    const matriculados = sellerMonthCandidates.filter((candidate) => candidate.hasMatriculado).length
     const emAndamento = filteredLeadCandidates.filter(
       (candidate) => candidate.status === 'Em andamento',
     ).length
@@ -982,7 +1008,7 @@ export function PainelVendedor() {
     const ganho = filteredLeadCandidates.filter((candidate) => candidate.status === 'Ganho').length
 
     return {
-      total: sellerCandidates.length,
+      total: sellerMonthCandidates.length,
       notConverted,
       inscritos,
       matriculados,
@@ -994,7 +1020,7 @@ export function PainelVendedor() {
         filteredLeadCandidates.map((candidate) => candidate.lossObservation),
       ),
     }
-  }, [filteredLeadCandidates, sellerCandidates])
+  }, [filteredLeadCandidates, sellerMonthCandidates])
 
   const sellerAllMatriculas = useMemo(() => {
     return matriculadosRows.filter(
