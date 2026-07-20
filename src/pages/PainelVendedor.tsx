@@ -1270,7 +1270,7 @@ export function PainelVendedor() {
     setActionDate('')
     setActionStep('')
     setSaving(false)
-    setNotice('Nova a\u00e7\u00e3o adicionada com sucesso.')
+    setNotice('Nova ação adicionada com sucesso.')
   }
 
   const handleDropOpportunity = async (temperature: OpportunityTemperature) => {
@@ -1496,6 +1496,22 @@ export function PainelVendedor() {
         </section>
       ) : null}
 
+      <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          Mês selecionado
+        </p>
+        <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
+              {monthConfig[selectedMonth].label}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">
+              O bloco de metas e comissão abaixo segue este recorte mensal.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Leads do vendedor"
@@ -1518,22 +1534,6 @@ export function PainelVendedor() {
           value={formatNumberBR(teamAllProuniMatriculas.length)}
           helperText={'A meta PROUNI é da equipe inteira, sem recorte mensal, seguindo a mesma lógica da visão de metas.'}
         />
-      </section>
-
-      <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-          Mês selecionado
-        </p>
-        <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
-              {monthConfig[selectedMonth].label}
-            </h3>
-            <p className="mt-2 text-sm text-slate-500">
-              O bloco de metas e comissão abaixo segue este recorte mensal.
-            </p>
-          </div>
-        </div>
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
@@ -1763,18 +1763,18 @@ export function PainelVendedor() {
                           {titleize(row.forma_ingresso)}
                         </p>
                         <p>
-                          <strong className="text-slate-900">Pr\u00f3ximo passo:</strong>{' '}
-                          {row.proximo_passo || 'Ainda n\u00e3o definido'}
+                          <strong className="text-slate-900">Próximo passo:</strong>{' '}
+                          {row.proximo_passo || 'Ainda não definido'}
                         </p>
                         <p>
-                          <strong className="text-slate-900">Data da a\u00e7\u00e3o:</strong>{' '}
+                          <strong className="text-slate-900">Data da ação:</strong>{' '}
                           {formatDateBR(row.data_acao)}
                         </p>
                       </div>
 
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                          Hist\u00f3rico
+                          Histórico
                         </p>
                         <div className="mt-3 space-y-2">
                           {(row.historico ?? []).slice(0, 3).map((action) => (
@@ -1784,7 +1784,7 @@ export function PainelVendedor() {
                             </div>
                           ))}
                           {(row.historico ?? []).length === 0 ? (
-                            <p className="text-xs text-slate-500">Nenhuma a\u00e7\u00e3o registrada ainda.</p>
+                            <p className="text-xs text-slate-500">Nenhuma ação registrada ainda.</p>
                           ) : null}
                         </div>
                       </div>
@@ -1799,7 +1799,7 @@ export function PainelVendedor() {
                         className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
                       >
                         <CalendarDays className="h-3.5 w-3.5" />
-                        Nova a\u00e7\u00e3o
+                        Nova ação
                       </button>
                     </article>
                   ))
