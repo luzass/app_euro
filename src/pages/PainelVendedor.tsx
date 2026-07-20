@@ -158,6 +158,11 @@ type OpportunityEditFormState = {
   temperatura: OpportunityTemperature
 }
 
+type OpportunityHistoryEditState = {
+  opportunity: OpportunityRow
+  action: OpportunityAction
+}
+
 const leadFilterOptions = [
   { key: 'all', label: 'Todos' },
   { key: 'not-converted', label: 'N\u00e3o convertidos' },
@@ -728,6 +733,9 @@ export function PainelVendedor() {
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [actionModalTarget, setActionModalTarget] = useState<OpportunityRow | null>(null)
   const [editModalTarget, setEditModalTarget] = useState<OpportunityRow | null>(null)
+  const [historyEditTarget, setHistoryEditTarget] = useState<OpportunityHistoryEditState | null>(
+    null,
+  )
   const [editOpportunityForm, setEditOpportunityForm] = useState<OpportunityEditFormState>(
     initialEditOpportunityForm,
   )
@@ -1205,6 +1213,15 @@ export function PainelVendedor() {
     })
   }
 
+  const openEditHistoryModal = (row: OpportunityRow, action: OpportunityAction) => {
+    setHistoryEditTarget({
+      opportunity: row,
+      action,
+    })
+    setActionDate(action.date)
+    setActionStep(action.step)
+  }
+
   const handleSaveManualLead = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -1325,6 +1342,65 @@ export function PainelVendedor() {
     setActionStep('')
     setSaving(false)
     setNotice('Nova ação adicionada com sucesso.')
+  }
+
+  const handleSaveHistoryEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!supabase || !historyEditTarget) {
+      return
+    }
+
+    const currentHistory = historyEditTarget.opportunity.historico ?? []
+    const nextHistory = currentHistory.map((action) =>
+      action.id === historyEditTarget.action.id
+        ? {
+            ...action,
+            date: actionDate,
+            step: actionStep.trim(),
+          }
+        : action,
+    )
+
+    const latestAction = nextHistory[0] ?? null
+
+    setSaving(true)
+    setNotice(null)
+
+    const { data, error: updateError } = await supabase
+      .from('vendedor_oportunidades')
+      .update({
+        historico: nextHistory,
+        proximo_passo: latestAction?.step ?? historyEditTarget.opportunity.proximo_passo ?? null,
+        data_acao: latestAction?.date ?? historyEditTarget.opportunity.data_acao ?? null,
+      })
+      .eq('id', historyEditTarget.opportunity.id)
+      .select(
+        'id, vendedor, nome, curso, forma_ingresso, campus, temperatura, proximo_passo, data_acao, historico, created_at, updated_at',
+      )
+      .single()
+
+    if (updateError) {
+      setNotice('Não consegui atualizar esta ação agora.')
+      setSaving(false)
+      return
+    }
+
+    setOpportunities((currentValue) =>
+      currentValue.map((row) =>
+        row.id === historyEditTarget.opportunity.id
+          ? {
+              ...(data as OpportunityRow),
+              historico: parseOpportunityHistory((data as OpportunityRow).historico),
+            }
+          : row,
+      ),
+    )
+    setHistoryEditTarget(null)
+    setActionDate('')
+    setActionStep('')
+    setSaving(false)
+    setNotice('Ação atualizada com sucesso.')
   }
 
   const handleSaveOpportunityEdit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1889,8 +1965,20 @@ export function PainelVendedor() {
                         <div className="mt-3 space-y-2">
                           {(row.historico ?? []).slice(0, 3).map((action) => (
                             <div key={action.id} className="rounded-2xl bg-white px-3 py-2 text-xs text-slate-600">
-                              <p className="font-semibold text-slate-900">{formatDateBR(action.date)}</p>
-                              <p className="mt-1">{action.step}</p>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-slate-900">{formatDateBR(action.date)}</p>
+                                  <p className="mt-1">{action.step}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditHistoryModal(row, action)}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  Editar
+                                </button>
+                              </div>
                             </div>
                           ))}
                           {(row.historico ?? []).length === 0 ? (
@@ -1996,6 +2084,35 @@ export function PainelVendedor() {
                               <strong className="text-slate-900">Data da ação:</strong>{' '}
                               {formatDateBR(row.data_acao)}
                             </p>
+                          </div>
+
+                          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                              Histórico
+                            </p>
+                            <div className="mt-3 space-y-2">
+                              {(row.historico ?? []).slice(0, 3).map((action) => (
+                                <div key={action.id} className="rounded-2xl bg-white px-3 py-2 text-xs text-slate-600">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="font-semibold text-slate-900">{formatDateBR(action.date)}</p>
+                                      <p className="mt-1">{action.step}</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditHistoryModal(row, action)}
+                                      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                      Editar
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {(row.historico ?? []).length === 0 ? (
+                                <p className="text-xs text-slate-500">Nenhuma ação registrada ainda.</p>
+                              ) : null}
+                            </div>
                           </div>
 
                           <div className="mt-4 flex flex-wrap gap-2">
@@ -2327,6 +2444,68 @@ export function PainelVendedor() {
               className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <CalendarDays className="h-4 w-4" />
+              {saving ? 'Salvando...' : 'Salvar ação'}
+            </button>
+          </div>
+        </form>
+      </OpportunityModal>
+
+      <OpportunityModal
+        open={Boolean(historyEditTarget)}
+        title={
+          historyEditTarget
+            ? `Editar ação - ${titleize(historyEditTarget.opportunity.nome)}`
+            : 'Editar ação'
+        }
+        onClose={() => {
+          setHistoryEditTarget(null)
+          setActionDate('')
+          setActionStep('')
+        }}
+      >
+        <form className="space-y-4" onSubmit={handleSaveHistoryEdit}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Data da ação</span>
+              <input
+                type="date"
+                value={actionDate}
+                onChange={(event) => setActionDate(event.target.value)}
+                required
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+          </div>
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-700">Próximo passo</span>
+            <textarea
+              value={actionStep}
+              onChange={(event) => setActionStep(event.target.value)}
+              rows={4}
+              required
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            />
+          </label>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setHistoryEditTarget(null)
+                setActionDate('')
+                setActionStep('')
+              }}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Pencil className="h-4 w-4" />
               {saving ? 'Salvando...' : 'Salvar ação'}
             </button>
           </div>
