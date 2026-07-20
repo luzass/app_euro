@@ -1,6 +1,7 @@
 ﻿import {
   CalendarDays,
   GripVertical,
+  Pencil,
   Plus,
   RefreshCw,
   Target,
@@ -78,7 +79,7 @@ type MatriculadoRow = {
   vendedor?: string | null
 }
 
-type OpportunityTemperature = 'Frio' | 'Morno' | 'Quente'
+type OpportunityTemperature = 'Frio' | 'Morno' | 'Quente' | 'Matriculado'
 
 type OpportunityAction = {
   id: string
@@ -150,6 +151,13 @@ type ManualLeadFormState = {
   dataAcao: string
 }
 
+type OpportunityEditFormState = {
+  curso: string
+  formaIngresso: string
+  campus: string
+  temperatura: OpportunityTemperature
+}
+
 const leadFilterOptions = [
   { key: 'all', label: 'Todos' },
   { key: 'not-converted', label: 'N\u00e3o convertidos' },
@@ -160,6 +168,12 @@ const leadFilterOptions = [
 type LeadFilterKey = (typeof leadFilterOptions)[number]['key']
 
 const temperatureColumns: OpportunityTemperature[] = ['Frio', 'Morno', 'Quente']
+const editableOpportunityTemperatures: OpportunityTemperature[] = [
+  'Frio',
+  'Morno',
+  'Quente',
+  'Matriculado',
+]
 
 const initialManualLeadForm: ManualLeadFormState = {
   nome: '',
@@ -169,6 +183,13 @@ const initialManualLeadForm: ManualLeadFormState = {
   temperatura: 'Frio',
   proximoPasso: '',
   dataAcao: '',
+}
+
+const initialEditOpportunityForm: OpportunityEditFormState = {
+  curso: '',
+  formaIngresso: '',
+  campus: '',
+  temperatura: 'Frio',
 }
 
 function decodeMojibake(value?: string | null) {
@@ -692,6 +713,10 @@ export function PainelVendedor() {
   const [manualLeadForm, setManualLeadForm] = useState<ManualLeadFormState>(initialManualLeadForm)
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [actionModalTarget, setActionModalTarget] = useState<OpportunityRow | null>(null)
+  const [editModalTarget, setEditModalTarget] = useState<OpportunityRow | null>(null)
+  const [editOpportunityForm, setEditOpportunityForm] = useState<OpportunityEditFormState>(
+    initialEditOpportunityForm,
+  )
   const [actionDate, setActionDate] = useState('')
   const [actionStep, setActionStep] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -1152,8 +1177,19 @@ export function PainelVendedor() {
       Frio: sellerOpportunities.filter((row) => row.temperatura === 'Frio'),
       Morno: sellerOpportunities.filter((row) => row.temperatura === 'Morno'),
       Quente: sellerOpportunities.filter((row) => row.temperatura === 'Quente'),
+      Matriculado: sellerOpportunities.filter((row) => row.temperatura === 'Matriculado'),
     }
   }, [sellerOpportunities])
+
+  const openEditOpportunityModal = (row: OpportunityRow) => {
+    setEditModalTarget(row)
+    setEditOpportunityForm({
+      curso: row.curso ?? '',
+      formaIngresso: row.forma_ingresso ?? '',
+      campus: row.campus ?? '',
+      temperatura: row.temperatura,
+    })
+  }
 
   const handleSaveManualLead = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1273,6 +1309,52 @@ export function PainelVendedor() {
     setNotice('Nova ação adicionada com sucesso.')
   }
 
+  const handleSaveOpportunityEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!supabase || !editModalTarget) {
+      return
+    }
+
+    setSaving(true)
+    setNotice(null)
+
+    const { data, error: updateError } = await supabase
+      .from('vendedor_oportunidades')
+      .update({
+        curso: cleanText(editOpportunityForm.curso) || null,
+        forma_ingresso: cleanText(editOpportunityForm.formaIngresso) || null,
+        campus: cleanText(editOpportunityForm.campus) || null,
+        temperatura: editOpportunityForm.temperatura,
+      })
+      .eq('id', editModalTarget.id)
+      .select(
+        'id, vendedor, nome, curso, forma_ingresso, campus, temperatura, proximo_passo, data_acao, historico, created_at, updated_at',
+      )
+      .single()
+
+    if (updateError) {
+      setNotice('Não consegui salvar as alterações deste lead agora.')
+      setSaving(false)
+      return
+    }
+
+    setOpportunities((currentValue) =>
+      currentValue.map((row) =>
+        row.id === editModalTarget.id
+          ? {
+              ...(data as OpportunityRow),
+              historico: parseOpportunityHistory((data as OpportunityRow).historico),
+            }
+          : row,
+      ),
+    )
+    setEditModalTarget(null)
+    setEditOpportunityForm(initialEditOpportunityForm)
+    setSaving(false)
+    setNotice('Lead atualizado com sucesso.')
+  }
+
   const handleDropOpportunity = async (temperature: OpportunityTemperature) => {
     if (!supabase || !draggedOpportunityId) {
       return
@@ -1363,11 +1445,13 @@ export function PainelVendedor() {
         )
 
         const temperature =
-          rawTemperature.toLowerCase() === 'morno'
-            ? 'Morno'
-            : rawTemperature.toLowerCase() === 'quente'
-              ? 'Quente'
-              : 'Frio'
+          rawTemperature.toLowerCase() === 'matriculado'
+            ? 'Matriculado'
+            : rawTemperature.toLowerCase() === 'morno'
+              ? 'Morno'
+              : rawTemperature.toLowerCase() === 'quente'
+                ? 'Quente'
+                : 'Frio'
 
         const history = step
           ? [
@@ -1789,18 +1873,28 @@ export function PainelVendedor() {
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionModalTarget(row)
-                          setActionDate('')
-                          setActionStep('')
-                        }}
-                        className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
-                      >
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        Nova ação
-                      </button>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditOpportunityModal(row)}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Editar lead
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionModalTarget(row)
+                            setActionDate('')
+                            setActionStep('')
+                          }}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                        >
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          Nova ação
+                        </button>
+                      </div>
                     </article>
                   ))
                 ) : (
@@ -1812,62 +1906,146 @@ export function PainelVendedor() {
             </div>
           ))}
 
-          <div className="flex h-[420px] min-h-[320px] flex-col rounded-[28px] border border-slate-200 bg-slate-50 p-4 lg:h-[720px]">
+          <div
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => void handleDropOpportunity('Matriculado')}
+            className="flex h-[420px] min-h-[320px] flex-col rounded-[28px] border border-slate-200 bg-slate-50 p-4 lg:h-[720px]"
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                   {'Matriculados'}
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-slate-950">
-                  {formatNumberBR(sellerDisplayedMatriculas.length)}
+                  {formatNumberBR(
+                    sellerDisplayedMatriculas.length + opportunitiesByTemperature.Matriculado.length,
+                  )}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {`${formatNumberBR(sellerMonthNormalMatriculas.length)} matrícula(s) normal(is) no mês + ${formatNumberBR(sellerOwnProuniMatriculas.length)} PROUNI do vendedor`}
+                  {`${formatNumberBR(opportunitiesByTemperature.Matriculado.length)} lead(s) marcados no quadro + ${formatNumberBR(sellerDisplayedMatriculas.length)} matrícula(s) confirmada(s)`}
                 </p>
               </div>
             </div>
 
             <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
-              {sellerDisplayedMatriculas.length > 0 ? (
-                sellerDisplayedMatriculas.map((row) => (
-                  <article
-                    key={`matricula-${row.id}`}
-                    className="rounded-[24px] border border-emerald-200 bg-white p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-950">{titleize(row.aluno)}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {normalizeCourse(row.curso)} - {normalizeCampus(row.filial)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                          Confirmado
-                        </span>
-                        {isProuni(row) ? (
-                          <span className="rounded-full bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700">
-                            PROUNI
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
+              {opportunitiesByTemperature.Matriculado.length > 0 || sellerDisplayedMatriculas.length > 0 ? (
+                <>
+                  {opportunitiesByTemperature.Matriculado.length > 0 ? (
+                    <>
+                      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Marcados no quadro
+                      </p>
+                      {opportunitiesByTemperature.Matriculado.map((row) => (
+                        <article
+                          key={row.id}
+                          draggable
+                          onDragStart={() => setDraggedOpportunityId(row.id)}
+                          className="rounded-[24px] border border-sky-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-950">{titleize(row.nome)}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {titleize(row.curso)} - {titleize(row.campus)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-700">
+                                No quadro
+                              </span>
+                              <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />
+                            </div>
+                          </div>
 
-                    <div className="mt-4 space-y-2 text-sm text-slate-600">
-                      <p>
-                        <strong className="text-slate-900">Ingresso:</strong>{' '}
-                        {titleize(row.tipo_de_ingresso)}
+                          <div className="mt-4 space-y-2 text-sm text-slate-600">
+                            <p>
+                              <strong className="text-slate-900">Forma de ingresso:</strong>{' '}
+                              {titleize(row.forma_ingresso)}
+                            </p>
+                            <p>
+                              <strong className="text-slate-900">Próximo passo:</strong>{' '}
+                              {row.proximo_passo || 'Ainda não definido'}
+                            </p>
+                            <p>
+                              <strong className="text-slate-900">Data da ação:</strong>{' '}
+                              {formatDateBR(row.data_acao)}
+                            </p>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditOpportunityModal(row)}
+                              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Editar lead
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActionModalTarget(row)
+                                setActionDate('')
+                                setActionStep('')
+                              }}
+                              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                            >
+                              <CalendarDays className="h-3.5 w-3.5" />
+                              Nova ação
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </>
+                  ) : null}
+
+                  {sellerDisplayedMatriculas.length > 0 ? (
+                    <>
+                      <p className="px-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Confirmados na base
                       </p>
-                      <p>
-                        <strong className="text-slate-900">Baixa:</strong>{' '}
-                        {formatDateBR(row.data_baixa_do_pagamento)}
-                      </p>
-                    </div>
-                  </article>
-                ))
+                      {sellerDisplayedMatriculas.map((row) => (
+                        <article
+                          key={`matricula-${row.id}`}
+                          className="rounded-[24px] border border-emerald-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-950">{titleize(row.aluno)}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {normalizeCourse(row.curso)} - {normalizeCampus(row.filial)}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                                Confirmado
+                              </span>
+                              {isProuni(row) ? (
+                                <span className="rounded-full bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700">
+                                  PROUNI
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-2 text-sm text-slate-600">
+                            <p>
+                              <strong className="text-slate-900">Ingresso:</strong>{' '}
+                              {titleize(row.tipo_de_ingresso)}
+                            </p>
+                            <p>
+                              <strong className="text-slate-900">Baixa:</strong>{' '}
+                              {formatDateBR(row.data_baixa_do_pagamento)}
+                            </p>
+                          </div>
+                        </article>
+                      ))}
+                    </>
+                  ) : null}
+                </>
               ) : (
                 <div className="rounded-[24px] border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-                  {'Ainda não há matrículas normais no mês selecionado nem PROUNI acumulado para este vendedor.'}
+                  {'Ainda não há leads marcados como matriculados nem matrículas confirmadas para este vendedor.'}
                 </div>
               )}
             </div>
@@ -2020,7 +2198,7 @@ export function PainelVendedor() {
                 }
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
               >
-                {temperatureColumns.map((temperature) => (
+                {editableOpportunityTemperatures.map((temperature) => (
                   <option key={temperature} value={temperature}>
                     {temperature}
                   </option>
@@ -2124,6 +2302,105 @@ export function PainelVendedor() {
             >
               <CalendarDays className="h-4 w-4" />
               {saving ? 'Salvando...' : 'Salvar ação'}
+            </button>
+          </div>
+        </form>
+      </OpportunityModal>
+
+      <OpportunityModal
+        open={Boolean(editModalTarget)}
+        title={editModalTarget ? `Editar lead - ${titleize(editModalTarget.nome)}` : 'Editar lead'}
+        onClose={() => {
+          setEditModalTarget(null)
+          setEditOpportunityForm(initialEditOpportunityForm)
+        }}
+      >
+        <form className="space-y-4" onSubmit={handleSaveOpportunityEdit}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Curso</span>
+              <input
+                type="text"
+                value={editOpportunityForm.curso}
+                onChange={(event) =>
+                  setEditOpportunityForm((currentValue) => ({
+                    ...currentValue,
+                    curso: event.target.value,
+                  }))
+                }
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Forma de ingresso</span>
+              <input
+                type="text"
+                value={editOpportunityForm.formaIngresso}
+                onChange={(event) =>
+                  setEditOpportunityForm((currentValue) => ({
+                    ...currentValue,
+                    formaIngresso: event.target.value,
+                  }))
+                }
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Campus</span>
+              <input
+                type="text"
+                value={editOpportunityForm.campus}
+                onChange={(event) =>
+                  setEditOpportunityForm((currentValue) => ({
+                    ...currentValue,
+                    campus: event.target.value,
+                  }))
+                }
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Coluna do quadro</span>
+              <select
+                value={editOpportunityForm.temperatura}
+                onChange={(event) =>
+                  setEditOpportunityForm((currentValue) => ({
+                    ...currentValue,
+                    temperatura: event.target.value as OpportunityTemperature,
+                  }))
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              >
+                {editableOpportunityTemperatures.map((temperature) => (
+                  <option key={`edit-${temperature}`} value={temperature}>
+                    {temperature}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setEditModalTarget(null)
+                setEditOpportunityForm(initialEditOpportunityForm)
+              }}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Pencil className="h-4 w-4" />
+              {saving ? 'Salvando...' : 'Salvar alterações'}
             </button>
           </div>
         </form>
