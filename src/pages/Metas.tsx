@@ -210,10 +210,9 @@ function buildNormalStages(monthKey: MonthKey): GoalStage[] {
 }
 
 function buildProuniStages(): GoalStage[] {
-  const vendorTargets = getVendorThresholds(prouniTargets)
-  return vendorTargets.map((item, index) => ({
-    label: item.label,
-    target: item.target,
+  return prouniTargets.map((target, index) => ({
+    label: `Meta ${String(index + 1).padStart(2, '0')}`,
+    target,
     reward: prouniRewards[index] ?? 0,
   }))
 }
@@ -410,6 +409,8 @@ export function Metas() {
   )
 
   const sellerCards = useMemo<SellerCardData[]>(() => {
+    const teamProuniResolution = resolveStage(prouniRows.length, prouniStages)
+
     return sellers.map((seller) => {
       const sellerNormalRows = normalRows.filter((row) => row.vendedor === seller)
       const sellerProuniRows = prouniRows.filter((row) => row.vendedor === seller)
@@ -422,7 +423,7 @@ export function Metas() {
             next: null,
             remaining: Math.max(generalNormalGateTarget - normalRows.length, 0),
           }
-      const prouniResolution = resolveStage(sellerProuniRows.length, prouniStages)
+      const prouniResolution = teamProuniResolution
       const payout =
         (generalNormalGateReached
           ? buildPayout(sellerNormalRows.length, normalResolution.achieved)
@@ -452,6 +453,7 @@ export function Metas() {
     generalNormalGateReached,
     generalNormalGateTarget,
     normalRows,
+    prouniRows.length,
     prouniRows,
     normalStages,
     prouniStages,

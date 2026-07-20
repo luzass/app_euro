@@ -131,7 +131,7 @@ export function buildNormalStages(
 export function buildProuniStages() {
   return prouniTargets.map((target, index) => ({
     label: `Meta ${String(index + 1).padStart(2, '0')}`,
-    target: Math.ceil(target / sellers.length),
+    target,
     reward: prouniRewards[index] ?? 0,
   }))
 }

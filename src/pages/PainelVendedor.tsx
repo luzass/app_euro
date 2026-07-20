@@ -172,7 +172,11 @@ const initialManualLeadForm: ManualLeadFormState = {
 }
 
 function decodeMojibake(value?: string | null) {
-  const text = String(value ?? '').trim()
+  const text = String(value ?? '')
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .trim()
 
   if (!text) {
     return ''
@@ -1087,7 +1091,11 @@ export function PainelVendedor() {
     )
   }, [matriculadosRows, selectedSeller])
 
-  const sellerAllProuniMatriculas = useMemo(() => {
+  const teamAllProuniMatriculas = useMemo(() => {
+    return matriculadosRows.filter((row) => isCalouro(row) && !isMedicina(row) && isProuni(row))
+  }, [matriculadosRows])
+
+  const sellerOwnProuniMatriculas = useMemo(() => {
     return sellerAllEligibleMatriculas.filter((row) => isProuni(row))
   }, [sellerAllEligibleMatriculas])
 
@@ -1102,10 +1110,10 @@ export function PainelVendedor() {
   }, [selectedMonth, sellerAllNormalMatriculas])
 
   const sellerDisplayedMatriculas = useMemo(() => {
-    return [...sellerMonthNormalMatriculas, ...sellerAllProuniMatriculas].sort((a, b) =>
+    return [...sellerMonthNormalMatriculas, ...sellerOwnProuniMatriculas].sort((a, b) =>
       toDateKey(b.data_baixa_do_pagamento).localeCompare(toDateKey(a.data_baixa_do_pagamento)),
     )
-  }, [sellerAllProuniMatriculas, sellerMonthNormalMatriculas])
+  }, [sellerOwnProuniMatriculas, sellerMonthNormalMatriculas])
 
   const normalStages = useMemo(
     () => buildNormalStages(selectedMonth, selectedTeamSize),
@@ -1117,16 +1125,16 @@ export function PainelVendedor() {
     [normalStages, sellerMonthNormalMatriculas.length],
   )
   const prouniResolution = useMemo(
-    () => resolveGoalStage(sellerAllProuniMatriculas.length, prouniStages),
-    [prouniStages, sellerAllProuniMatriculas.length],
+    () => resolveGoalStage(teamAllProuniMatriculas.length, prouniStages),
+    [prouniStages, teamAllProuniMatriculas.length],
   )
   const monthNormalPayout = useMemo(
     () => buildPayout(sellerMonthNormalMatriculas.length, monthResolution.achieved),
     [monthResolution.achieved, sellerMonthNormalMatriculas.length],
   )
   const prouniPayout = useMemo(
-    () => buildPayout(sellerAllProuniMatriculas.length, prouniResolution.achieved),
-    [prouniResolution.achieved, sellerAllProuniMatriculas.length],
+    () => buildPayout(sellerOwnProuniMatriculas.length, prouniResolution.achieved),
+    [prouniResolution.achieved, sellerOwnProuniMatriculas.length],
   )
   const totalExpectedPayout = useMemo(
     () => monthNormalPayout + prouniPayout,
@@ -1506,15 +1514,26 @@ export function PainelVendedor() {
           helperText={'Contagem mensal das matrículas normais do vendedor, considerando apenas calouros e excluindo Medicina.'}
         />
         <KpiCard
-          title={'PROUNI acumulado'}
-          value={formatNumberBR(sellerAllProuniMatriculas.length)}
-          helperText={'As matrículas PROUNI seguem em trilha própria, sem recorte mensal, como na visão de metas.'}
+          title={'PROUNI da equipe'}
+          value={formatNumberBR(teamAllProuniMatriculas.length)}
+          helperText={'A meta PROUNI é da equipe inteira, sem recorte mensal, seguindo a mesma lógica da visão de metas.'}
         />
-        <KpiCard
-          title={'Mês selecionado'}
-          value={monthConfig[selectedMonth].label}
-          helperText={'O bloco de metas e comissão abaixo segue este recorte mensal.'}
-        />
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          Mês selecionado
+        </p>
+        <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
+              {monthConfig[selectedMonth].label}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">
+              O bloco de metas e comissão abaixo segue este recorte mensal.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
@@ -1572,7 +1591,7 @@ export function PainelVendedor() {
                   {'Matrículas normais do vendedor no mês selecionado.'}
                 </p>
                 <p className="mt-2 text-xs font-medium text-slate-500">
-                  {`PROUNI acumulado: ${formatNumberBR(sellerAllProuniMatriculas.length)} matrícula(s).`}
+                  {`Suas matrículas PROUNI: ${formatNumberBR(sellerOwnProuniMatriculas.length)} • PROUNI da equipe: ${formatNumberBR(teamAllProuniMatriculas.length)}.`}
                 </p>
               </div>
 
@@ -1638,11 +1657,11 @@ export function PainelVendedor() {
                 <div>
                   <p className="text-sm font-semibold text-slate-950">Faixas PROUNI</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Contagem separada, sem recorte mensal, seguindo a mesma regra da visão de metas.
+                    A meta PROUNI é da equipe inteira, sem divisão por vendedor e sem recorte mensal.
                   </p>
                 </div>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                  {formatNumberBR(sellerAllProuniMatriculas.length)} PROUNI
+                  {formatNumberBR(teamAllProuniMatriculas.length)} PROUNI na equipe
                 </span>
               </div>
 
@@ -1652,7 +1671,7 @@ export function PainelVendedor() {
                     key={`prouni-${stage.label}`}
                     label={`${stage.label} · PROUNI`}
                     target={stage.target}
-                    current={sellerAllProuniMatriculas.length}
+                    current={teamAllProuniMatriculas.length}
                     reward={stage.reward}
                   />
                 ))}
@@ -1803,7 +1822,7 @@ export function PainelVendedor() {
                   {formatNumberBR(sellerDisplayedMatriculas.length)}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {`${formatNumberBR(sellerMonthNormalMatriculas.length)} normal(is) no mês + ${formatNumberBR(sellerAllProuniMatriculas.length)} PROUNI acumulado(s)`}
+                  {`${formatNumberBR(sellerMonthNormalMatriculas.length)} matrícula(s) normal(is) no mês + ${formatNumberBR(sellerOwnProuniMatriculas.length)} PROUNI do vendedor`}
                 </p>
               </div>
             </div>
@@ -1910,8 +1929,11 @@ export function PainelVendedor() {
               <p className="text-sm font-semibold text-slate-900">Faixa PROUNI atual</p>
               <p className="mt-1 text-xs text-slate-500">
                 {prouniResolution.achieved?.label ?? 'Ainda não atingiu a Meta 01'} •{' '}
-                {formatNumberBR(sellerAllProuniMatriculas.length)} /{' '}
-                {formatNumberBR(prouniResolution.next?.target ?? sellerAllProuniMatriculas.length)}
+                {formatNumberBR(teamAllProuniMatriculas.length)} /{' '}
+                {formatNumberBR(prouniResolution.next?.target ?? teamAllProuniMatriculas.length)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {`Você tem ${formatNumberBR(sellerOwnProuniMatriculas.length)} matrícula(s) PROUNI nesse acumulado da equipe.`}
               </p>
             </div>
           </section>
@@ -2059,13 +2081,13 @@ export function PainelVendedor() {
 
       <OpportunityModal
         open={Boolean(actionModalTarget)}
-        title={actionModalTarget ? `Nova a\u00e7\u00e3o - ${titleize(actionModalTarget.nome)}` : 'Nova a\u00e7\u00e3o'}
+        title={actionModalTarget ? `Nova ação - ${titleize(actionModalTarget.nome)}` : 'Nova ação'}
         onClose={() => setActionModalTarget(null)}
       >
         <form className="space-y-4" onSubmit={handleAddAction}>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Data da a\u00e7\u00e3o</span>
+              <span className="text-sm font-medium text-slate-700">Data da ação</span>
               <input
                 type="date"
                 value={actionDate}
@@ -2077,7 +2099,7 @@ export function PainelVendedor() {
           </div>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-700">Pr\u00f3ximo passo</span>
+            <span className="text-sm font-medium text-slate-700">Próximo passo</span>
             <textarea
               value={actionStep}
               onChange={(event) => setActionStep(event.target.value)}
@@ -2101,7 +2123,7 @@ export function PainelVendedor() {
               className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <CalendarDays className="h-4 w-4" />
-              {saving ? 'Salvando...' : 'Salvar a\u00e7\u00e3o'}
+              {saving ? 'Salvando...' : 'Salvar ação'}
             </button>
           </div>
         </form>
