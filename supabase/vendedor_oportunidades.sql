@@ -5,7 +5,7 @@ create table if not exists public.vendedor_oportunidades (
   curso text null,
   forma_ingresso text null,
   campus text null,
-  temperatura text not null default 'Frio' check (temperatura in ('Frio', 'Morno', 'Quente')),
+  temperatura text not null default 'Frio' check (temperatura in ('Frio', 'Morno', 'Quente', 'Matriculado')),
   proximo_passo text null,
   data_acao date null,
   historico jsonb not null default '[]'::jsonb,

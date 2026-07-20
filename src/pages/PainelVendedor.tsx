@@ -487,6 +487,20 @@ function parseOpportunityHistory(value: unknown): OpportunityAction[] {
     .filter((item): item is OpportunityAction => Boolean(item?.step))
 }
 
+function isOpportunityTemperatureConstraintError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const row = error as { message?: string; details?: string; hint?: string }
+  const combined = `${row.message ?? ''} ${row.details ?? ''} ${row.hint ?? ''}`.toLowerCase()
+
+  return (
+    combined.includes('vendedor_oportunidades') &&
+    (combined.includes('temperatura') || combined.includes('check constraint'))
+  )
+}
+
 function parseDelimitedFile(content: string) {
   const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   const lines = normalizedContent.split('\n').filter((line) => line.trim())
@@ -1235,7 +1249,11 @@ export function PainelVendedor() {
       .single()
 
     if (insertError) {
-      setNotice('N\u00e3o consegui salvar este lead no quadro do vendedor.')
+      setNotice(
+        isOpportunityTemperatureConstraintError(insertError)
+          ? 'O banco ainda não foi liberado para a coluna Matriculado no quadro. Rode o SQL novo de vendedor_oportunidades e tente novamente.'
+          : 'N\u00e3o consegui salvar este lead no quadro do vendedor.',
+      )
       setSaving(false)
       return
     }
@@ -1334,7 +1352,11 @@ export function PainelVendedor() {
       .single()
 
     if (updateError) {
-      setNotice('Não consegui salvar as alterações deste lead agora.')
+      setNotice(
+        isOpportunityTemperatureConstraintError(updateError)
+          ? 'O banco ainda não foi liberado para a coluna Matriculado no quadro. Rode o SQL novo de vendedor_oportunidades e tente novamente.'
+          : 'Não consegui salvar as alterações deste lead agora.',
+      )
       setSaving(false)
       return
     }
@@ -1379,7 +1401,11 @@ export function PainelVendedor() {
       .eq('id', draggedOpportunityId)
 
     if (updateError) {
-      setNotice('N\u00e3o consegui mover este card agora. Tenta novamente.')
+      setNotice(
+        isOpportunityTemperatureConstraintError(updateError)
+          ? 'O banco ainda não foi liberado para a coluna Matriculado no quadro. Rode o SQL novo de vendedor_oportunidades e tente novamente.'
+          : 'N\u00e3o consegui mover este card agora. Tenta novamente.',
+      )
       setOpportunities((currentValue) =>
         currentValue.map((row) =>
           row.id === draggedOpportunityId ? currentOpportunity : row,
