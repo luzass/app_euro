@@ -128,6 +128,14 @@ export function buildNormalStages(
   }))
 }
 
+export function buildProuniStages() {
+  return prouniTargets.map((target, index) => ({
+    label: `Meta ${String(index + 1).padStart(2, '0')}`,
+    target: Math.ceil(target / sellers.length),
+    reward: prouniRewards[index] ?? 0,
+  }))
+}
+
 export function resolveGoalStage(count: number, stages: GoalStage[]) {
   let achieved: GoalStage | null = null
   let next: GoalStage | null = null
