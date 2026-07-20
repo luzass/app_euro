@@ -1173,19 +1173,24 @@ export function TrafegoPagoSpike() {
   )
 
   const spikeLeadSummaries = useMemo<LeadMatchedSummary[]>(() => {
+    const inscritosCpfSet = extractCpfSet(filteredInscritoRows)
+    const matriculadosCpfSet = extractCpfSet(filteredMatriculadoRows)
+
     if (filteredSpikeLeadResumoRows.length > 0) {
       return filteredSpikeLeadResumoRows.map((row, index) => ({
         key: String(row.lead_id ?? `lead-${index}`),
         status: normalizeLeadStatus(row.status_crm),
         objection: normalizeLeadObservation(row.objecao, 'Não informada'),
         lossObservation: normalizeLeadObservation(row.observacoes_perda, 'Não informada'),
-        hasInscrito: Boolean(row.tem_inscricao),
-        hasMatriculado: Boolean(row.tem_matricula),
+        hasInscrito: normalizeCpf(row.cpf)
+          ? inscritosCpfSet.has(normalizeCpf(row.cpf) as string)
+          : Boolean(row.tem_inscricao),
+        hasMatriculado: normalizeCpf(row.cpf)
+          ? matriculadosCpfSet.has(normalizeCpf(row.cpf) as string)
+          : Boolean(row.tem_matricula),
       }))
     }
 
-    const inscritosCpfSet = extractCpfSet(filteredInscritoRows)
-    const matriculadosCpfSet = extractCpfSet(filteredMatriculadoRows)
     const registroByMatchKey = new Map<
       string,
       { dateKey: string; status: string; objection: string; lossObservation: string }
@@ -1294,8 +1299,6 @@ export function TrafegoPagoSpike() {
     [filteredRegistroCrmRows],
   )
 
-  const spikeLeadHasResumoTable = filteredSpikeLeadResumoRows.length > 0
-  const spikeLeadCardsUseFallback = spikeLeadSummaries.length === 0
   const spikeLeadFallbackBase = Math.round(funilGeralRow ? toNumber(funilGeralRow.leads) : operationalLeadsCount)
   const spikeLeadFallbackInscritos = Math.round(
     funilGeralRow ? toNumber(funilGeralRow.inscritos) : inscritosGeradosNoPeriodo,
@@ -1303,18 +1306,14 @@ export function TrafegoPagoSpike() {
   const spikeLeadFallbackMatriculados = Math.round(
     funilGeralRow ? toNumber(funilGeralRow.matriculas) : matriculadosGeradosNoPeriodo,
   )
-  const spikeLeadInscritosCount = spikeLeadHasResumoTable
-    ? spikeLeadSummaries.filter((row) => row.hasInscrito).length
-    : spikeLeadFallbackInscritos
-  const spikeLeadMatriculadosCount = spikeLeadHasResumoTable
-    ? spikeLeadSummaries.filter((row) => row.hasMatriculado).length
-    : spikeLeadFallbackMatriculados
-  const spikeLeadNotConvertedCount = spikeLeadHasResumoTable
-    ? spikeLeadSummaries.filter((row) => !row.hasInscrito && !row.hasMatriculado).length
-    : Math.max(spikeLeadFallbackBase - spikeLeadFallbackInscritos, 0)
-  const effectiveSpikeLeadStatusRows = spikeLeadCardsUseFallback
-    ? spikeRegistroStatusRows
-    : focusedSpikeLeadSummaries
+  const spikeLeadInscritosCount = spikeLeadFallbackInscritos
+  const spikeLeadMatriculadosCount = spikeLeadFallbackMatriculados
+  const spikeLeadNotConvertedCount = Math.max(
+    spikeLeadFallbackBase - spikeLeadFallbackInscritos,
+    0,
+  )
+  const effectiveSpikeLeadStatusRows =
+    spikeLeadSummaries.length === 0 ? spikeRegistroStatusRows : focusedSpikeLeadSummaries
 
   const funnelSteps = useMemo(
     () => [
