@@ -38,6 +38,8 @@ import {
 } from '../lib/formatters'
 import { supabase } from '../lib/supabase'
 
+const SUPABASE_BATCH_SIZE = 1000
+
 interface FilterState {
   startDate: string
   endDate: string
@@ -569,6 +571,50 @@ function countIntersectedCpfs(leadsRows: GenericRow[], matriculadosRows: Generic
   return intersectionCount
 }
 
+async function fetchAllRows(
+  tableName: string,
+  selectClause = '*',
+  options?: {
+    orderBy?: string
+    ascending?: boolean
+  },
+) {
+  if (!supabase) {
+    return { data: [] as GenericRow[], error: new Error('Supabase não configurado.') }
+  }
+
+  const allRows: GenericRow[] = []
+  let start = 0
+
+  while (true) {
+    let query = supabase
+      .from(tableName)
+      .select(selectClause)
+      .range(start, start + SUPABASE_BATCH_SIZE - 1)
+
+    if (options?.orderBy) {
+      query = query.order(options.orderBy, { ascending: options.ascending ?? true })
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      return { data: [] as GenericRow[], error }
+    }
+
+    const batch = ((data ?? []) as unknown) as GenericRow[]
+    allRows.push(...batch)
+
+    if (batch.length < SUPABASE_BATCH_SIZE) {
+      break
+    }
+
+    start += SUPABASE_BATCH_SIZE
+  }
+
+  return { data: allRows, error: null }
+}
+
 function ChartContainer({
   title,
   description,
@@ -635,13 +681,13 @@ export function TrafegoPagoSpike() {
       clarityResumoResponse,
       clarityDevicesResponse,
     ] = await Promise.all([
-      supabase
-        .from('campanha_euro_20262')
-        .select('*')
-        .order('data_inicio', { ascending: true }),
-      supabase.from('leads_cursos_enriquecidos').select('*'),
-      supabase.from('inscritos_20262').select('*'),
-      supabase.from('matriculados_20262').select('*'),
+      fetchAllRows('campanha_euro_20262', '*', {
+        orderBy: 'data_inicio',
+        ascending: true,
+      }),
+      fetchAllRows('leads_cursos_enriquecidos'),
+      fetchAllRows('inscritos_20262'),
+      fetchAllRows('matriculados_20262'),
       supabase
         .from('funil_euro_20262_geral')
         .select(
@@ -649,18 +695,22 @@ export function TrafegoPagoSpike() {
         )
         .limit(1)
         .maybeSingle(),
-      supabase
-        .from('clarity_resumo_diario')
-        .select(
-          'id, created_at, data_referencia, periodo, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, scroll_depth_percentage, active_time_spent_seconds, total_time_spent_seconds',
-        )
-        .order('data_referencia', { ascending: true }),
-      supabase
-        .from('clarity_devices_diario')
-        .select(
-          'id, created_at, data_referencia, periodo, device, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, session_percentage',
-        )
-        .order('data_referencia', { ascending: true }),
+      fetchAllRows(
+        'clarity_resumo_diario',
+        'id, created_at, data_referencia, periodo, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, scroll_depth_percentage, active_time_spent_seconds, total_time_spent_seconds',
+        {
+          orderBy: 'data_referencia',
+          ascending: true,
+        },
+      ),
+      fetchAllRows(
+        'clarity_devices_diario',
+        'id, created_at, data_referencia, periodo, device, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, session_percentage',
+        {
+          orderBy: 'data_referencia',
+          ascending: true,
+        },
+      ),
     ])
 
     if (campaignResponse.error) {
@@ -673,18 +723,18 @@ export function TrafegoPagoSpike() {
       return
     }
 
-    setRows((campaignResponse.data as CampaignRow[]) ?? [])
-    setLeadRows((leadsResponse.data as GenericRow[]) ?? [])
-    setInscritoRows((inscritosResponse.data as GenericRow[]) ?? [])
+    setRows(((campaignResponse.data ?? []) as unknown) as CampaignRow[])
+    setLeadRows(((leadsResponse.data ?? []) as unknown) as GenericRow[])
+    setInscritoRows(((inscritosResponse.data ?? []) as unknown) as GenericRow[])
     setFunilGeralRow((funilGeralResponse.data as FunilGeralRow | null) ?? null)
-    setClarityResumoRows((clarityResumoResponse.data as ClarityResumoRow[]) ?? [])
-    setClarityDeviceRows((clarityDevicesResponse.data as ClarityDeviceRow[]) ?? [])
+    setClarityResumoRows(((clarityResumoResponse.data ?? []) as unknown) as ClarityResumoRow[])
+    setClarityDeviceRows(((clarityDevicesResponse.data ?? []) as unknown) as ClarityDeviceRow[])
 
     if (!leadsResponse.error && !inscritosResponse.error && !matriculadosResponse.error) {
       setMatriculados(
         countIntersectedCpfs(
-          (leadsResponse.data as GenericRow[]) ?? [],
-          (matriculadosResponse.data as GenericRow[]) ?? [],
+          (((leadsResponse.data ?? []) as unknown) as GenericRow[]),
+          (((matriculadosResponse.data ?? []) as unknown) as GenericRow[]),
         ),
       )
     } else {
@@ -810,15 +860,15 @@ export function TrafegoPagoSpike() {
       { data: matriculadosData, error: matriculadosError },
     ] =
       await Promise.all([
-        supabase.from('leads_cursos_enriquecidos').select('*'),
-        supabase
-          .from('inscritos_20262')
-          .select('cpf, campus, curso, turno, forma_de_ingresso, etapa_atual, data_inscricao'),
-        supabase
-          .from('matriculados_20262')
-          .select(
-            'filial, curso, turno, tipo_aluno, tipo_de_ingresso, contrato, status, data_baixa_do_pagamento',
-          ),
+        fetchAllRows('leads_cursos_enriquecidos'),
+        fetchAllRows(
+          'inscritos_20262',
+          'cpf, campus, curso, turno, forma_de_ingresso, etapa_atual, data_inscricao',
+        ),
+        fetchAllRows(
+          'matriculados_20262',
+          'filial, curso, turno, tipo_aluno, tipo_de_ingresso, contrato, status, data_baixa_do_pagamento',
+        ),
       ])
 
     if (leadsError || inscritosError || matriculadosError) {
@@ -832,12 +882,12 @@ export function TrafegoPagoSpike() {
       endDate: range.endDate,
     })
 
-    const inscritosRows = ((inscritosData as InscritoAnalysisRow[]) ?? []).filter((row) => {
+    const inscritosRows = ((((inscritosData ?? []) as unknown) as InscritoAnalysisRow[])).filter((row) => {
       const dateKey = getDateKey(row.data_inscricao)
       return dateKey >= range.startDate && dateKey <= range.endDate
     })
 
-    const matriculadosRows = ((matriculadosData as MatriculadoAnalysisRow[]) ?? []).filter((row) => {
+    const matriculadosRows = ((((matriculadosData ?? []) as unknown) as MatriculadoAnalysisRow[])).filter((row) => {
       const dateKey = getDateKey(row.data_baixa_do_pagamento)
       const isCalouro = normalizeText(row.tipo_aluno) === 'CALOURO'
       return isCalouro && dateKey >= range.startDate && dateKey <= range.endDate
