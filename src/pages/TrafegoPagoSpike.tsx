@@ -1577,6 +1577,69 @@ export function TrafegoPagoSpike() {
     [filteredLeadRows],
   )
 
+  const spikeVsNormalByIngresso = useMemo(() => {
+    const leadCpfs = extractCpfSet(filteredLeadRows)
+    const rowsMap = new Map<
+      string,
+      {
+        label: string
+        spike: number
+        normal: number
+        total: number
+      }
+    >()
+
+    filteredInscritoRows.forEach((row) => {
+      const label = normalizeIngresso(
+        getRowField(row, 'forma_de_ingresso', 'FORMA DE INGRESSO'),
+      )
+      const currentRow = rowsMap.get(label) ?? {
+        label,
+        spike: 0,
+        normal: 0,
+        total: 0,
+      }
+
+      const cpf = normalizeCpf(
+        getRowField(row, 'cpf', 'CPF'),
+      )
+      const isSpike = cpf !== null && leadCpfs.has(cpf)
+
+      currentRow.total += 1
+
+      if (isSpike) {
+        currentRow.spike += 1
+      } else {
+        currentRow.normal += 1
+      }
+
+      rowsMap.set(label, currentRow)
+    })
+
+    const totals = Array.from(rowsMap.values()).reduce(
+      (accumulator, row) => ({
+        spike: accumulator.spike + row.spike,
+        normal: accumulator.normal + row.normal,
+        total: accumulator.total + row.total,
+      }),
+      { spike: 0, normal: 0, total: 0 },
+    )
+
+    return {
+      rows: Array.from(rowsMap.values())
+        .map((row) => ({
+          ...row,
+          spikeShareOfSpike: totals.spike > 0 ? safeDivide(row.spike, totals.spike, 100) : 0,
+          normalShareOfNormal:
+            totals.normal > 0 ? safeDivide(row.normal, totals.normal, 100) : 0,
+          spikeShareOfRow: row.total > 0 ? safeDivide(row.spike, row.total, 100) : 0,
+          normalShareOfRow: row.total > 0 ? safeDivide(row.normal, row.total, 100) : 0,
+        }))
+        .sort((currentItem, nextItem) => nextItem.total - currentItem.total),
+      totals,
+    }
+  }, [filteredInscritoRows, filteredLeadRows])
+
   const selectedStoredReport = storedReports[selectedReportType] ?? null
   const isMobileViewport = viewportWidth < 640
   const selectedSessionReport =
@@ -1729,6 +1792,168 @@ export function TrafegoPagoSpike() {
               </ResponsiveContainer>
             )}
           </ChartContainer>
+        </div>
+      </div>
+
+      <div className="mt-8 rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
+        <div className="max-w-3xl">
+          <h3 className="text-lg font-semibold text-slate-950">
+            Spike x Normal por forma de ingresso
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Aqui cruzamos os inscritos do recorte com a base de leads pelo CPF. Se o CPF do inscrito
+            estiver na base de leads, ele entra como <span className="font-medium text-slate-700">Spike</span>.
+            Se não estiver, entra como <span className="font-medium text-slate-700">Normal</span>.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <article className="rounded-2xl border border-sky-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
+              Spike
+            </p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              {formatNumberBR(spikeVsNormalByIngresso.totals.spike)}
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              {formatPercentBR(
+                spikeVsNormalByIngresso.totals.total > 0
+                  ? safeDivide(
+                      spikeVsNormalByIngresso.totals.spike,
+                      spikeVsNormalByIngresso.totals.total,
+                      100,
+                    )
+                  : 0,
+                0,
+              )}{' '}
+              do total de inscritos filtrados.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+              Normal
+            </p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              {formatNumberBR(spikeVsNormalByIngresso.totals.normal)}
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              {formatPercentBR(
+                spikeVsNormalByIngresso.totals.total > 0
+                  ? safeDivide(
+                      spikeVsNormalByIngresso.totals.normal,
+                      spikeVsNormalByIngresso.totals.total,
+                      100,
+                    )
+                  : 0,
+                0,
+              )}{' '}
+              do total de inscritos filtrados.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+              Total comparado
+            </p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              {formatNumberBR(spikeVsNormalByIngresso.totals.total)}
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              Usa o mesmo recorte de datas aplicado no restante da página.
+            </p>
+          </article>
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="sticky left-0 z-10 bg-slate-50/70 px-4 py-3 font-semibold">
+                  Forma de ingresso
+                </th>
+                <th className="px-4 py-3 font-semibold">Spike</th>
+                <th className="px-4 py-3 font-semibold">% no Spike</th>
+                <th className="px-4 py-3 font-semibold">Normal</th>
+                <th className="px-4 py-3 font-semibold">% no Normal</th>
+                <th className="px-4 py-3 font-semibold">Total</th>
+                <th className="px-4 py-3 font-semibold">% Spike na forma</th>
+                <th className="px-4 py-3 font-semibold">% Normal na forma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spikeVsNormalByIngresso.rows.map((row) => (
+                <tr key={row.label} className="border-t border-slate-200/80">
+                  <td className="sticky left-0 z-10 bg-slate-50/70 px-4 py-4 font-semibold text-slate-950">
+                    {row.label}
+                  </td>
+                  <td className="px-4 py-4 text-slate-800">{formatNumberBR(row.spike)}</td>
+                  <td className="px-4 py-4 text-slate-600">
+                    {formatPercentBR(row.spikeShareOfSpike, 0)}
+                  </td>
+                  <td className="px-4 py-4 text-slate-800">{formatNumberBR(row.normal)}</td>
+                  <td className="px-4 py-4 text-slate-600">
+                    {formatPercentBR(row.normalShareOfNormal, 0)}
+                  </td>
+                  <td className="px-4 py-4 font-semibold text-slate-950">
+                    {formatNumberBR(row.total)}
+                  </td>
+                  <td className="px-4 py-4 text-sky-700">
+                    {formatPercentBR(row.spikeShareOfRow, 0)}
+                  </td>
+                  <td className="px-4 py-4 text-slate-600">
+                    {formatPercentBR(row.normalShareOfRow, 0)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-200 bg-white">
+                <td className="sticky left-0 z-10 bg-white px-4 py-4 font-semibold text-slate-950">
+                  Total
+                </td>
+                <td className="px-4 py-4 font-semibold text-slate-950">
+                  {formatNumberBR(spikeVsNormalByIngresso.totals.spike)}
+                </td>
+                <td className="px-4 py-4 font-semibold text-slate-700">
+                  {formatPercentBR(100, 0)}
+                </td>
+                <td className="px-4 py-4 font-semibold text-slate-950">
+                  {formatNumberBR(spikeVsNormalByIngresso.totals.normal)}
+                </td>
+                <td className="px-4 py-4 font-semibold text-slate-700">
+                  {formatPercentBR(100, 0)}
+                </td>
+                <td className="px-4 py-4 font-semibold text-slate-950">
+                  {formatNumberBR(spikeVsNormalByIngresso.totals.total)}
+                </td>
+                <td className="px-4 py-4 font-semibold text-sky-700">
+                  {formatPercentBR(
+                    spikeVsNormalByIngresso.totals.total > 0
+                      ? safeDivide(
+                          spikeVsNormalByIngresso.totals.spike,
+                          spikeVsNormalByIngresso.totals.total,
+                          100,
+                        )
+                      : 0,
+                    0,
+                  )}
+                </td>
+                <td className="px-4 py-4 font-semibold text-slate-700">
+                  {formatPercentBR(
+                    spikeVsNormalByIngresso.totals.total > 0
+                      ? safeDivide(
+                          spikeVsNormalByIngresso.totals.normal,
+                          spikeVsNormalByIngresso.totals.total,
+                          100,
+                        )
+                      : 0,
+                    0,
+                  )}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
     </section>
