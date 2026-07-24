@@ -367,6 +367,10 @@ function normalizeMatriculaIngresso(value?: string | null) {
     return 'ENEM'
   }
 
+  if (normalized.includes('GRADUADO')) {
+    return 'Graduado'
+  }
+
   if (value?.includes('-')) {
     return titleize(value.split('-').pop()?.trim() ?? value)
   }
