@@ -37,7 +37,6 @@ import {
   formatPercentBR,
 } from '../lib/formatters'
 import { supabase } from '../lib/supabase'
-import { cn } from '../lib/utils'
 
 interface FilterState {
   startDate: string
@@ -135,30 +134,6 @@ interface FunilGeralRow {
   leads: string | number | null
   inscritos: string | number | null
   matriculas: string | number | null
-}
-
-interface SpikeLeadResumoRow {
-  lead_id: string | number
-  data_referencia: string | null
-  cpf: string | null
-  telefone: string | null
-  nome: string | null
-  tem_inscricao: boolean | null
-  tem_matricula: boolean | null
-  status_crm: string | null
-  objecao: string | null
-  observacoes_perda: string | null
-}
-
-type LeadFocusFilter = 'all' | 'notConverted' | 'inscritos' | 'matriculados'
-
-interface LeadMatchedSummary {
-  key: string
-  status: string
-  objection: string
-  lossObservation: string
-  hasInscrito: boolean
-  hasMatriculado: boolean
 }
 
 const initialFilters: FilterState = {
@@ -490,24 +465,6 @@ function normalizeCpf(value: unknown) {
   return digits.length >= 11 ? digits : null
 }
 
-function normalizePhone(value: unknown) {
-  if (value === null || value === undefined) {
-    return null
-  }
-
-  const digits = String(value).replace(/\D/g, '')
-
-  if (digits.length < 10) {
-    return null
-  }
-
-  if (digits.length > 11) {
-    return digits.slice(-11)
-  }
-
-  return digits
-}
-
 function extractCpfSet(rows: GenericRow[]) {
   const cpfs = new Set<string>()
 
@@ -525,28 +482,6 @@ function extractCpfSet(rows: GenericRow[]) {
   return cpfs
 }
 
-function normalizeLeadStatus(value?: string | null) {
-  const normalizedValue = normalizeText(cleanPlaceholderText(value))
-
-  if (!normalizedValue) {
-    return 'Não informado'
-  }
-
-  if (normalizedValue.includes('GANH')) {
-    return 'Ganho'
-  }
-
-  if (normalizedValue.includes('PERD')) {
-    return 'Perdido'
-  }
-
-  return 'Em andamento'
-}
-
-function normalizeLeadObservation(value?: string | null, fallback = 'Não informada') {
-  return cleanPlaceholderText(value) || fallback
-}
-
 function getGenericRowDateKey(row: GenericRow) {
   for (const fieldName of dateFieldCandidates) {
     const value = row[fieldName]
@@ -562,6 +497,47 @@ function getGenericRowDateKey(row: GenericRow) {
 function applyGenericDateFilter(rows: GenericRow[], filters: FilterState) {
   return rows.filter((row) => {
     const dateKey = getGenericRowDateKey(row)
+
+    if (!filters.startDate && !filters.endDate) {
+      return true
+    }
+
+    if (!dateKey) {
+      return false
+    }
+
+    const startDatePass = !filters.startDate || dateKey >= filters.startDate
+    const endDatePass = !filters.endDate || dateKey <= filters.endDate
+
+    return startDatePass && endDatePass
+  })
+}
+
+function getLeadTableDateKey(row: GenericRow) {
+  const leadDateCandidates = [
+    'data_referencia',
+    'Data da criação',
+    'Data de criação',
+    'created_at',
+    'createdAt',
+    'data_cadastro',
+    'data',
+  ]
+
+  for (const fieldName of leadDateCandidates) {
+    const value = row[fieldName]
+
+    if (value !== null && value !== undefined && value !== '') {
+      return getDateKey(String(value))
+    }
+  }
+
+  return getGenericRowDateKey(row)
+}
+
+function applyLeadTableDateFilter(rows: GenericRow[], filters: FilterState) {
+  return rows.filter((row) => {
+    const dateKey = getLeadTableDateKey(row)
 
     if (!filters.startDate && !filters.endDate) {
       return true
@@ -619,10 +595,7 @@ export function TrafegoPagoSpike() {
   )
   const [rows, setRows] = useState<CampaignRow[]>([])
   const [leadRows, setLeadRows] = useState<GenericRow[]>([])
-  const [spikeLeadResumoRows, setSpikeLeadResumoRows] = useState<SpikeLeadResumoRow[]>([])
   const [inscritoRows, setInscritoRows] = useState<GenericRow[]>([])
-  const [matriculadoRows, setMatriculadoRows] = useState<GenericRow[]>([])
-  const [registroCrmRows, setRegistroCrmRows] = useState<GenericRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
   const [funilGeralRow, setFunilGeralRow] = useState<FunilGeralRow | null>(null)
   const [clarityResumoRows, setClarityResumoRows] = useState<ClarityResumoRow[]>([])
@@ -642,7 +615,6 @@ export function TrafegoPagoSpike() {
   const [reportsLoading, setReportsLoading] = useState(true)
   const [reportsError, setReportsError] = useState<string | null>(null)
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('semanal')
-  const [leadFocusFilter, setLeadFocusFilter] = useState<LeadFocusFilter>('all')
 
   const loadRows = async () => {
     if (!supabase) {
@@ -657,10 +629,8 @@ export function TrafegoPagoSpike() {
     const [
       campaignResponse,
       leadsResponse,
-      spikeLeadResumoResponse,
       inscritosResponse,
       matriculadosResponse,
-      registroCrmResponse,
       funilGeralResponse,
       clarityResumoResponse,
       clarityDevicesResponse,
@@ -669,16 +639,9 @@ export function TrafegoPagoSpike() {
         .from('campanha_euro_20262')
         .select('*')
         .order('data_inicio', { ascending: true }),
-      supabase.from('leads_cursos').select('*'),
-      supabase
-        .from('spike_leads_resumo_20262')
-        .select(
-          'lead_id, data_referencia, cpf, telefone, nome, tem_inscricao, tem_matricula, status_crm, objecao, observacoes_perda',
-        )
-        .order('data_referencia', { ascending: true }),
+      supabase.from('leads_cursos_enriquecidos').select('*'),
       supabase.from('inscritos_20262').select('*'),
       supabase.from('matriculados_20262').select('*'),
-      supabase.from('registro_crm').select('*'),
       supabase
         .from('funil_euro_20262_geral')
         .select(
@@ -712,10 +675,7 @@ export function TrafegoPagoSpike() {
 
     setRows((campaignResponse.data as CampaignRow[]) ?? [])
     setLeadRows((leadsResponse.data as GenericRow[]) ?? [])
-    setSpikeLeadResumoRows((spikeLeadResumoResponse.data as SpikeLeadResumoRow[]) ?? [])
     setInscritoRows((inscritosResponse.data as GenericRow[]) ?? [])
-    setMatriculadoRows((matriculadosResponse.data as GenericRow[]) ?? [])
-    setRegistroCrmRows((registroCrmResponse.data as GenericRow[]) ?? [])
     setFunilGeralRow((funilGeralResponse.data as FunilGeralRow | null) ?? null)
     setClarityResumoRows((clarityResumoResponse.data as ClarityResumoRow[]) ?? [])
     setClarityDeviceRows((clarityDevicesResponse.data as ClarityDeviceRow[]) ?? [])
@@ -746,18 +706,6 @@ export function TrafegoPagoSpike() {
     if (funilGeralResponse.error) {
       console.warn('Não foi possível carregar a tabela funil_euro_20262_geral.', {
         funilGeralError: funilGeralResponse.error,
-      })
-    }
-
-    if (registroCrmResponse.error) {
-      console.warn('Não foi possível carregar a tabela registro_crm.', {
-        registroCrmError: registroCrmResponse.error,
-      })
-    }
-
-    if (spikeLeadResumoResponse.error) {
-      console.warn('Não foi possível carregar a tabela spike_leads_resumo_20262.', {
-        spikeLeadResumoError: spikeLeadResumoResponse.error,
       })
     }
 
@@ -862,7 +810,7 @@ export function TrafegoPagoSpike() {
       { data: matriculadosData, error: matriculadosError },
     ] =
       await Promise.all([
-        supabase.from('leads_cursos').select('*'),
+        supabase.from('leads_cursos_enriquecidos').select('*'),
         supabase
           .from('inscritos_20262')
           .select('cpf, campus, curso, turno, forma_de_ingresso, etapa_atual, data_inscricao'),
@@ -875,11 +823,11 @@ export function TrafegoPagoSpike() {
 
     if (leadsError || inscritosError || matriculadosError) {
       throw new Error(
-        'Não foi possível buscar leads_cursos, inscritos_20262 ou matriculados_20262 para montar o relatório.',
+        'Não foi possível buscar leads_cursos_enriquecidos, inscritos_20262 ou matriculados_20262 para montar o relatório.',
       )
     }
 
-    const leadsRows = applyGenericDateFilter((leadsData as GenericRow[]) ?? [], {
+    const leadsRows = applyLeadTableDateFilter((leadsData as GenericRow[]) ?? [], {
       startDate: range.startDate,
       endDate: range.endDate,
     })
@@ -1113,36 +1061,13 @@ export function TrafegoPagoSpike() {
   }, [clarityDeviceRows, filters.endDate, filters.startDate])
 
   const filteredLeadRows = useMemo(
-    () => applyGenericDateFilter(leadRows, filters),
+    () => applyLeadTableDateFilter(leadRows, filters),
     [filters, leadRows],
-  )
-
-  const filteredSpikeLeadResumoRows = useMemo(
-    () =>
-      applyGenericDateFilter(
-        spikeLeadResumoRows as unknown as GenericRow[],
-        filters,
-      ) as unknown as SpikeLeadResumoRow[],
-    [filters, spikeLeadResumoRows],
   )
 
   const filteredInscritoRows = useMemo(
     () => applyGenericDateFilter(inscritoRows, filters),
     [filters, inscritoRows],
-  )
-
-  const filteredMatriculadoRows = useMemo(
-    () =>
-      applyGenericDateFilter(matriculadoRows, filters).filter((row) => {
-        const tipoAluno = normalizeText(getRowField(row, 'tipo_aluno', 'Tipo Aluno'))
-        return !tipoAluno || tipoAluno === 'CALOURO'
-      }),
-    [filters, matriculadoRows],
-  )
-
-  const filteredRegistroCrmRows = useMemo(
-    () => applyGenericDateFilter(registroCrmRows, filters),
-    [filters, registroCrmRows],
   )
 
   const groupedRows = useMemo(() => agruparPorData(filteredRows), [filteredRows])
@@ -1160,10 +1085,6 @@ export function TrafegoPagoSpike() {
     () => countIntersectedCpfs(filteredLeadRows, filteredInscritoRows),
     [filteredInscritoRows, filteredLeadRows],
   )
-  const matriculadosGeradosNoPeriodo = useMemo(
-    () => countIntersectedCpfs(filteredLeadRows, filteredMatriculadoRows),
-    [filteredLeadRows, filteredMatriculadoRows],
-  )
   const inscritosForTrafficCards = useMemo(
     () =>
       funilGeralRow && toNumber(funilGeralRow.inscritos) > 0
@@ -1171,149 +1092,6 @@ export function TrafegoPagoSpike() {
         : inscritosGeradosNoPeriodo,
     [funilGeralRow, inscritosGeradosNoPeriodo],
   )
-
-  const spikeLeadSummaries = useMemo<LeadMatchedSummary[]>(() => {
-    const inscritosCpfSet = extractCpfSet(filteredInscritoRows)
-    const matriculadosCpfSet = extractCpfSet(filteredMatriculadoRows)
-
-    if (filteredSpikeLeadResumoRows.length > 0) {
-      return filteredSpikeLeadResumoRows.map((row, index) => ({
-        key: String(row.lead_id ?? `lead-${index}`),
-        status: normalizeLeadStatus(row.status_crm),
-        objection: normalizeLeadObservation(row.objecao, 'Não informada'),
-        lossObservation: normalizeLeadObservation(row.observacoes_perda, 'Não informada'),
-        hasInscrito: normalizeCpf(row.cpf)
-          ? inscritosCpfSet.has(normalizeCpf(row.cpf) as string)
-          : Boolean(row.tem_inscricao),
-        hasMatriculado: normalizeCpf(row.cpf)
-          ? matriculadosCpfSet.has(normalizeCpf(row.cpf) as string)
-          : Boolean(row.tem_matricula),
-      }))
-    }
-
-    const registroByMatchKey = new Map<
-      string,
-      { dateKey: string; status: string; objection: string; lossObservation: string }
-    >()
-
-    filteredRegistroCrmRows.forEach((row) => {
-      const status = normalizeLeadStatus(getRowField(row, 'Status'))
-      const objection = normalizeLeadObservation(getRowField(row, 'Objeção'), 'Não informada')
-      const lossObservation = normalizeLeadObservation(
-        getRowField(row, 'Observações da perda'),
-        'Não informada',
-      )
-      const dateKey = getGenericRowDateKey(row)
-      const cpf = normalizeCpf(
-        getRowField(row, 'CPF', 'cpf', 'CPF da pessoa'),
-      )
-      const phone = normalizePhone(
-        getRowField(row, 'Telefone da pessoa', 'telefone', 'Telefone', 'Telefones secundários'),
-      )
-
-      ;[
-        cpf ? `cpf:${cpf}` : null,
-        phone ? `phone:${phone}` : null,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .forEach((key) => {
-          const currentValue = registroByMatchKey.get(key)
-
-          if (!currentValue || dateKey >= currentValue.dateKey) {
-            registroByMatchKey.set(key, {
-              dateKey,
-              status,
-              objection,
-              lossObservation,
-            })
-          }
-        })
-    })
-
-    const uniqueLeadMap = new Map<string, LeadMatchedSummary>()
-
-    filteredLeadRows.forEach((row, index) => {
-      const cpf = normalizeCpf(getRowField(row, 'cpf', 'CPF', 'cpf_lead'))
-      const phone = normalizePhone(
-        getRowField(row, 'telefone', 'Telefone', 'telefone_1', 'celular', 'whatsapp', 'phone'),
-      )
-      const matchKeys = [
-        cpf ? `cpf:${cpf}` : null,
-        phone ? `phone:${phone}` : null,
-      ].filter((value): value is string => Boolean(value))
-
-      const leadKey = cpf ? `cpf:${cpf}` : phone ? `phone:${phone}` : `lead:${index}`
-
-      if (uniqueLeadMap.has(leadKey)) {
-        return
-      }
-
-      const matchedRegistro =
-        matchKeys
-          .map((key) => registroByMatchKey.get(key))
-          .find((value) => Boolean(value)) ?? null
-
-      uniqueLeadMap.set(leadKey, {
-        key: leadKey,
-        status: matchedRegistro?.status ?? 'Não informado',
-        objection: matchedRegistro?.objection ?? 'Não informada',
-        lossObservation: matchedRegistro?.lossObservation ?? 'Não informada',
-        hasInscrito: cpf ? inscritosCpfSet.has(cpf) : false,
-        hasMatriculado: cpf ? matriculadosCpfSet.has(cpf) : false,
-      })
-    })
-
-    return Array.from(uniqueLeadMap.values())
-  }, [
-    filteredInscritoRows,
-    filteredLeadRows,
-    filteredMatriculadoRows,
-    filteredRegistroCrmRows,
-    filteredSpikeLeadResumoRows,
-  ])
-
-  const focusedSpikeLeadSummaries = useMemo(() => {
-    switch (leadFocusFilter) {
-      case 'notConverted':
-        return spikeLeadSummaries.filter((row) => !row.hasInscrito && !row.hasMatriculado)
-      case 'inscritos':
-        return spikeLeadSummaries.filter((row) => row.hasInscrito)
-      case 'matriculados':
-        return spikeLeadSummaries.filter((row) => row.hasMatriculado)
-      default:
-        return spikeLeadSummaries
-    }
-  }, [leadFocusFilter, spikeLeadSummaries])
-
-  const spikeRegistroStatusRows = useMemo(
-    () =>
-      filteredRegistroCrmRows.map((row, index) => ({
-        key: `registro-${index}`,
-        status: normalizeLeadStatus(getRowField(row, 'Status')),
-        objection: normalizeLeadObservation(getRowField(row, 'Objeção'), 'Não informada'),
-        lossObservation: normalizeLeadObservation(
-          getRowField(row, 'Observações da perda'),
-          'Não informada',
-        ),
-      })),
-    [filteredRegistroCrmRows],
-  )
-
-  const spikeLeadFallbackBase = Math.round(funilGeralRow ? toNumber(funilGeralRow.leads) : operationalLeadsCount)
-  const spikeLeadFallbackInscritos = Math.round(
-    funilGeralRow ? toNumber(funilGeralRow.inscritos) : inscritosGeradosNoPeriodo,
-  )
-  const spikeLeadFallbackMatriculados = Math.round(
-    funilGeralRow ? toNumber(funilGeralRow.matriculas) : matriculadosGeradosNoPeriodo,
-  )
-  const spikeLeadInscritosCount = spikeLeadFallbackInscritos
-  const spikeLeadMatriculadosCount = spikeLeadFallbackMatriculados
-  const spikeLeadNotConvertedCount = Math.max(
-    spikeLeadFallbackBase - spikeLeadFallbackInscritos,
-    0,
-  )
-  const effectiveSpikeLeadStatusRows =
-    spikeLeadSummaries.length === 0 ? spikeRegistroStatusRows : focusedSpikeLeadSummaries
 
   const funnelSteps = useMemo(
     () => [
@@ -1638,63 +1416,76 @@ export function TrafegoPagoSpike() {
     [inscritosForTrafficCards, kpis],
   )
 
-  const spikeLeadFocusCards = useMemo(
+  const enrichedLeadCounts = useMemo(() => {
+    const total = filteredLeadRows.length
+    const inscritos = filteredLeadRows.filter((row) =>
+      Boolean(getRowField(row, 'data_inscricao', 'Data da Inscrição')),
+    ).length
+    const matriculados = filteredLeadRows.filter((row) =>
+      Boolean(getRowField(row, 'data_matricula', 'Data da Matricula')),
+    ).length
+
+    return {
+      total,
+      inscritos,
+      matriculados,
+      naoConvertidos: Math.max(total - inscritos - matriculados, 0),
+    }
+  }, [filteredLeadRows])
+
+  const enrichedLeadFunnelSteps = useMemo(
     () => [
       {
-        key: 'notConverted' as const,
-        title: 'Não se inscreveram nem se matricularam',
-        value: spikeLeadNotConvertedCount,
-        helperText: 'Leads sem correspondência nas bases de inscritos e matriculados.',
+        label: 'Leads',
+        value: enrichedLeadCounts.total,
+        helperText: 'Todos os leads da tabela enriquecida.',
       },
       {
-        key: 'inscritos' as const,
-        title: 'Leads inscritos',
-        value: spikeLeadInscritosCount,
-        helperText: 'Leads encontrados na base de inscritos da campanha.',
+        label: 'Inscritos',
+        value: enrichedLeadCounts.inscritos,
+        helperText: 'Leads com Data da Inscrição preenchida.',
       },
       {
-        key: 'matriculados' as const,
-        title: 'Leads matriculados',
-        value: spikeLeadMatriculadosCount,
-        helperText: 'Leads encontrados também na base de matriculados.',
+        label: 'Matriculados',
+        value: enrichedLeadCounts.matriculados,
+        helperText: 'Leads com Data da Matricula preenchida.',
       },
     ],
-    [
-      spikeLeadInscritosCount,
-      spikeLeadMatriculadosCount,
-      spikeLeadNotConvertedCount,
-    ],
+    [enrichedLeadCounts],
   )
 
-  const spikeLeadStatusCards = useMemo(
-    () => [
-      {
-        title: 'Em andamento',
-        value: effectiveSpikeLeadStatusRows.filter((row) => row.status === 'Em andamento').length,
-        helperText: 'Leads do recorte atual com registro ainda em andamento no CRM.',
-      },
-      {
-        title: 'Perdido',
-        value: effectiveSpikeLeadStatusRows.filter((row) => row.status === 'Perdido').length,
-        helperText: 'Leads do recorte atual que já foram marcados como perdidos.',
-      },
-      {
-        title: 'Ganho',
-        value: effectiveSpikeLeadStatusRows.filter((row) => row.status === 'Ganho').length,
-        helperText: 'Leads do recorte atual com status ganho no CRM.',
-      },
-    ],
-    [effectiveSpikeLeadStatusRows],
+  const enrichedLeadInscritosByIngresso = useMemo(
+    () =>
+      countByLabel(
+        filteredLeadRows.filter((row) => Boolean(getRowField(row, 'data_inscricao', 'Data da Inscrição'))),
+        (row) =>
+          normalizeIngresso(
+            getRowField(
+              row,
+              'forma_ingresso_inscricao',
+              'Forma de Ingresso Inscrição',
+            ),
+          ),
+        12,
+      ),
+    [filteredLeadRows],
   )
 
-  const spikeLeadObjectionData = useMemo(
-    () => countByLabel(effectiveSpikeLeadStatusRows, (row) => row.objection, 10),
-    [effectiveSpikeLeadStatusRows],
-  )
-
-  const spikeLeadLossObservationData = useMemo(
-    () => countByLabel(effectiveSpikeLeadStatusRows, (row) => row.lossObservation, 10),
-    [effectiveSpikeLeadStatusRows],
+  const enrichedLeadMatriculadosByIngresso = useMemo(
+    () =>
+      countByLabel(
+        filteredLeadRows.filter((row) => Boolean(getRowField(row, 'data_matricula', 'Data da Matricula'))),
+        (row) =>
+          normalizeIngresso(
+            getRowField(
+              row,
+              'forma_ingresso_matricula',
+              'Forma de Ingresso Matricula',
+            ),
+          ),
+        12,
+      ),
+    [filteredLeadRows],
   )
 
   const selectedStoredReport = storedReports[selectedReportType] ?? null
@@ -1710,144 +1501,142 @@ export function TrafegoPagoSpike() {
 
   const spikeLeadSection = (
     <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div className="max-w-3xl">
-          <h3 className="text-lg font-semibold text-slate-950">Resumo dos Leads</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Leitura dos leads gerados pela Spike cruzando as bases de inscritos, matriculados e registros do CRM.
-          </p>
-        </div>
-
-        <div className="inline-flex flex-wrap rounded-2xl border border-slate-200 bg-slate-50 p-1">
-          {[
-            { key: 'all' as const, label: 'Todos' },
-            { key: 'notConverted' as const, label: 'Não convertidos' },
-            { key: 'inscritos' as const, label: 'Inscritos' },
-            { key: 'matriculados' as const, label: 'Matriculados' },
-          ].map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setLeadFocusFilter(option.key)}
-              className={cn(
-                'rounded-2xl px-4 py-2 text-sm font-semibold transition',
-                leadFocusFilter === option.key
-                  ? 'bg-slate-950 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-white hover:text-slate-950',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+      <div className="max-w-3xl">
+        <h3 className="text-lg font-semibold text-slate-950">Funil de leads da Spike</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Esta leitura usa a tabela <span className="font-medium text-slate-700">leads_cursos_enriquecidos</span>,
+          removendo CPF&apos;s duplicados antes da contagem e cruzando inscrição e matrícula no mesmo registro.
+        </p>
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-3">
-        {spikeLeadFocusCards.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            onClick={() => setLeadFocusFilter(card.key)}
-            className={cn(
-              'rounded-3xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5',
-              leadFocusFilter === card.key
-                ? 'border-slate-950 bg-slate-950 text-white'
-                : 'border-slate-200',
-            )}
-          >
-            <p
-              className={cn(
-                'text-sm font-medium',
-                leadFocusFilter === card.key ? 'text-white/80' : 'text-slate-500',
-              )}
-            >
-              {card.title}
-            </p>
-            <p className="mt-3 text-2xl font-semibold tracking-tight">
-              {formatNumberBR(card.value)}
-            </p>
-            <p
-              className={cn(
-                'mt-2 text-xs leading-5',
-                leadFocusFilter === card.key ? 'text-white/70' : 'text-slate-500',
-              )}
-            >
-              {card.helperText}
-            </p>
-          </button>
-        ))}
+      <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
+          CPF&apos;s duplicados removidos
+        </span>
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-700">
+          Leads no recorte: {formatNumberBR(enrichedLeadCounts.total)}
+        </span>
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-3">
-        {spikeLeadStatusCards.map((card, index) => (
-          <KpiCard
-            key={card.title}
-            title={card.title}
-            value={formatNumberBR(card.value)}
-            helperText={card.helperText}
-            emphasis={index === 0 ? 'primary' : 'neutral'}
-          />
-        ))}
-      </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <div className="space-y-4">
+          {enrichedLeadFunnelSteps.map((step, index) => {
+            const previousValue =
+              index === 0 ? step.value : enrichedLeadFunnelSteps[index - 1].value
+            const conversionFromPrevious =
+              index === 0 ? 100 : safeDivide(step.value, previousValue, 100)
+            const shareOfTop =
+              enrichedLeadCounts.total > 0
+                ? safeDivide(step.value, enrichedLeadCounts.total, 100)
+                : 0
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <ChartContainer
-          title="Objeções"
-          description="Principais objeções dos leads da Spike dentro do recorte selecionado."
-        >
-          {spikeLeadObjectionData.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-              Nenhuma objeção encontrada para esse recorte.
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={spikeLeadObjectionData} layout="vertical" margin={{ left: 12, right: 16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" stroke="#64748b" allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={150}
-                  stroke="#64748b"
-                  tickLine={false}
-                />
-                <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartContainer>
-
-        <ChartContainer
-          title="Observações da perda"
-          description="Motivos de perda e observações do CRM dentro do mesmo recorte dos leads."
-        >
-          {spikeLeadLossObservationData.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-              Nenhuma observação de perda encontrada para esse recorte.
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={spikeLeadLossObservationData}
-                layout="vertical"
-                margin={{ left: 12, right: 16 }}
+            return (
+              <article
+                key={step.label}
+                className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" stroke="#64748b" allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={170}
-                  stroke="#64748b"
-                  tickLine={false}
-                />
-                <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                <Bar dataKey="value" fill="#0f766e" radius={[0, 12, 12, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartContainer>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Etapa {index + 1}
+                    </p>
+                    <h4 className="mt-1 text-lg font-semibold text-slate-950">
+                      {step.label}
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-500">{step.helperText}</p>
+                  </div>
+
+                  <div className="sm:text-right">
+                    <p className="text-2xl font-semibold tracking-tight text-slate-950">
+                      {formatNumberBR(step.value)}
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-500">
+                      {index === 0
+                        ? '100% da base de leads'
+                        : `${formatPercentBR(conversionFromPrevious)} da etapa anterior`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${funnelAccentClasses[index % funnelAccentClasses.length]}`}
+                    style={{ width: `${Math.max(shareOfTop, step.value > 0 ? 2 : 0)}%` }}
+                  />
+                </div>
+
+                <div className="mt-3 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                  <span>{formatPercentBR(shareOfTop)} da base deduplicada</span>
+                  <span>{formatPercentBR(conversionFromPrevious)} de conversão</span>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartContainer
+            title="Inscritos por forma de ingresso"
+            description="Somente os leads enriquecidos que já têm Data da Inscrição."
+          >
+            {enrichedLeadInscritosByIngresso.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                Nenhum inscrito encontrado neste recorte.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={enrichedLeadInscritosByIngresso}
+                  layout="vertical"
+                  margin={{ left: 12, right: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" stroke="#64748b" allowDecimals={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={120}
+                    stroke="#64748b"
+                    tickLine={false}
+                  />
+                  <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
+                  <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartContainer>
+
+          <ChartContainer
+            title="Matriculados por forma de ingresso"
+            description="Somente os leads enriquecidos que já têm Data da Matricula."
+          >
+            {enrichedLeadMatriculadosByIngresso.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                Nenhum matriculado encontrado neste recorte.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={enrichedLeadMatriculadosByIngresso}
+                  layout="vertical"
+                  margin={{ left: 12, right: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" stroke="#64748b" allowDecimals={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={120}
+                    stroke="#64748b"
+                    tickLine={false}
+                  />
+                  <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
+                  <Bar dataKey="value" fill="#0f766e" radius={[0, 12, 12, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartContainer>
+        </div>
       </div>
     </section>
   )
