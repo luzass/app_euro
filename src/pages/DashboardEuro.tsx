@@ -74,6 +74,16 @@ interface MatriculadoRow {
   semestre: string | null
 }
 
+interface LeadEnriquecidoRow {
+  id?: number
+  created_at?: string | null
+  cpf?: string | null
+  data_inscricao?: string | null
+  data_matricula?: string | null
+  forma_ingresso_inscricao?: string | null
+  forma_ingresso_matricula?: string | null
+}
+
 interface DateRangeFilter {
   startDate: string
   endDate: string
@@ -309,6 +319,10 @@ function normalizeString(value?: string | null) {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toUpperCase()
+}
+
+function normalizeCpf(value?: string | null) {
+  return (value ?? '').replace(/\D/g, '')
 }
 
 function titleize(value?: string | null) {
@@ -1197,6 +1211,7 @@ function InteractivePieChart({
 export function DashboardEuro() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('inscritos')
   const [inscritosRows, setInscritosRows] = useState<InscritoRow[]>([])
+  const [leadsEnriquecidosRows, setLeadsEnriquecidosRows] = useState<LeadEnriquecidoRow[]>([])
   const [matriculadosRows, setMatriculadosRows] = useState<MatriculadoRow[]>([])
   const [inscritos20252Rows, setInscritos20252Rows] = useState<InscritoRow[]>([])
   const [matriculados20252Rows, setMatriculados20252Rows] = useState<MatriculadoRow[]>([])
@@ -1232,11 +1247,13 @@ export function DashboardEuro() {
 
     const [
       inscritosResponse,
+      leadsEnriquecidosResponse,
       matriculadosResponse,
       inscritos20252Response,
       matriculados20252Response,
     ] = await Promise.all([
       fetchAllRows<InscritoRow>('inscritos_20262', 'data_inscricao'),
+      fetchAllRows<LeadEnriquecidoRow>('leads_cursos_enriquecidos', 'created_at'),
       fetchAllRows<MatriculadoRow>('matriculados_20262', 'data_baixa_do_pagamento'),
       fetchAllRows<InscritoRow>('inscritos_20252', 'data_inscricao'),
       fetchAllRows<MatriculadoRow>('matriculados_20252', 'data_baixa_do_pagamento'),
@@ -1244,8 +1261,8 @@ export function DashboardEuro() {
 
     if (
       inscritosResponse.error ||
-      matriculadosResponse.error ||
       inscritos20252Response.error ||
+      matriculadosResponse.error ||
       matriculados20252Response.error
     ) {
       setError(
@@ -1256,6 +1273,7 @@ export function DashboardEuro() {
     }
 
     setInscritosRows((inscritosResponse.data as InscritoRow[]) ?? [])
+    setLeadsEnriquecidosRows((leadsEnriquecidosResponse.data as LeadEnriquecidoRow[]) ?? [])
     setMatriculadosRows((matriculadosResponse.data as MatriculadoRow[]) ?? [])
     setInscritos20252Rows((inscritos20252Response.data as InscritoRow[]) ?? [])
     setMatriculados20252Rows((matriculados20252Response.data as MatriculadoRow[]) ?? [])
@@ -1382,6 +1400,83 @@ export function DashboardEuro() {
         return true
       }),
     [inscritosDateRange, inscritosPrepared, inscritosSelections],
+  )
+
+  const spikeLeadCpfSet = useMemo(
+    () =>
+      new Set(
+        leadsEnriquecidosRows
+          .map((row) => normalizeCpf(row.cpf))
+          .filter((cpf): cpf is string => Boolean(cpf)),
+      ),
+    [leadsEnriquecidosRows],
+  )
+
+  const inscritosOrigemComparativo = useMemo(() => {
+    const rowsMap = new Map<
+      string,
+      {
+        label: string
+        spike: number
+        normal: number
+        total: number
+      }
+    >()
+
+    inscritosFiltered.forEach((row) => {
+      const label = row.formaLabel
+      const currentRow = rowsMap.get(label) ?? {
+        label,
+        spike: 0,
+        normal: 0,
+        total: 0,
+      }
+
+      const cpf = normalizeCpf(row.cpf)
+      const isSpike = Boolean(cpf) && spikeLeadCpfSet.has(cpf)
+
+      currentRow.total += 1
+
+      if (isSpike) {
+        currentRow.spike += 1
+      } else {
+        currentRow.normal += 1
+      }
+
+      rowsMap.set(label, currentRow)
+    })
+
+    const totals = Array.from(rowsMap.values()).reduce(
+      (accumulator, row) => ({
+        spike: accumulator.spike + row.spike,
+        normal: accumulator.normal + row.normal,
+        total: accumulator.total + row.total,
+      }),
+      { spike: 0, normal: 0, total: 0 },
+    )
+
+    return Array.from(rowsMap.values())
+      .map((row) => ({
+        ...row,
+        spikeShareOfSpike: totals.spike > 0 ? (row.spike / totals.spike) * 100 : 0,
+        normalShareOfNormal: totals.normal > 0 ? (row.normal / totals.normal) * 100 : 0,
+        spikeShareOfRow: row.total > 0 ? (row.spike / row.total) * 100 : 0,
+        normalShareOfRow: row.total > 0 ? (row.normal / row.total) * 100 : 0,
+      }))
+      .sort((currentRow, nextRow) => nextRow.total - currentRow.total)
+  }, [inscritosFiltered, spikeLeadCpfSet])
+
+  const inscritosOrigemTotais = useMemo(
+    () =>
+      inscritosOrigemComparativo.reduce(
+        (accumulator, row) => ({
+          spike: accumulator.spike + row.spike,
+          normal: accumulator.normal + row.normal,
+          total: accumulator.total + row.total,
+        }),
+        { spike: 0, normal: 0, total: 0 },
+      ),
+    [inscritosOrigemComparativo],
   )
 
   const matriculadosFiltered = useMemo(
@@ -2407,6 +2502,144 @@ export function DashboardEuro() {
                   }
                 />
               </section>
+
+              <DashboardSection
+                title="Spike x Normal por forma de ingresso"
+                description="Classificacao dos inscritos filtrados cruzando o CPF da base inscritos_20262 com a base de leads. Se o CPF estiver na base de leads, entra como Spike; o restante entra como Normal."
+              >
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <article className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
+                      Spike
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                      {formatNumberBR(inscritosOrigemTotais.spike)}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {formatPercentBR(
+                        inscritosOrigemTotais.total > 0
+                          ? (inscritosOrigemTotais.spike / inscritosOrigemTotais.total) * 100
+                          : 0,
+                        0,
+                      )}{' '}
+                      do total filtrado.
+                    </p>
+                  </article>
+
+                  <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                      Normal
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                      {formatNumberBR(inscritosOrigemTotais.normal)}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {formatPercentBR(
+                        inscritosOrigemTotais.total > 0
+                          ? (inscritosOrigemTotais.normal / inscritosOrigemTotais.total) * 100
+                          : 0,
+                        0,
+                      )}{' '}
+                      do total filtrado.
+                    </p>
+                  </article>
+
+                  <article className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                      Total comparado
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                      {formatNumberBR(inscritosOrigemTotais.total)}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      CPFs duplicados na base de leads nao aumentam a contagem.
+                    </p>
+                  </article>
+                </div>
+
+                <div className="mt-6 overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-500">
+                        <th className="sticky left-0 z-10 bg-white px-4 py-3 font-semibold">
+                          Forma de ingresso
+                        </th>
+                        <th className="px-4 py-3 font-semibold">Spike</th>
+                        <th className="px-4 py-3 font-semibold">% no Spike</th>
+                        <th className="px-4 py-3 font-semibold">Normal</th>
+                        <th className="px-4 py-3 font-semibold">% no Normal</th>
+                        <th className="px-4 py-3 font-semibold">Total</th>
+                        <th className="px-4 py-3 font-semibold">% Spike na forma</th>
+                        <th className="px-4 py-3 font-semibold">% Normal na forma</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inscritosOrigemComparativo.map((row) => (
+                        <tr key={row.label} className="border-t border-slate-100">
+                          <td className="sticky left-0 z-10 bg-white px-4 py-4 font-semibold text-slate-950">
+                            {row.label}
+                          </td>
+                          <td className="px-4 py-4 text-slate-800">{formatNumberBR(row.spike)}</td>
+                          <td className="px-4 py-4 text-slate-600">
+                            {formatPercentBR(row.spikeShareOfSpike, 0)}
+                          </td>
+                          <td className="px-4 py-4 text-slate-800">{formatNumberBR(row.normal)}</td>
+                          <td className="px-4 py-4 text-slate-600">
+                            {formatPercentBR(row.normalShareOfNormal, 0)}
+                          </td>
+                          <td className="px-4 py-4 font-semibold text-slate-950">
+                            {formatNumberBR(row.total)}
+                          </td>
+                          <td className="px-4 py-4 text-sky-700">
+                            {formatPercentBR(row.spikeShareOfRow, 0)}
+                          </td>
+                          <td className="px-4 py-4 text-slate-600">
+                            {formatPercentBR(row.normalShareOfRow, 0)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-200 bg-slate-50">
+                        <td className="sticky left-0 z-10 bg-slate-50 px-4 py-4 font-semibold text-slate-950">
+                          Total
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-950">
+                          {formatNumberBR(inscritosOrigemTotais.spike)}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-700">
+                          {formatPercentBR(100, 0)}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-950">
+                          {formatNumberBR(inscritosOrigemTotais.normal)}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-700">
+                          {formatPercentBR(100, 0)}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-950">
+                          {formatNumberBR(inscritosOrigemTotais.total)}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-sky-700">
+                          {formatPercentBR(
+                            inscritosOrigemTotais.total > 0
+                              ? (inscritosOrigemTotais.spike / inscritosOrigemTotais.total) * 100
+                              : 0,
+                            0,
+                          )}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-700">
+                          {formatPercentBR(
+                            inscritosOrigemTotais.total > 0
+                              ? (inscritosOrigemTotais.normal / inscritosOrigemTotais.total) * 100
+                              : 0,
+                            0,
+                          )}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </DashboardSection>
 
               <InteractiveDistributionChart
                 title="Etapa atual"
