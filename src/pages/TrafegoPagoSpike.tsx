@@ -6,6 +6,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -179,6 +180,44 @@ const funnelAccentClasses = [
 
 const analysisWebhookUrl =
   'https://casa-oceano-n8n.cj1us3.easypanel.host/webhook/gerar_relatorio'
+
+function renderSmartBarLabel(props: {
+  x?: number | string
+  y?: number | string
+  width?: number | string
+  height?: number | string
+  value?: number | string
+}) {
+  const { value = 0 } = props
+  const x = Number(props.x ?? 0)
+  const y = Number(props.y ?? 0)
+  const width = Number(props.width ?? 0)
+  const height = Number(props.height ?? 0)
+  const numericValue = Number(value ?? 0)
+
+  if (!numericValue || height <= 0) {
+    return null
+  }
+
+  const formattedValue = formatNumberBR(numericValue)
+  const estimatedTextWidth = formattedValue.length * 8.5
+  const canFitInside = width >= estimatedTextWidth + 18
+  const textX = canFitInside ? x + width - 8 : x + width + 8
+
+  return (
+    <text
+      x={textX}
+      y={y + height / 2}
+      dy={4}
+      textAnchor={canFitInside ? 'end' : 'start'}
+      fill={canFitInside ? '#ffffff' : '#0f172a'}
+      fontSize={12}
+      fontWeight={700}
+    >
+      {formattedValue}
+    </text>
+  )
+}
 
 function getDateKey(value?: string | null) {
   if (!value) {
@@ -1650,7 +1689,9 @@ export function TrafegoPagoSpike() {
                     tickLine={false}
                   />
                   <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                  <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]} />
+                  <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]}>
+                    <LabelList dataKey="value" content={renderSmartBarLabel} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -1681,7 +1722,9 @@ export function TrafegoPagoSpike() {
                     tickLine={false}
                   />
                   <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                  <Bar dataKey="value" fill="#0f766e" radius={[0, 12, 12, 0]} />
+                  <Bar dataKey="value" fill="#0f766e" radius={[0, 12, 12, 0]}>
+                    <LabelList dataKey="value" content={renderSmartBarLabel} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
