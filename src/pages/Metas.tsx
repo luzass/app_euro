@@ -168,6 +168,12 @@ function isProuni(row: MatriculadoMetaRow) {
   return normalizeString(row.tipo_de_ingresso).includes('PROUNI')
 }
 
+function isReadmissaoTrancamento(row: MatriculadoMetaRow) {
+  const normalized = normalizeString(row.tipo_de_ingresso)
+
+  return normalized.includes('READMISSAO') && normalized.includes('TRANCAMENTO')
+}
+
 function isMedicina(row: MatriculadoMetaRow) {
   return normalizeString(row.curso) === 'MEDICINA'
 }
@@ -353,6 +359,7 @@ export function Metas() {
     return rows
       .filter((row) => isCalouro(row))
       .filter((row) => !isMedicina(row))
+      .filter((row) => !isReadmissaoTrancamento(row))
       .filter((row) => {
         const dateKey = toDateKey(row.data_baixa_do_pagamento)
         return dateKey.startsWith(`2026-${selectedMonth}`)
@@ -360,7 +367,11 @@ export function Metas() {
   }, [rows, selectedMonth])
 
   const allCalouroRows = useMemo(
-    () => rows.filter((row) => isCalouro(row)).filter((row) => !isMedicina(row)),
+    () =>
+      rows
+        .filter((row) => isCalouro(row))
+        .filter((row) => !isMedicina(row))
+        .filter((row) => !isReadmissaoTrancamento(row)),
     [rows],
   )
 

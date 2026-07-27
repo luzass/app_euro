@@ -456,6 +456,12 @@ function isProuni(row: MatriculadoRow) {
   return normalizeString(row.tipo_de_ingresso).includes('PROUNI')
 }
 
+function isReadmissaoTrancamento(value?: string | null) {
+  const normalized = normalizeString(value)
+
+  return normalized.includes('READMISSAO') && normalized.includes('TRANCAMENTO')
+}
+
 function uniqueCountSummary(values: string[]) {
   const counts = new Map<string, number>()
 
@@ -885,7 +891,12 @@ export function PainelVendedor() {
       })
     })
 
-    const matriculadosBaseRows = matriculadosRows.filter((row) => isCalouro(row) && !isMedicina(row))
+    const matriculadosBaseRows = matriculadosRows.filter(
+      (row) =>
+        isCalouro(row) &&
+        !isMedicina(row) &&
+        !isReadmissaoTrancamento(row.tipo_de_ingresso),
+    )
     const matriculadosKeyDates = new Map<string, string[]>()
     matriculadosBaseRows.forEach((row) => {
       const dateKey = toDateKey(row.data_baixa_do_pagamento)
@@ -1134,12 +1145,22 @@ export function PainelVendedor() {
 
   const sellerAllEligibleMatriculas = useMemo(() => {
     return matriculadosRows.filter(
-      (row) => row.vendedor === selectedSeller && isCalouro(row) && !isMedicina(row),
+      (row) =>
+        row.vendedor === selectedSeller &&
+        isCalouro(row) &&
+        !isMedicina(row) &&
+        !isReadmissaoTrancamento(row.tipo_de_ingresso),
     )
   }, [matriculadosRows, selectedSeller])
 
   const teamAllProuniMatriculas = useMemo(() => {
-    return matriculadosRows.filter((row) => isCalouro(row) && !isMedicina(row) && isProuni(row))
+    return matriculadosRows.filter(
+      (row) =>
+        isCalouro(row) &&
+        !isMedicina(row) &&
+        !isReadmissaoTrancamento(row.tipo_de_ingresso) &&
+        isProuni(row),
+    )
   }, [matriculadosRows])
 
   const sellerOwnProuniMatriculas = useMemo(() => {
@@ -1199,7 +1220,11 @@ export function PainelVendedor() {
       Frio: sellerOpportunities.filter((row) => row.temperatura === 'Frio'),
       Morno: sellerOpportunities.filter((row) => row.temperatura === 'Morno'),
       Quente: sellerOpportunities.filter((row) => row.temperatura === 'Quente'),
-      Matriculado: sellerOpportunities.filter((row) => row.temperatura === 'Matriculado'),
+      Matriculado: sellerOpportunities.filter(
+        (row) =>
+          row.temperatura === 'Matriculado' &&
+          !isReadmissaoTrancamento(row.forma_ingresso),
+      ),
     }
   }, [sellerOpportunities])
 
