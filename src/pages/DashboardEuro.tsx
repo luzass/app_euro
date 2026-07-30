@@ -118,6 +118,8 @@ interface FilialTableRow {
   vestibular: number
   enem: number
   prouni: number
+  graduado: number
+  transferenciaExterna: number
   total: number
   manualAdjustmentCount: number
 }
@@ -131,6 +133,7 @@ interface ManualMatriculadoPrepared {
   ingressoLabel: string
   statusLabel: string
   contratoLabel: string
+  periodoLabel: string
 }
 
 interface ComparativeKpiCard {
@@ -1324,6 +1327,7 @@ export function DashboardEuro() {
           ingressoLabel: normalizeMatriculaIngresso(row.tipo_de_ingresso),
           statusLabel: titleize(row.status),
           contratoLabel: normalizeContrato(row.contrato),
+          periodoLabel: normalizeString(row.periodo),
         })),
     [matriculadosRows],
   )
@@ -1355,6 +1359,7 @@ export function DashboardEuro() {
           ingressoLabel: normalizeMatriculaIngresso(row.tipo_de_ingresso),
           statusLabel: titleize(row.status),
           contratoLabel: normalizeContrato(row.contrato),
+          periodoLabel: normalizeString(row.periodo),
         })),
     [matriculados20252Rows],
   )
@@ -1370,6 +1375,7 @@ export function DashboardEuro() {
         ingressoLabel: row.ingresso,
         statusLabel: 'Não informado',
         contratoLabel: 'Ativo',
+        periodoLabel: '',
       })),
     [],
   )
@@ -1566,13 +1572,19 @@ export function DashboardEuro() {
   const matriculadosTodayRows = useMemo(
     () =>
       matriculadosFiltered.filter(
-        (row) => row.dateKey === matriculadosReferenceDate && row.contratoLabel === 'Ativo',
+        (row) =>
+          row.dateKey === matriculadosReferenceDate &&
+          row.contratoLabel === 'Ativo' &&
+          row.periodoLabel === '1',
       ),
     [matriculadosFiltered, matriculadosReferenceDate],
   )
 
   const matriculadosAtivosFiltered = useMemo(
-    () => matriculadosFiltered.filter((row) => row.contratoLabel === 'Ativo'),
+    () =>
+      matriculadosFiltered.filter(
+        (row) => row.contratoLabel === 'Ativo' && row.periodoLabel === '1',
+      ),
     [matriculadosFiltered],
   )
 
@@ -2158,7 +2170,11 @@ export function DashboardEuro() {
         }
 
         const ingresso = row.ingressoLabel
-        if (!['Vestibular', 'ENEM', 'PROUNI'].includes(ingresso)) {
+        if (
+          !['Vestibular', 'ENEM', 'PROUNI', 'Graduado', 'Transferência Externa'].includes(
+            ingresso,
+          )
+        ) {
           return
         }
 
@@ -2171,6 +2187,8 @@ export function DashboardEuro() {
             vestibular: 0,
             enem: 0,
             prouni: 0,
+            graduado: 0,
+            transferenciaExterna: 0,
             total: 0,
             manualAdjustmentCount: 0,
           }
@@ -2181,9 +2199,18 @@ export function DashboardEuro() {
           currentRow.enem += 1
         } else if (ingresso === 'PROUNI') {
           currentRow.prouni += 1
+        } else if (ingresso === 'Graduado') {
+          currentRow.graduado += 1
+        } else if (ingresso === 'Transferência Externa') {
+          currentRow.transferenciaExterna += 1
         }
 
-        currentRow.total = currentRow.vestibular + currentRow.enem + currentRow.prouni
+        currentRow.total =
+          currentRow.vestibular +
+          currentRow.enem +
+          currentRow.prouni +
+          currentRow.graduado +
+          currentRow.transferenciaExterna
         rowsMap.set(mapKey, currentRow)
       })
 
@@ -2201,6 +2228,8 @@ export function DashboardEuro() {
             vestibular: 0,
             enem: 0,
             prouni: 0,
+            graduado: 0,
+            transferenciaExterna: 0,
             total: 0,
             manualAdjustmentCount: 0,
           }
@@ -2208,7 +2237,12 @@ export function DashboardEuro() {
         currentRow.prouni += 1
 
         currentRow.manualAdjustmentCount += 1
-        currentRow.total = currentRow.vestibular + currentRow.enem + currentRow.prouni
+        currentRow.total =
+          currentRow.vestibular +
+          currentRow.enem +
+          currentRow.prouni +
+          currentRow.graduado +
+          currentRow.transferenciaExterna
         rowsMap.set(mapKey, currentRow)
       })
 
@@ -2783,7 +2817,7 @@ export function DashboardEuro() {
 
               <DashboardSection
                 title="Tabela por filial"
-                description="Duas visoes separadas por filial, contando apenas Vestibular, ENEM e PROUNI para os calouros com contrato ativo."
+                description="Duas visoes separadas por filial, buscando cursos e turnos com alunos no recorte de calouros com contrato ativo e periodo 1."
               >
                 <div className="space-y-6">
                   {[
@@ -2800,7 +2834,16 @@ export function DashboardEuro() {
                         <table className="min-w-full border-separate border-spacing-0 text-sm">
                           <thead>
                             <tr>
-                              {['Curso', 'Turno', 'Vestibular', 'ENEM', 'PROUNI', 'Total'].map(
+                              {[
+                                'Curso',
+                                'Turno',
+                                'Vestibular',
+                                'ENEM',
+                                'PROUNI',
+                                'Graduado',
+                                'Transf. Externa',
+                                'Total',
+                              ].map(
                                 (header) => (
                                   <th
                                     key={header}
@@ -2834,6 +2877,12 @@ export function DashboardEuro() {
                                 <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-900">
                                   {formatNumberBR(row.prouni)}
                                 </td>
+                                <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-900">
+                                  {formatNumberBR(row.graduado)}
+                                </td>
+                                <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-medium text-slate-900">
+                                  {formatNumberBR(row.transferenciaExterna)}
+                                </td>
                                 <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 font-semibold text-slate-950">
                                   {formatNumberBR(row.total)}
                                 </td>
@@ -2861,6 +2910,23 @@ export function DashboardEuro() {
                                 {formatNumberBR(
                                   table.rows.reduce(
                                     (accumulator, row) => accumulator + row.prouni,
+                                    0,
+                                  ),
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {formatNumberBR(
+                                  table.rows.reduce(
+                                    (accumulator, row) => accumulator + row.graduado,
+                                    0,
+                                  ),
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {formatNumberBR(
+                                  table.rows.reduce(
+                                    (accumulator, row) =>
+                                      accumulator + row.transferenciaExterna,
                                     0,
                                   ),
                                 )}
