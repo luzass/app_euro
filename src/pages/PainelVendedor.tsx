@@ -231,6 +231,24 @@ function normalizeString(value?: string | null) {
     .toUpperCase()
 }
 
+const excludedMetaStudentNames = new Set([
+  'JONATHAN MENDES DE PAIVA',
+  'ANA KAROLINA DA SILVA MORAES',
+  'PEDRO ARTHUR GOMES SILVA',
+])
+
+const forcedCalouroStudentNames = new Set([
+  'JOAO VITOR RIBEIRO SOUSA DA MOTA',
+])
+
+function isExcludedFromMeta(value?: string | null) {
+  return excludedMetaStudentNames.has(normalizeString(value))
+}
+
+function isForcedCalouro(value?: string | null) {
+  return forcedCalouroStudentNames.has(normalizeString(value))
+}
+
 function cleanText(value?: string | null) {
   return decodeMojibake(value).replace(/\s+/g, ' ').trim()
 }
@@ -445,7 +463,7 @@ function buildPrimaryCandidateKey(candidate: {
 }
 
 function isCalouro(row: MatriculadoRow) {
-  return normalizeString(row.tipo_aluno) === 'CALOURO'
+  return isForcedCalouro(row.aluno) || normalizeString(row.tipo_aluno) === 'CALOURO'
 }
 
 function isMedicina(row: MatriculadoRow) {
@@ -894,6 +912,7 @@ export function PainelVendedor() {
     const matriculadosBaseRows = matriculadosRows.filter(
       (row) =>
         isCalouro(row) &&
+        !isExcludedFromMeta(row.aluno) &&
         !isMedicina(row) &&
         !isReadmissaoTrancamento(row.tipo_de_ingresso),
     )
@@ -1148,6 +1167,7 @@ export function PainelVendedor() {
       (row) =>
         row.vendedor === selectedSeller &&
         isCalouro(row) &&
+        !isExcludedFromMeta(row.aluno) &&
         !isMedicina(row) &&
         !isReadmissaoTrancamento(row.tipo_de_ingresso),
     )
@@ -1157,6 +1177,7 @@ export function PainelVendedor() {
     return matriculadosRows.filter(
       (row) =>
         isCalouro(row) &&
+        !isExcludedFromMeta(row.aluno) &&
         !isMedicina(row) &&
         !isReadmissaoTrancamento(row.tipo_de_ingresso) &&
         isProuni(row),

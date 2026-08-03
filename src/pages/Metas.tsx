@@ -79,6 +79,24 @@ function normalizeString(value?: string | null) {
     .toUpperCase()
 }
 
+const excludedMetaStudentNames = new Set([
+  'JONATHAN MENDES DE PAIVA',
+  'ANA KAROLINA DA SILVA MORAES',
+  'PEDRO ARTHUR GOMES SILVA',
+])
+
+const forcedCalouroStudentNames = new Set([
+  'JOAO VITOR RIBEIRO SOUSA DA MOTA',
+])
+
+function isExcludedFromMeta(row: Pick<MatriculadoMetaRow, 'aluno'>) {
+  return excludedMetaStudentNames.has(normalizeString(row.aluno))
+}
+
+function isForcedCalouro(row: Pick<MatriculadoMetaRow, 'aluno'>) {
+  return forcedCalouroStudentNames.has(normalizeString(row.aluno))
+}
+
 function normalizeSellerValue(value?: string | null): Seller | null {
   const normalized = normalizeString(value)
 
@@ -161,7 +179,7 @@ function getCurrentSaoPauloMonthKey(): MonthKey {
 }
 
 function isCalouro(row: MatriculadoMetaRow) {
-  return normalizeString(row.tipo_aluno) === 'CALOURO'
+  return isForcedCalouro(row) || normalizeString(row.tipo_aluno) === 'CALOURO'
 }
 
 function isProuni(row: MatriculadoMetaRow) {
@@ -358,6 +376,7 @@ export function Metas() {
   const monthRows = useMemo(() => {
     return rows
       .filter((row) => isCalouro(row))
+      .filter((row) => !isExcludedFromMeta(row))
       .filter((row) => !isMedicina(row))
       .filter((row) => !isReadmissaoTrancamento(row))
       .filter((row) => {
@@ -370,6 +389,7 @@ export function Metas() {
     () =>
       rows
         .filter((row) => isCalouro(row))
+        .filter((row) => !isExcludedFromMeta(row))
         .filter((row) => !isMedicina(row))
         .filter((row) => !isReadmissaoTrancamento(row)),
     [rows],
