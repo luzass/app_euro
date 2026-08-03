@@ -474,10 +474,14 @@ function isProuni(row: MatriculadoRow) {
   return normalizeString(row.tipo_de_ingresso).includes('PROUNI')
 }
 
-function isReadmissaoTrancamento(value?: string | null) {
+function isExcludedIngressoFromMeta(value?: string | null) {
   const normalized = normalizeString(value)
 
-  return normalized.includes('READMISSAO') && normalized.includes('TRANCAMENTO')
+  const isReadmissaoTrancamento =
+    normalized.includes('READMISSAO') && normalized.includes('TRANCAMENTO')
+  const isFies = normalized === 'VAGAS NOVAS - ENEM - FIES'
+
+  return isReadmissaoTrancamento || isFies
 }
 
 function uniqueCountSummary(values: string[]) {
@@ -914,7 +918,7 @@ export function PainelVendedor() {
         isCalouro(row) &&
         !isExcludedFromMeta(row.aluno) &&
         !isMedicina(row) &&
-        !isReadmissaoTrancamento(row.tipo_de_ingresso),
+        !isExcludedIngressoFromMeta(row.tipo_de_ingresso),
     )
     const matriculadosKeyDates = new Map<string, string[]>()
     matriculadosBaseRows.forEach((row) => {
@@ -1169,7 +1173,7 @@ export function PainelVendedor() {
         isCalouro(row) &&
         !isExcludedFromMeta(row.aluno) &&
         !isMedicina(row) &&
-        !isReadmissaoTrancamento(row.tipo_de_ingresso),
+        !isExcludedIngressoFromMeta(row.tipo_de_ingresso),
     )
   }, [matriculadosRows, selectedSeller])
 
@@ -1179,7 +1183,7 @@ export function PainelVendedor() {
         isCalouro(row) &&
         !isExcludedFromMeta(row.aluno) &&
         !isMedicina(row) &&
-        !isReadmissaoTrancamento(row.tipo_de_ingresso) &&
+        !isExcludedIngressoFromMeta(row.tipo_de_ingresso) &&
         isProuni(row),
     )
   }, [matriculadosRows])
@@ -1244,7 +1248,7 @@ export function PainelVendedor() {
       Matriculado: sellerOpportunities.filter(
         (row) =>
           row.temperatura === 'Matriculado' &&
-          !isReadmissaoTrancamento(row.forma_ingresso),
+          !isExcludedIngressoFromMeta(row.forma_ingresso),
       ),
     }
   }, [sellerOpportunities])

@@ -186,10 +186,14 @@ function isProuni(row: MatriculadoMetaRow) {
   return normalizeString(row.tipo_de_ingresso).includes('PROUNI')
 }
 
-function isReadmissaoTrancamento(row: MatriculadoMetaRow) {
+function isExcludedIngressoFromMeta(row: Pick<MatriculadoMetaRow, 'tipo_de_ingresso'>) {
   const normalized = normalizeString(row.tipo_de_ingresso)
 
-  return normalized.includes('READMISSAO') && normalized.includes('TRANCAMENTO')
+  const isReadmissaoTrancamento =
+    normalized.includes('READMISSAO') && normalized.includes('TRANCAMENTO')
+  const isFies = normalized === 'VAGAS NOVAS - ENEM - FIES'
+
+  return isReadmissaoTrancamento || isFies
 }
 
 function isMedicina(row: MatriculadoMetaRow) {
@@ -378,7 +382,7 @@ export function Metas() {
       .filter((row) => isCalouro(row))
       .filter((row) => !isExcludedFromMeta(row))
       .filter((row) => !isMedicina(row))
-      .filter((row) => !isReadmissaoTrancamento(row))
+      .filter((row) => !isExcludedIngressoFromMeta(row))
       .filter((row) => {
         const dateKey = toDateKey(row.data_baixa_do_pagamento)
         return dateKey.startsWith(`2026-${selectedMonth}`)
@@ -391,7 +395,7 @@ export function Metas() {
         .filter((row) => isCalouro(row))
         .filter((row) => !isExcludedFromMeta(row))
         .filter((row) => !isMedicina(row))
-        .filter((row) => !isReadmissaoTrancamento(row)),
+        .filter((row) => !isExcludedIngressoFromMeta(row)),
     [rows],
   )
 
