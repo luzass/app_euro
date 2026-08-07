@@ -647,6 +647,7 @@ export function VisaoCrm() {
   const [cardTab, setCardTab] = useState<CardTab>('seller')
   const [savingLeadId, setSavingLeadId] = useState<number | string | null>(null)
   const [observationDrafts, setObservationDrafts] = useState<Record<string, string>>({})
+  const [sellerDrafts, setSellerDrafts] = useState<Record<string, Seller>>({})
 
   useEffect(() => {
     if (resolvedProfileSeller && !canChooseSeller) {
@@ -684,6 +685,17 @@ export function VisaoCrm() {
     setObservationDrafts(
       preparedRows.reduce<Record<string, string>>((accumulator, row) => {
         accumulator[String(row.id)] = row.observation === 'Sem observação' ? '' : row.observation
+        return accumulator
+      }, {}),
+    )
+
+    setSellerDrafts(
+      preparedRows.reduce<Record<string, Seller>>((accumulator, row) => {
+        if (!row.seller) {
+          accumulator[String(row.id)] =
+            resolvedProfileSeller ??
+            (selectedSeller !== 'Todos' ? selectedSeller : sellers[0])
+        }
         return accumulator
       }, {}),
     )
@@ -865,13 +877,15 @@ export function VisaoCrm() {
     setSavingLeadId(null)
   }
 
-  const handleAssignLeadToSeller = async (row: LeadPrepared) => {
+  const handleAssignLeadToSeller = async (row: LeadPrepared, sellerOverride?: Seller) => {
     if (!supabase) {
       return
     }
 
     const sellerToAssign =
-      selectedSeller !== 'Todos' ? selectedSeller : resolvedProfileSeller
+      sellerOverride ??
+      sellerDrafts[String(row.id)] ??
+      (selectedSeller !== 'Todos' ? selectedSeller : resolvedProfileSeller)
 
     if (!sellerToAssign) {
       setNotice('Escolha um vendedor antes de assumir este lead.')
@@ -1153,8 +1167,11 @@ export function VisaoCrm() {
               {activeCards.map((row) => {
                 const isSaving = savingLeadId === row.id
                 const draftObservation = observationDrafts[String(row.id)] ?? ''
-                const showAssignButton =
-                  row.seller === null && (selectedSeller !== 'Todos' || resolvedProfileSeller)
+                const draftSeller =
+                  sellerDrafts[String(row.id)] ??
+                  resolvedProfileSeller ??
+                  (selectedSeller !== 'Todos' ? selectedSeller : sellers[0])
+                const showAssignControls = row.seller === null && cardTab === 'unassigned'
 
                 return (
                   <article
@@ -1201,16 +1218,46 @@ export function VisaoCrm() {
                           {row.seller ?? 'Sem vendedor'}
                         </span>
 
-                        {showAssignButton ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleAssignLeadToSeller(row)}
-                            disabled={isSaving}
-                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <UserPlus className="h-3.5 w-3.5" />
-                            Assumir lead
-                          </button>
+                        {showAssignControls ? (
+                          canChooseSeller ? (
+                            <>
+                              <select
+                                value={draftSeller}
+                                onChange={(event) =>
+                                  setSellerDrafts((currentValue) => ({
+                                    ...currentValue,
+                                    [String(row.id)]: event.target.value as Seller,
+                                  }))
+                                }
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 outline-none transition focus:border-sky-400"
+                              >
+                                {sellers.map((seller) => (
+                                  <option key={seller} value={seller}>
+                                    {seller}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => void handleAssignLeadToSeller(row, draftSeller)}
+                                disabled={isSaving}
+                                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                                Marcar vendedor
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleAssignLeadToSeller(row, draftSeller)}
+                              disabled={isSaving}
+                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <UserPlus className="h-3.5 w-3.5" />
+                              Assumir lead
+                            </button>
+                          )
                         ) : null}
                       </div>
                     </div>
