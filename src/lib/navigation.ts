@@ -46,7 +46,7 @@ export const navItems: NavItem[] = [
     title: 'Visão CRM',
     path: '/app/visao-crm',
     icon: Building2,
-    allowedRoles: ['admin', 'reitoria', 'captacao_gerente'],
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
     title: 'Criar Usuário',
