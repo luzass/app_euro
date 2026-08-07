@@ -40,7 +40,7 @@ export const navItems: NavItem[] = [
     title: 'Metas',
     path: '/app/metas',
     icon: Target,
-    allowedRoles: ['admin', 'reitoria', 'captacao_gerente'],
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
     title: 'Visão CRM',

@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { ClipboardList, Eraser, RefreshCw, Users } from 'lucide-react'
+import { Eraser, RefreshCw, Save, UserPlus, Users } from 'lucide-react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import {
   Bar,
   BarChart,
@@ -14,20 +14,20 @@ import {
 import { EmptyState } from '../components/UI/EmptyState'
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
+import { useProfile } from '../hooks/useProfile'
 import { formatDateBR, formatNumberBR } from '../lib/formatters'
+import { normalizeSellerValue, resolveSellerFromProfile, sellers, type Seller } from '../lib/sellers'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
-type Seller = 'Agestone' | 'William' | 'Gustavo' | 'Jordana'
+const MIN_LEAD_DATE = '2026-08-06'
+const SUPABASE_BATCH_SIZE = 1000
+
+type SellerScope = Seller | 'Todos'
 
 type FilterState = {
   startDate: string
   endDate: string
-  course: string
-  campus: string
-  process: string
-  status: string
-  candidateName: string
 }
 
 type CountDatum = {
@@ -37,116 +37,53 @@ type CountDatum = {
 }
 
 type ChartFilterKey =
-  | 'campus'
-  | 'process'
   | 'course'
-  | 'status'
-  | 'activity'
-  | 'objection'
-  | 'lossObservation'
+  | 'ingresso'
+  | 'campus'
+  | 'matriculadoCourse'
+  | 'matriculadoIngresso'
+  | 'matriculadoCampus'
+  | 'observation'
 
 type ChartSelections = Record<ChartFilterKey, string[]>
 
-type ActivityCrmPrepared = {
-  id: number
-  schedulingCode: string
-  activity: string
-  description: string
-  courseLabel: string
-  processLabel: string
-  email: string
-  personCode: string
-  contactName: string
-  cpf: string
+type GenericRow = Record<string, unknown>
+
+type LeadPrepared = {
+  id: number | string
+  raw: GenericRow
   seller: Seller | null
-  campusLabel: string
-  dateCreatedRaw: string
-  dateCreatedKey: string
-}
-
-type RegistroCrmPrepared = {
-  id: number
-  identifier: string
-  externalCode: string
-  personCode: string
-  contactName: string
-  seller: Seller | null
-  email: string
-  cpf: string
-  courseLabel: string
-  processLabel: string
-  campusLabel: string
-  statusLabel: string
-  objectionLabel: string
-  lossObservationLabel: string
-  currentSummary: string
-  dateCreatedRaw: string
-  dateCreatedKey: string
-}
-
-type CandidateSummary = {
-  key: string
-  personCode: string
-  contactName: string
-  cpf: string
-  email: string
-  courseLabel: string
-  campusLabel: string
-  processLabel: string
-  statusLabel: string
-  objectionLabel: string
-  lossObservationLabel: string
-  currentSummary: string
-  activityCount: number
-  activities: string[]
-  descriptions: string[]
-  hasInscrito: boolean
-  hasMatriculado: boolean
-  hasRegistro: boolean
-  hasActivity: boolean
-  latestDateKey: string
-}
-
-type InscritoPrepared = {
-  cpf: string
+  sellerRaw: string
   name: string
-}
-
-type MatriculadoPrepared = {
   cpf: string
-  name: string
+  phone: string
+  course: string
+  ingresso: string
+  campus: string
+  observation: string
+  createdAtKey: string
+  createdAtLabel: string
+  inscricaoDate: string
+  matriculaDate: string
+  matriculadoIngresso: string
+  matriculadoCampus: string
+  hasInscricao: boolean
+  hasMatricula: boolean
 }
-
-const sellers: Seller[] = ['Agestone', 'William', 'Gustavo', 'Jordana']
 
 const initialFilters: FilterState = {
-  startDate: '',
+  startDate: MIN_LEAD_DATE,
   endDate: '',
-  course: '',
-  campus: '',
-  process: '',
-  status: '',
-  candidateName: '',
 }
 
 const initialChartSelections: ChartSelections = {
-  campus: [],
-  process: [],
   course: [],
-  status: [],
-  activity: [],
-  objection: [],
-  lossObservation: [],
-}
-
-function normalizeString(value?: string | null) {
-  return decodeMojibake(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Z0-9@.\s/-]+/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase()
+  ingresso: [],
+  campus: [],
+  matriculadoCourse: [],
+  matriculadoIngresso: [],
+  matriculadoCampus: [],
+  observation: [],
 }
 
 function decodeMojibake(value?: string | null) {
@@ -169,53 +106,19 @@ function decodeMojibake(value?: string | null) {
   }
 }
 
-function titleize(value?: string | null, fallback = 'Não informado') {
-  const text = decodeMojibake(value)
-
-  if (!text) {
-    return fallback
-  }
-
-  return text
-    .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
 function cleanText(value?: string | null) {
   const normalized = decodeMojibake(value).replace(/\s+/g, ' ').trim()
   return /^-\s*-\s*-$/.test(normalized) ? '' : normalized
 }
 
-function normalizeCpf(value?: string | null) {
-  return String(value ?? '').replace(/\D/g, '')
-}
-
-function normalizeEmail(value?: string | null) {
-  return cleanText(value).toLowerCase()
-}
-
-function toDateKey(value?: string | null) {
-  const text = cleanText(value)
-
-  if (!text) {
-    return ''
-  }
-
-  const brDateTime = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/)
-  if (brDateTime) {
-    const [, day, month, year] = brDateTime
-    return `${year}-${month}-${day}`
-  }
-
-  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (isoDate) {
-    return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`
-  }
-
-  return ''
+function normalizeString(value?: string | null) {
+  return cleanText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9@.\s/-]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
 }
 
 function canonicalizeFieldKey(value?: string | null) {
@@ -229,17 +132,17 @@ function canonicalizeFieldKey(value?: string | null) {
 function readField(row: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {
     const value = row[key]
+
     if (value !== undefined && value !== null) {
       const textValue = cleanText(String(value))
+
       if (textValue) {
         return textValue
       }
     }
   }
 
-  const normalizedTargets = new Set(
-    keys.map((key) => canonicalizeFieldKey(key)).filter(Boolean),
-  )
+  const normalizedTargets = new Set(keys.map((key) => canonicalizeFieldKey(key)).filter(Boolean))
 
   for (const [currentKey, currentValue] of Object.entries(row)) {
     if (
@@ -248,6 +151,7 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
       normalizedTargets.has(canonicalizeFieldKey(currentKey))
     ) {
       const textValue = cleanText(String(currentValue))
+
       if (textValue) {
         return textValue
       }
@@ -257,90 +161,103 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
   return ''
 }
 
-function normalizeSeller(value?: string | null): Seller | null {
-  const normalized = normalizeString(value)
+function titleize(value?: string | null, fallback = 'Não informado') {
+  const text = cleanText(value)
 
-  if (!normalized) {
-    return null
+  if (!text) {
+    return fallback
   }
 
-  if (
-    normalized.includes('TONY') ||
-    normalized.includes('AGESTONE') ||
-    normalized.includes('FRANCISCO ALVES DA SILVA')
-  ) {
-    return 'Agestone'
-  }
-
-  if (
-    normalized.includes('WILLIAM') ||
-    normalized.includes('WILLAM') ||
-    normalized.includes('SIDOU')
-  ) {
-    return 'William'
-  }
-
-  if (normalized.includes('GUSTAVO')) {
-    return 'Gustavo'
-  }
-
-  if (normalized.includes('JORDANA')) {
-    return 'Jordana'
-  }
-
-  return null
+  return text
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
-function normalizeCampus(...sources: Array<string | null | undefined>) {
-  const combined = normalizeString(sources.map((value) => cleanText(value)).join(' '))
+function normalizeCpf(value?: string | null) {
+  return String(value ?? '').replace(/\D/g, '')
+}
 
-  if (combined.includes('AGUAS CLARAS') || combined.includes('GUAS CLARAS')) {
+function toDateKey(value?: string | null) {
+  const text = cleanText(value)
+
+  if (!text) {
+    return ''
+  }
+
+  const brDateTime = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+\d{2}:\d{2}(?::\d{2})?)?$/)
+  if (brDateTime) {
+    const [, day, month, year] = brDateTime
+    return `${year}-${month}-${day}`
+  }
+
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoDate) {
+    return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`
+  }
+
+  const parsed = new Date(text)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return ''
+  }
+
+  const month = `${parsed.getMonth() + 1}`.padStart(2, '0')
+  const day = `${parsed.getDate()}`.padStart(2, '0')
+
+  return `${parsed.getFullYear()}-${month}-${day}`
+}
+
+function normalizeCampus(value?: string | null) {
+  const normalized = normalizeString(value)
+
+  if (normalized.includes('AGUAS CLARAS') || normalized.includes('GUAS CLARAS')) {
     return 'Águas Claras'
   }
 
-  if (combined.includes('ASA SUL')) {
+  if (normalized.includes('ASA SUL')) {
     return 'Asa Sul'
   }
 
-  return 'Não informado'
+  return titleize(value)
 }
 
-function normalizeCourseLabel(value?: string | null) {
-  const decoded = cleanText(value)
+function normalizeCourse(value?: string | null) {
+  const text = cleanText(value)
 
-  if (!decoded) {
+  if (!text) {
     return 'Não informado'
   }
 
-  const firstChunk = decoded
-    .split(' - ')
-    .map((part) => part.trim())
-    .find(Boolean)
-
-  return titleize(firstChunk ?? decoded)
+  return titleize(text)
 }
 
-function normalizeProcessLabel(value?: string | null) {
-  const decoded = cleanText(value)
-  const normalized = normalizeString(decoded)
+function normalizeLeadIngresso(value?: string | null) {
+  const normalized = normalizeString(value)
 
   if (!normalized) {
     return 'Não informado'
-  }
-
-  if (
-    ((normalized.includes('GRADUACAO') || normalized.includes('GRADUA') || normalized.includes('2A')) &&
-      normalized.includes('2')) ||
-    normalized.includes('SEGUNDA GRADUACAO')
-  ) {
-    return '2ª Graduação'
   }
 
   if (normalized.includes('PROUNI')) {
     return 'PROUNI'
   }
 
-  if (normalized.includes('TRANSFERENCIA EXTERNA') || normalized.includes('TRANSFERENCIA')) {
+  if (normalized.includes('VESTIBULAR')) {
+    return 'Vestibular'
+  }
+
+  if (normalized.includes('ENEM')) {
+    return 'ENEM'
+  }
+
+  if (normalized.includes('GRADUADO') || normalized.includes('VAGA DE GRADUADO')) {
+    return 'Graduado'
+  }
+
+  if (normalized.includes('TRANSFER')) {
     return 'Transf. Externa'
   }
 
@@ -348,379 +265,359 @@ function normalizeProcessLabel(value?: string | null) {
     return 'Reingresso'
   }
 
-  if (normalized.includes('ENEM')) {
-    return 'ENEM'
+  if (normalized.includes('READMISSAO')) {
+    return 'Readmissão'
   }
 
-  if (normalized.includes('VESTIBULAR')) {
-    return 'Vestibular'
+  if (normalized.includes('FIES')) {
+    return 'FIES'
+  }
+
+  if (normalized.includes('EAD')) {
+    return 'Ead'
   }
 
   if (normalized.includes('SEMIPRESENCIAL')) {
     return 'Semipresencial'
   }
 
-  if (normalized.includes('EAD')) {
-    return 'EAD'
-  }
-
-  return titleize(decoded)
+  return titleize(value)
 }
 
-function normalizeStatusLabel(value?: string | null) {
-  const decoded = cleanText(value)
-  const normalized = normalizeString(decoded)
-
-  if (!normalized) {
-    return 'Não informado'
-  }
-
-  if (normalized.includes('PERD')) {
-    return 'Perdido'
-  }
-
-  if (normalized.includes('GANH')) {
-    return 'Ganho'
-  }
-
-  return 'Em andamento'
+function normalizeObservation(value?: string | null) {
+  return cleanText(value) || 'Sem observação'
 }
 
-function normalizeObjectionLabel(value?: string | null) {
-  return titleize(value, 'Não informada')
-}
+function countByLabel<T>(rows: T[], getLabel: (row: T) => string, limit = 12) {
+  const counts = new Map<string, number>()
 
-function normalizeLossObservationLabel(value?: string | null) {
-  return cleanText(value) || 'Não informada'
-}
-
-function buildCountDataFromValues(values: string[]) {
-  const map = new Map<string, CountDatum>()
-
-  values.forEach((labelValue) => {
-    const label = labelValue || 'Não informado'
-    const current = map.get(label) ?? { key: label, label, value: 0 }
-    current.value += 1
-    map.set(label, current)
+  rows.forEach((row) => {
+    const label = getLabel(row) || 'Não informado'
+    counts.set(label, (counts.get(label) ?? 0) + 1)
   })
 
-  return Array.from(map.values())
-    .sort(
-      (currentItem, nextItem) =>
-        nextItem.value - currentItem.value || currentItem.label.localeCompare(nextItem.label),
-    )
-    .slice(0, 10)
+  return Array.from(counts.entries())
+    .map(([label, value]) => ({
+      key: label,
+      label,
+      value,
+    }))
+    .sort((currentValue, nextValue) => nextValue.value - currentValue.value)
+    .slice(0, limit)
 }
 
-function buildCandidateKeys(candidate: {
-  personCode?: string
-  cpf?: string
-  email?: string
-  contactName?: string
-}) {
-  const keys = new Set<string>()
-
-  if (candidate.personCode) {
-    keys.add(`code:${normalizeString(candidate.personCode)}`)
+function isMultiSelectEvent(event: unknown) {
+  if (!event || typeof event !== 'object') {
+    return false
   }
 
-  if (candidate.cpf) {
-    keys.add(`cpf:${normalizeCpf(candidate.cpf)}`)
-  }
-
-  if (candidate.email) {
-    keys.add(`email:${normalizeEmail(candidate.email)}`)
-  }
-
-  if (candidate.contactName) {
-    keys.add(`name:${normalizeString(candidate.contactName)}`)
-  }
-
-  return Array.from(keys).filter((value) => value && !value.endsWith(':'))
-}
-
-function buildPrimaryCandidateKey(candidate: {
-  personCode?: string
-  cpf?: string
-  email?: string
-  contactName?: string
-}) {
-  return (
-    buildCandidateKeys(candidate)[0] ||
-    `fallback:${normalizeString(candidate.contactName || candidate.email || candidate.cpf || String(Math.random()))}`
+  const row = event as { ctrlKey?: boolean; metaKey?: boolean; nativeEvent?: { ctrlKey?: boolean; metaKey?: boolean } }
+  return Boolean(
+    row.ctrlKey ||
+      row.metaKey ||
+      row.nativeEvent?.ctrlKey ||
+      row.nativeEvent?.metaKey,
   )
 }
 
-function wrapAxisLabel(label: string, maxLineLength = 18, maxLines = 3) {
-  if (!label) {
-    return ['']
-  }
-
-  const words = label.split(/\s+/).filter(Boolean)
-  const lines: string[] = []
-  let currentLine = ''
-
-  words.forEach((word) => {
-    const nextLine = currentLine ? `${currentLine} ${word}` : word
-
-    if (nextLine.length <= maxLineLength) {
-      currentLine = nextLine
-      return
-    }
-
-    if (currentLine) {
-      lines.push(currentLine)
-    }
-
-    currentLine = word
-  })
-
-  if (currentLine) {
-    lines.push(currentLine)
-  }
-
-  if (lines.length <= maxLines) {
-    return lines
-  }
-
-  const visibleLines = lines.slice(0, maxLines)
-  const lastLine = visibleLines[maxLines - 1] ?? ''
-  visibleLines[maxLines - 1] =
-    lastLine.length > maxLineLength - 3
-      ? `${lastLine.slice(0, Math.max(maxLineLength - 3, 1)).trim()}...`
-      : `${lastLine}...`
-
-  return visibleLines
-}
-
-function WrappedYAxisTick({
-  x = 0,
-  y = 0,
-  payload,
-}: {
-  x?: number
-  y?: number
-  payload?: { value?: string }
+function renderSmartBarLabel(props: {
+  x?: number | string
+  y?: number | string
+  width?: number | string
+  height?: number | string
+  value?: number | string
 }) {
-  const lines = wrapAxisLabel(payload?.value ?? '')
+  const x = Number(props.x ?? 0)
+  const y = Number(props.y ?? 0)
+  const width = Number(props.width ?? 0)
+  const height = Number(props.height ?? 0)
+  const numericValue = Number(props.value ?? 0)
+
+  if (!numericValue || height <= 0) {
+    return null
+  }
+
+  const formattedValue = formatNumberBR(numericValue)
+  const estimatedTextWidth = formattedValue.length * 8.5
+  const canFitInside = width >= estimatedTextWidth + 18
+  const textX = canFitInside ? x + width - 8 : x + width + 8
 
   return (
-    <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={4} textAnchor="end" fill="#334155" fontSize={11}>
-        {lines.map((line, index) => (
-          <tspan key={`${line}-${index}`} x={0} dy={index === 0 ? 0 : 13}>
-            {line}
-          </tspan>
-        ))}
-      </text>
-    </g>
+    <text
+      x={textX}
+      y={y + height / 2}
+      dy={4}
+      textAnchor={canFitInside ? 'end' : 'start'}
+      fill={canFitInside ? '#ffffff' : '#0f172a'}
+      fontSize={12}
+      fontWeight={700}
+    >
+      {formattedValue}
+    </text>
   )
 }
 
-function matchesFilterDate(dateKey: string, filters: FilterState) {
-  if (filters.startDate && dateKey < filters.startDate) {
-    return false
-  }
-
-  if (filters.endDate && dateKey > filters.endDate) {
-    return false
-  }
-
-  return true
-}
-
-function applyCandidateFilters(candidate: CandidateSummary, filters: FilterState) {
-  if (!matchesFilterDate(candidate.latestDateKey, filters)) {
-    return false
-  }
-
-  if (filters.course && candidate.courseLabel !== filters.course) {
-    return false
-  }
-
-  if (filters.campus && candidate.campusLabel !== filters.campus) {
-    return false
-  }
-
-  if (filters.process && candidate.processLabel !== filters.process) {
-    return false
-  }
-
-  if (filters.status && candidate.statusLabel !== filters.status) {
-    return false
-  }
-
-  if (
-    filters.candidateName &&
-    !normalizeString(candidate.contactName).includes(normalizeString(filters.candidateName))
-  ) {
-    return false
-  }
-
-  return true
-}
-
-function hasActiveChartSelections(selections: ChartSelections) {
-  return Object.values(selections).some((items) => items.length > 0)
-}
-
-function applyChartSelections(candidate: CandidateSummary, selections: ChartSelections) {
-  if (selections.campus.length > 0 && !selections.campus.includes(candidate.campusLabel)) {
-    return false
-  }
-
-  if (selections.process.length > 0 && !selections.process.includes(candidate.processLabel)) {
-    return false
-  }
-
-  if (selections.course.length > 0 && !selections.course.includes(candidate.courseLabel)) {
-    return false
-  }
-
-  if (selections.status.length > 0 && !selections.status.includes(candidate.statusLabel)) {
-    return false
-  }
-
-  if (
-    selections.objection.length > 0 &&
-    !selections.objection.includes(candidate.objectionLabel)
-  ) {
-    return false
-  }
-
-  if (
-    selections.lossObservation.length > 0 &&
-    !selections.lossObservation.includes(candidate.lossObservationLabel)
-  ) {
-    return false
-  }
-
-  if (
-    selections.activity.length > 0 &&
-    !selections.activity.some((activity) => candidate.activities.includes(activity))
-  ) {
-    return false
-  }
-
-  return true
-}
-
-async function fetchAllRows(tableName: string, orderColumn: string, selectClause = '*') {
+async function fetchAllRows(tableName: string, selectClause = '*') {
   if (!supabase) {
-    return {
-      data: null as Record<string, unknown>[] | null,
-      error: new Error('Supabase indisponÃ­vel.'),
-    }
+    return { data: [] as GenericRow[], error: new Error('Supabase não configurado.') }
   }
 
-  const pageSize = 1000
-  const allRows: Record<string, unknown>[] = []
-  let from = 0
+  const allRows: GenericRow[] = []
+  let start = 0
 
   while (true) {
-    const tableClient = supabase.from(tableName as never) as any
-    const { data, error } = await tableClient
+    const { data, error } = await supabase
+      .from(tableName)
       .select(selectClause)
-      .order(orderColumn, { ascending: false })
-      .range(from, from + pageSize - 1)
+      .range(start, start + SUPABASE_BATCH_SIZE - 1)
 
     if (error) {
-      return {
-        data: null as Record<string, unknown>[] | null,
-        error,
-      }
+      return { data: [] as GenericRow[], error }
     }
 
-    const batch = (data as Record<string, unknown>[] | null) ?? []
+    const batch = ((data ?? []) as unknown) as GenericRow[]
     allRows.push(...batch)
 
-    if (batch.length < pageSize) {
+    if (batch.length < SUPABASE_BATCH_SIZE) {
       break
     }
 
-    from += pageSize
+    start += SUPABASE_BATCH_SIZE
   }
 
+  return { data: allRows, error: null }
+}
+
+function buildLeadRow(row: GenericRow): LeadPrepared {
+  const id = (row.id as number | string | undefined) ?? crypto.randomUUID()
+  const sellerRaw = readField(row, 'vendedor_crm', 'Vendedor CRM')
+  const createdAtLabel = readField(row, 'created_at', 'Data da criação', 'Data de criação')
+  const inscricaoDate = readField(row, 'data_inscricao', 'Data da Inscrição')
+  const matriculaDate = readField(row, 'data_matricula', 'Data da Matricula')
+
   return {
-    data: allRows,
-    error: null,
+    id,
+    raw: row,
+    seller: normalizeSellerValue(sellerRaw),
+    sellerRaw,
+    name: titleize(
+      readField(row, 'nome', 'Nome', 'name', 'Name', 'nome_completo', 'Nome completo'),
+    ),
+    cpf: normalizeCpf(readField(row, 'cpf', 'CPF')),
+    phone: cleanText(
+      readField(
+        row,
+        'telefone',
+        'Telefone',
+        'phone',
+        'Phone',
+        'celular',
+        'Celular',
+        'whatsapp',
+        'WhatsApp',
+      ),
+    ),
+    course: normalizeCourse(
+      readField(
+        row,
+        'curso',
+        'Curso',
+        'curso_interesse',
+        'Curso de interesse',
+        'nome_curso',
+      ),
+    ),
+    ingresso: normalizeLeadIngresso(
+      readField(
+        row,
+        'forma_de_ingresso',
+        'forma_ingresso',
+        'Forma de ingresso',
+        'Forma de Ingresso',
+        'forma_ingresso_inscricao',
+        'Forma de Ingresso Inscrição',
+      ),
+    ),
+    campus: normalizeCampus(
+      readField(row, 'campus', 'Campus', 'unidade', 'Unidade', 'local', 'Local'),
+    ),
+    observation: normalizeObservation(
+      readField(row, 'observacao_captacao', 'Observação captação'),
+    ),
+    createdAtKey: toDateKey(createdAtLabel),
+    createdAtLabel,
+    inscricaoDate,
+    matriculaDate,
+    matriculadoIngresso: normalizeLeadIngresso(
+      readField(row, 'forma_ingresso_matricula', 'Forma de Ingresso Matricula'),
+    ),
+    matriculadoCampus: normalizeCampus(
+      readField(row, 'filial', 'Filial', 'campus', 'Campus', 'unidade', 'Unidade'),
+    ),
+    hasInscricao: Boolean(inscricaoDate),
+    hasMatricula: Boolean(matriculaDate),
   }
+}
+
+function applyChartSelections(rows: LeadPrepared[], selections: ChartSelections) {
+  return rows.filter((row) => {
+    const values: Record<ChartFilterKey, string> = {
+      course: row.course,
+      ingresso: row.ingresso,
+      campus: row.campus,
+      matriculadoCourse: row.hasMatricula ? row.course : '__SEM_MATRICULA__',
+      matriculadoIngresso: row.hasMatricula ? row.matriculadoIngresso : '__SEM_MATRICULA__',
+      matriculadoCampus: row.hasMatricula ? row.matriculadoCampus : '__SEM_MATRICULA__',
+      observation: row.observation,
+    }
+
+    return (Object.keys(selections) as ChartFilterKey[]).every((key) => {
+      const selectedValues = selections[key]
+
+      if (selectedValues.length === 0) {
+        return true
+      }
+
+      return selectedValues.includes(values[key])
+    })
+  })
+}
+
+function DataFilters({
+  filters,
+  setFilters,
+}: {
+  filters: FilterState
+  setFilters: Dispatch<SetStateAction<FilterState>>
+}) {
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="max-w-3xl">
+          <h3 className="text-lg font-semibold text-slate-950">Filtro por data</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Esta visão considera apenas os leads a partir de{' '}
+            <span className="font-medium text-slate-700">{formatDateBR(MIN_LEAD_DATE)}</span>.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setFilters(initialFilters)}
+          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+        >
+          <Eraser className="h-4 w-4" />
+          Limpar datas
+        </button>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-slate-700">Data inicial</label>
+          <input
+            type="date"
+            min={MIN_LEAD_DATE}
+            value={filters.startDate}
+            onChange={(event) =>
+              setFilters((currentValue) => ({
+                ...currentValue,
+                startDate: event.target.value < MIN_LEAD_DATE ? MIN_LEAD_DATE : event.target.value,
+              }))
+            }
+            className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none transition focus:border-sky-400"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-slate-700">Data final</label>
+          <input
+            type="date"
+            min={MIN_LEAD_DATE}
+            value={filters.endDate}
+            onChange={(event) =>
+              setFilters((currentValue) => ({
+                ...currentValue,
+                endDate: event.target.value,
+              }))
+            }
+            className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none transition focus:border-sky-400"
+          />
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function ChartCard({
   title,
   description,
-  data,
   chartKey,
-  selectedKeys,
+  data,
+  selectedValues,
   onSelect,
 }: {
   title: string
   description: string
-  data: CountDatum[]
   chartKey: ChartFilterKey
-  selectedKeys: string[]
-  onSelect: (chartKey: ChartFilterKey, label: string, accumulate: boolean) => void
+  data: CountDatum[]
+  selectedValues: string[]
+  onSelect: (chartKey: ChartFilterKey, label: string, append: boolean) => void
 }) {
-  const chartHeight = Math.max(320, data.length * 58)
-  const viewportHeight = 420
+  const chartHeight = Math.max(280, data.length * 46)
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <h3 className="text-xl font-semibold text-slate-950">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-5">
+        <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+      </div>
 
       {data.length === 0 ? (
-        <div className="mt-6 rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-          Sem dados para este grÃ¡fico no recorte atual.
+        <div className="flex h-[280px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+          Nenhum dado encontrado para este recorte.
         </div>
       ) : (
-        <div className="mt-6 overflow-y-auto pr-2" style={{ height: viewportHeight }}>
-          <div style={{ height: chartHeight }}>
+        <div className="max-h-[420px] overflow-y-auto pr-2">
+          <div style={{ height: chartHeight, minWidth: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data}
-                layout="vertical"
-                margin={{ top: 4, right: 20, left: 12, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                <XAxis type="number" tick={{ fill: '#64748b', fontSize: 12 }} />
-                <YAxis type="category" dataKey="label" width={156} tick={<WrappedYAxisTick />} />
+              <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" stroke="#64748b" allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={160}
+                  stroke="#64748b"
+                  tickLine={false}
+                  interval={0}
+                />
                 <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
                 <Bar
                   dataKey="value"
                   radius={[0, 12, 12, 0]}
-                  cursor="pointer"
-                  onClick={(entry: CountDatum, _index: number, event: MouseEvent | KeyboardEvent | any) =>
-                    onSelect(
-                      chartKey,
-                      entry?.label ?? '',
-                      Boolean(
-                        event?.ctrlKey ||
-                          event?.metaKey ||
-                          event?.nativeEvent?.ctrlKey ||
-                          event?.nativeEvent?.metaKey,
-                      ),
-                    )
-                  }
+                  onClick={(dataPoint, _index, event) => {
+                    const payload = dataPoint as { payload?: CountDatum }
+                    const label = payload.payload?.label
+
+                    if (!label) {
+                      return
+                    }
+
+                    onSelect(chartKey, label, isMultiSelectEvent(event))
+                  }}
                 >
                   {data.map((entry) => {
-                    const isActive = selectedKeys.includes(entry.label)
-                    const hasSelection = selectedKeys.length > 0
+                    const active = selectedValues.includes(entry.label)
 
                     return (
                       <Cell
-                        key={`${chartKey}-${entry.key}`}
-                        fill={isActive ? '#0f172a' : hasSelection ? '#7dd3fc' : '#0ea5e9'}
+                        key={`${chartKey}-${entry.label}`}
+                        cursor="pointer"
+                        fill={active ? '#020617' : '#0ea5e9'}
                       />
                     )
                   })}
-                  <LabelList
-                    dataKey="value"
-                    position="right"
-                    formatter={(value: number) => formatNumberBR(Number(value ?? 0))}
-                    className="fill-slate-700 text-xs font-semibold"
-                  />
+                  <LabelList dataKey="value" content={renderSmartBarLabel} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -731,286 +628,64 @@ function ChartCard({
   )
 }
 
-function FilterPanel({
-  title,
-  description,
-  filters,
-  setFilters,
-  courseOptions,
-  campusOptions,
-  processOptions,
-  statusOptions,
-}: {
-  title: string
-  description: string
-  filters: FilterState
-  setFilters: Dispatch<SetStateAction<FilterState>>
-  courseOptions: string[]
-  campusOptions: string[]
-  processOptions: string[]
-  statusOptions: string[]
-}) {
-  return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-xl font-semibold text-slate-950">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setFilters(initialFilters)}
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-        >
-          <Eraser className="h-4 w-4" />
-          Limpar filtros
-        </button>
-      </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <label className="space-y-2">
-          <span className="text-sm font-medium text-slate-700">Data inicial</span>
-          <input
-            type="date"
-            value={filters.startDate}
-            onChange={(event) =>
-              setFilters((currentValue) => ({ ...currentValue, startDate: event.target.value }))
-            }
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-medium text-slate-700">Data final</span>
-          <input
-            type="date"
-            value={filters.endDate}
-            onChange={(event) =>
-              setFilters((currentValue) => ({ ...currentValue, endDate: event.target.value }))
-            }
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-medium text-slate-700">Curso</span>
-          <select
-            value={filters.course}
-            onChange={(event) =>
-              setFilters((currentValue) => ({ ...currentValue, course: event.target.value }))
-            }
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          >
-            <option value="">Todos</option>
-            {courseOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-medium text-slate-700">Campus</span>
-          <select
-            value={filters.campus}
-            onChange={(event) =>
-              setFilters((currentValue) => ({ ...currentValue, campus: event.target.value }))
-            }
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          >
-            <option value="">Todos</option>
-            {campusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-medium text-slate-700">Processo seletivo</span>
-          <select
-            value={filters.process}
-            onChange={(event) =>
-              setFilters((currentValue) => ({ ...currentValue, process: event.target.value }))
-            }
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          >
-            <option value="">Todos</option>
-            {processOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-medium text-slate-700">Status</span>
-          <select
-            value={filters.status}
-            onChange={(event) =>
-              setFilters((currentValue) => ({ ...currentValue, status: event.target.value }))
-            }
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          >
-            <option value="">Todos</option>
-            {statusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2 xl:col-span-2">
-          <span className="text-sm font-medium text-slate-700">Nome do candidato</span>
-          <input
-            type="text"
-            value={filters.candidateName}
-            onChange={(event) =>
-              setFilters((currentValue) => ({
-                ...currentValue,
-                candidateName: event.target.value,
-              }))
-            }
-            placeholder="Digite para buscar"
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-500"
-          />
-        </label>
-      </div>
-    </section>
-  )
-}
-
 export function VisaoCrm() {
-  const [activeSeller, setActiveSeller] = useState<Seller>('Agestone')
-  const [crmRows, setCrmRows] = useState<ActivityCrmPrepared[]>([])
-  const [registroRows, setRegistroRows] = useState<RegistroCrmPrepared[]>([])
-  const [inscritosRows, setInscritosRows] = useState<InscritoPrepared[]>([])
-  const [matriculadosRows, setMatriculadosRows] = useState<MatriculadoPrepared[]>([])
-  const [filters, setFilters] = useState<FilterState>(initialFilters)
-  const [cardFilters, setCardFilters] = useState<FilterState>(initialFilters)
-  const [chartSelections, setChartSelections] = useState<ChartSelections>(initialChartSelections)
-  const [candidatePage, setCandidatePage] = useState(1)
+  const { profile } = useProfile()
+  const resolvedProfileSeller = resolveSellerFromProfile(profile)
+  const canChooseSeller =
+    profile?.role === 'admin' || profile?.role === 'reitoria' || profile?.role === 'captacao_gerente'
+
+  const [rows, setRows] = useState<LeadPrepared[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [filters, setFilters] = useState<FilterState>(initialFilters)
+  const [selectedSeller, setSelectedSeller] = useState<SellerScope>(
+    resolvedProfileSeller ?? 'Todos',
+  )
+  const [chartSelections, setChartSelections] = useState<ChartSelections>(initialChartSelections)
+  const [savingLeadId, setSavingLeadId] = useState<number | string | null>(null)
+  const [observationDrafts, setObservationDrafts] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (resolvedProfileSeller && !canChooseSeller) {
+      setSelectedSeller(resolvedProfileSeller)
+    }
+  }, [canChooseSeller, resolvedProfileSeller])
 
   const loadRows = async () => {
     if (!supabase) {
-      setError('Configure o Supabase antes de carregar a Visão CRM.')
+      setError('Configure o Supabase antes de abrir esta visão.')
       setLoading(false)
       return
     }
 
     setLoading(true)
     setError(null)
+    setNotice(null)
 
-    const [crmResponse, registroResponse, inscritosResponse, matriculadosResponse] =
-      await Promise.all([
-        fetchAllRows('atividade_crm', 'Data de criação'),
-        fetchAllRows('registro_crm', 'Data da criação'),
-        fetchAllRows('inscritos_20262', 'data_inscricao', 'cpf, candidato'),
-        fetchAllRows('matriculados_20262', 'data_baixa_do_pagamento', 'cpf, aluno'),
-      ])
+    const { data, error: loadError } = await fetchAllRows('leads_cursos_enriquecidos')
 
-    if (
-      crmResponse.error ||
-      registroResponse.error ||
-      inscritosResponse.error ||
-      matriculadosResponse.error
-    ) {
+    if (loadError) {
       setError(
-        'Não foi possível carregar as bases de CRM, registros, inscritos e matriculados. Confira as tabelas e as permissões de leitura no Supabase.',
+        'Não foi possível carregar os leads enriquecidos. Confere se a tabela leads_cursos_enriquecidos está liberada no Supabase.',
       )
+      setRows([])
       setLoading(false)
       return
     }
 
-    const preparedCrmRows = (crmResponse.data ?? []).map((row) => {
-      const dateCreatedRaw = readField(row, 'Data de criação', 'Data de criaÃ§Ã£o', 'Data de criaÃƒÂ§ÃƒÂ£o')
-      const courseSource = readField(row, 'Nome - Oferta de curso')
-      const localOfferSource = readField(row, 'Nome - Local de oferta')
-      const unidadeSource = readField(row, 'Unidade')
-      const processSource = readField(row, 'Nome - Processo seletivo')
+    const preparedRows = (data ?? [])
+      .map((row) => buildLeadRow(row))
+      .filter((row) => row.createdAtKey >= MIN_LEAD_DATE)
 
-      return {
-        id: Number(row.id ?? 0),
-        schedulingCode: cleanText(
-          readField(row, 'Código do agendamento', 'CÃ³digo do agendamento', 'CÃƒÂ³digo do agendamento'),
-        ),
-        activity: titleize(readField(row, 'Atividade')),
-        description:
-          cleanText(readField(row, 'Descrição', 'DescriÃ§Ã£o', 'DescriÃƒÂ§ÃƒÂ£o')) || 'Sem descrição',
-        courseLabel: normalizeCourseLabel(courseSource),
-        processLabel: normalizeProcessLabel(processSource),
-        email: normalizeEmail(readField(row, 'E-mail')),
-        personCode: cleanText(readField(row, 'Código da pessoa', 'CÃ³digo da pessoa', 'CÃƒÂ³digo da pessoa')),
-        contactName: titleize(readField(row, 'Contato')),
-        cpf: normalizeCpf(readField(row, 'CPF da pessoa')),
-        seller: normalizeSeller(readField(row, 'Responsável', 'ResponsÃ¡vel', 'ResponsÃƒÂ¡vel')),
-        campusLabel: normalizeCampus(localOfferSource, unidadeSource, courseSource),
-        dateCreatedRaw,
-        dateCreatedKey: toDateKey(dateCreatedRaw),
-      } satisfies ActivityCrmPrepared
-    })
-
-    const preparedRegistroRows = (registroResponse.data ?? []).map((row) => {
-      const dateCreatedRaw = readField(row, 'Data da criação', 'Data da criaÃ§Ã£o', 'Data da criaÃƒÂ§ÃƒÂ£o')
-      const courseSource = readField(row, 'Nome - Oferta de curso', 'Curso de interesse')
-      const unidadeSource = readField(row, 'Unidade', 'Unidade de Interesse')
-      const localOfferSource = readField(row, 'Local da oferta')
-      const processSource = readField(row, 'Processo seletivo')
-      const sellerSource = readField(
-        row,
-        'Vendedor',
-        'Nome do responsável',
-        'Nome do responsável2',
-        'Nome do responsÃ¡vel',
-        'Nome do responsÃ¡vel2',
-      )
-
-      return {
-        id: Number(row.id ?? 0),
-        identifier: cleanText(readField(row, 'Identificador')),
-        externalCode: cleanText(readField(row, 'Código externo do registro', 'CÃ³digo externo do registro')),
-        personCode: cleanText(readField(row, 'Identificador da pessoa')),
-        contactName: titleize(readField(row, 'Nome da pessoa')),
-        seller: normalizeSeller(sellerSource),
-        email: normalizeEmail(readField(row, 'E-mail da pessoa')),
-        cpf: normalizeCpf(readField(row, 'CPF')),
-        courseLabel: normalizeCourseLabel(courseSource),
-        processLabel: normalizeProcessLabel(processSource),
-        campusLabel: normalizeCampus(unidadeSource, localOfferSource, courseSource),
-        statusLabel: normalizeStatusLabel(
-          readField(row, 'Status', 'Status do registro', 'Resumo atual', 'Etapa'),
-        ),
-        objectionLabel: normalizeObjectionLabel(readField(row, 'Objeção', 'ObjeÃ§Ã£o')),
-        lossObservationLabel: normalizeLossObservationLabel(
-          readField(row, 'Observações da perda', 'ObservaÃ§Ãµes da perda'),
-        ),
-        currentSummary: cleanText(readField(row, 'Resumo atual')) || 'Sem resumo atual',
-        dateCreatedRaw,
-        dateCreatedKey: toDateKey(dateCreatedRaw),
-      } satisfies RegistroCrmPrepared
-    })
-
-    setCrmRows(preparedCrmRows)
-    setRegistroRows(preparedRegistroRows)
-    setInscritosRows(
-      (inscritosResponse.data ?? []).map((row) => ({
-        cpf: normalizeCpf(readField(row, 'cpf')),
-        name: titleize(readField(row, 'candidato')),
-      })),
+    setRows(preparedRows)
+    setObservationDrafts(
+      preparedRows.reduce<Record<string, string>>((accumulator, row) => {
+        accumulator[String(row.id)] = row.observation === 'Sem observação' ? '' : row.observation
+        return accumulator
+      }, {}),
     )
-    setMatriculadosRows(
-      (matriculadosResponse.data ?? []).map((row) => ({
-        cpf: normalizeCpf(readField(row, 'cpf')),
-        name: titleize(readField(row, 'aluno')),
-      })),
-    )
+
     setLoading(false)
   }
 
@@ -1018,405 +693,207 @@ export function VisaoCrm() {
     void loadRows()
   }, [])
 
-  const inscritosCpfSet = useMemo(
-    () => new Set(inscritosRows.map((row) => row.cpf).filter(Boolean)),
-    [inscritosRows],
-  )
-  const inscritosNameSet = useMemo(
-    () => new Set(inscritosRows.map((row) => normalizeString(row.name)).filter(Boolean)),
-    [inscritosRows],
-  )
-  const matriculadosCpfSet = useMemo(
-    () => new Set(matriculadosRows.map((row) => row.cpf).filter(Boolean)),
-    [matriculadosRows],
-  )
-  const matriculadosNameSet = useMemo(
-    () => new Set(matriculadosRows.map((row) => normalizeString(row.name)).filter(Boolean)),
-    [matriculadosRows],
-  )
-
-  const sellerActivityRows = useMemo(
-    () => crmRows.filter((row) => row.seller === activeSeller),
-    [activeSeller, crmRows],
-  )
-  const sellerRegistroRows = useMemo(
-    () => registroRows.filter((row) => row.seller === activeSeller),
-    [activeSeller, registroRows],
-  )
-
-  const allCandidates = useMemo(() => {
-    const activityIndex = new Map<string, number[]>()
-
-    sellerActivityRows.forEach((row, index) => {
-      buildCandidateKeys(row).forEach((key) => {
-        const currentItems = activityIndex.get(key) ?? []
-        currentItems.push(index)
-        activityIndex.set(key, currentItems)
-      })
-    })
-
-    const referencedActivityIndexes = new Set<number>()
-    const candidateMap = new Map<string, CandidateSummary>()
-
-    sellerRegistroRows.forEach((row) => {
-      const matchingIndexes = new Set<number>()
-
-      buildCandidateKeys(row).forEach((key) => {
-        const currentIndexes = activityIndex.get(key) ?? []
-        currentIndexes.forEach((index) => matchingIndexes.add(index))
-      })
-
-      const matchingActivities = Array.from(matchingIndexes).map((index) => sellerActivityRows[index])
-      matchingIndexes.forEach((index) => referencedActivityIndexes.add(index))
-
-      const activities = Array.from(
-        new Set(matchingActivities.map((item) => item.activity).filter(Boolean)),
-      )
-      const descriptions = Array.from(
-        new Set(matchingActivities.map((item) => item.description).filter(Boolean)),
-      )
-
-      const latestActivityDate = matchingActivities.reduce(
-        (latest, item) => (item.dateCreatedKey > latest ? item.dateCreatedKey : latest),
-        '',
-      )
-      const latestDateKey =
-        row.dateCreatedKey > latestActivityDate ? row.dateCreatedKey : latestActivityDate
-
-      const hasInscrito =
-        (row.cpf && inscritosCpfSet.has(row.cpf)) ||
-        inscritosNameSet.has(normalizeString(row.contactName))
-      const hasMatriculado =
-        (row.cpf && matriculadosCpfSet.has(row.cpf)) ||
-        matriculadosNameSet.has(normalizeString(row.contactName))
-
-      const primaryKey = buildPrimaryCandidateKey({
-        personCode: row.personCode,
-        cpf: row.cpf,
-        email: row.email,
-        contactName: row.contactName,
-      })
-
-      candidateMap.set(primaryKey, {
-        key: primaryKey,
-        personCode: row.personCode || 'Não informado',
-        contactName: row.contactName || 'Não informado',
-        cpf: row.cpf,
-        email: row.email,
-        courseLabel:
-          row.courseLabel !== 'Não informado'
-            ? row.courseLabel
-            : matchingActivities.find((item) => item.courseLabel !== 'Não informado')?.courseLabel ||
-              'Não informado',
-        campusLabel:
-          row.campusLabel !== 'Não informado'
-            ? row.campusLabel
-            : matchingActivities.find((item) => item.campusLabel !== 'Não informado')?.campusLabel ||
-              'Não informado',
-        processLabel:
-          row.processLabel !== 'Não informado'
-            ? row.processLabel
-            : matchingActivities.find((item) => item.processLabel !== 'Não informado')?.processLabel ||
-              'Não informado',
-        statusLabel: row.statusLabel,
-        objectionLabel: row.objectionLabel,
-        lossObservationLabel: row.lossObservationLabel,
-        currentSummary: row.currentSummary,
-        activityCount: matchingActivities.length,
-        activities,
-        descriptions,
-        hasInscrito,
-        hasMatriculado,
-        hasRegistro: true,
-        hasActivity: matchingActivities.length > 0,
-        latestDateKey,
-      })
-    })
-
-    sellerActivityRows.forEach((row, index) => {
-      if (referencedActivityIndexes.has(index)) {
-        return
-      }
-
-      const primaryKey = buildPrimaryCandidateKey({
-        personCode: row.personCode,
-        cpf: row.cpf,
-        email: row.email,
-        contactName: row.contactName,
-      })
-
-      const existingCandidate = candidateMap.get(primaryKey)
-
-      if (existingCandidate) {
-        return
-      }
-
-      const hasInscrito =
-        (row.cpf && inscritosCpfSet.has(row.cpf)) ||
-        inscritosNameSet.has(normalizeString(row.contactName))
-      const hasMatriculado =
-        (row.cpf && matriculadosCpfSet.has(row.cpf)) ||
-        matriculadosNameSet.has(normalizeString(row.contactName))
-
-      candidateMap.set(primaryKey, {
-        key: primaryKey,
-        personCode: row.personCode || 'Não informado',
-        contactName: row.contactName || 'Não informado',
-        cpf: row.cpf,
-        email: row.email,
-        courseLabel: row.courseLabel,
-        campusLabel: row.campusLabel,
-        processLabel: row.processLabel,
-        statusLabel: 'Não informado',
-        objectionLabel: 'Não informada',
-        lossObservationLabel: 'Não informada',
-        currentSummary: 'Sem resumo atual',
-        activityCount: 1,
-        activities: row.activity ? [row.activity] : [],
-        descriptions: row.description ? [row.description] : [],
-        hasInscrito,
-        hasMatriculado,
-        hasRegistro: false,
-        hasActivity: true,
-        latestDateKey: row.dateCreatedKey,
-      })
-    })
-
-    return Array.from(candidateMap.values()).sort((currentItem, nextItem) =>
-      currentItem.contactName.localeCompare(nextItem.contactName),
-    )
-  }, [
-    inscritosCpfSet,
-    inscritosNameSet,
-    matriculadosCpfSet,
-    matriculadosNameSet,
-    sellerActivityRows,
-    sellerRegistroRows,
-  ])
-
-  const filterOptions = useMemo(() => {
-    const courses = new Set<string>()
-    const campuses = new Set<string>()
-    const processes = new Set<string>()
-    const statuses = new Set<string>()
-    const candidates = new Set<string>()
-
-    allCandidates.forEach((candidate) => {
-      if (candidate.courseLabel && candidate.courseLabel !== 'Não informado') {
-        courses.add(candidate.courseLabel)
-      }
-      if (candidate.campusLabel && candidate.campusLabel !== 'Não informado') {
-        campuses.add(candidate.campusLabel)
-      }
-      if (candidate.processLabel && candidate.processLabel !== 'Não informado') {
-        processes.add(candidate.processLabel)
-      }
-      if (candidate.statusLabel && candidate.statusLabel !== 'Não informado') {
-        statuses.add(candidate.statusLabel)
-      }
-      if (candidate.contactName && candidate.contactName !== 'Não informado') {
-        candidates.add(candidate.contactName)
-      }
-    })
-
-    return {
-      courses: Array.from(courses).sort(),
-      campuses: Array.from(campuses).sort(),
-      processes: Array.from(processes).sort(),
-      statuses: Array.from(statuses).sort(),
-      candidates: Array.from(candidates).sort(),
-    }
-  }, [allCandidates])
-
-  const handleChartSelection = (
-    chartKey: ChartFilterKey,
-    label: string,
-    accumulate: boolean,
-  ) => {
-    if (!label) {
-      return
+  const sellerScopedRows = useMemo(() => {
+    if (selectedSeller === 'Todos') {
+      return rows
     }
 
-    setChartSelections((currentValue) => {
-      const currentItems = currentValue[chartKey]
-      const alreadySelected = currentItems.includes(label)
+    return rows.filter((row) => row.seller === selectedSeller || row.seller === null)
+  }, [rows, selectedSeller])
 
-      if (accumulate) {
-        return {
-          ...currentValue,
-          [chartKey]: alreadySelected
-            ? currentItems.filter((item) => item !== label)
-            : [...currentItems, label],
-        }
+  const dateFilteredRows = useMemo(() => {
+    const effectiveStartDate = filters.startDate && filters.startDate >= MIN_LEAD_DATE
+      ? filters.startDate
+      : MIN_LEAD_DATE
+
+    return sellerScopedRows.filter((row) => {
+      if (!row.createdAtKey) {
+        return false
       }
 
-      return {
-        ...currentValue,
-        [chartKey]: alreadySelected && currentItems.length === 1 ? [] : [label],
-      }
+      const startDatePass = row.createdAtKey >= effectiveStartDate
+      const endDatePass = !filters.endDate || row.createdAtKey <= filters.endDate
+
+      return startDatePass && endDatePass
     })
-  }
+  }, [filters.endDate, filters.startDate, sellerScopedRows])
 
-  const activeChartFilters = useMemo(
-    () =>
-      [
-        ...chartSelections.campus.map((value) => ({
-          chartKey: 'campus' as const,
-          label: 'Campus',
-          value,
-        })),
-        ...chartSelections.process.map((value) => ({
-          chartKey: 'process' as const,
-          label: 'Processo',
-          value,
-        })),
-        ...chartSelections.course.map((value) => ({
-          chartKey: 'course' as const,
-          label: 'Curso',
-          value,
-        })),
-        ...chartSelections.status.map((value) => ({
-          chartKey: 'status' as const,
-          label: 'Status',
-          value,
-        })),
-        ...chartSelections.activity.map((value) => ({
-          chartKey: 'activity' as const,
-          label: 'Atividade',
-          value,
-        })),
-        ...chartSelections.objection.map((value) => ({
-          chartKey: 'objection' as const,
-          label: 'Objeção',
-          value,
-        })),
-        ...chartSelections.lossObservation.map((value) => ({
-          chartKey: 'lossObservation' as const,
-          label: 'Perda',
-          value,
-        })),
-      ],
-    [chartSelections],
-  )
-
-  const filteredCandidates = useMemo(
-    () =>
-      allCandidates
-        .filter((candidate) => applyCandidateFilters(candidate, filters))
-        .filter((candidate) => applyChartSelections(candidate, chartSelections)),
-    [allCandidates, chartSelections, filters],
-  )
-
-  const cardCandidateSummaries = useMemo(
-    () => allCandidates.filter((candidate) => applyCandidateFilters(candidate, cardFilters)),
-    [allCandidates, cardFilters],
+  const filteredRows = useMemo(
+    () => applyChartSelections(dateFilteredRows, chartSelections),
+    [chartSelections, dateFilteredRows],
   )
 
   const kpiCards = useMemo(
     () => [
       {
-        title: 'Não inscritos e não matriculados',
-        value: formatNumberBR(
-          filteredCandidates.filter((candidate) => !candidate.hasInscrito && !candidate.hasMatriculado)
-            .length,
-        ),
-        helperText:
-          'Candidatos do vendedor sem correspondência nas bases de inscritos e matriculados.',
+        title: 'Leads totais',
+        value: formatNumberBR(filteredRows.length),
+        helperText: 'Todos os leads visíveis no recorte atual.',
         emphasis: 'primary' as const,
       },
       {
-        title: 'Inscritos',
-        value: formatNumberBR(filteredCandidates.filter((candidate) => candidate.hasInscrito).length),
-        helperText: 'Candidatos do recorte localizados na tabela de inscritos.',
+        title: 'Leads não se inscreveram',
+        value: formatNumberBR(filteredRows.filter((row) => !row.hasInscricao).length),
+        helperText: 'Leads ainda sem Data da Inscrição preenchida.',
       },
       {
-        title: 'Matriculados',
-        value: formatNumberBR(
-          filteredCandidates.filter((candidate) => candidate.hasMatriculado).length,
-        ),
-        helperText: 'Candidatos do recorte localizados na tabela de matriculados.',
+        title: 'Leads inscritos',
+        value: formatNumberBR(filteredRows.filter((row) => row.hasInscricao).length),
+        helperText: 'Leads com Data da Inscrição preenchida.',
       },
       {
-        title: 'Em andamento',
-        value: formatNumberBR(
-          filteredCandidates.filter((candidate) => candidate.statusLabel === 'Em andamento').length,
-        ),
-        helperText: 'Registros com status em andamento dentro do recorte ativo.',
-      },
-      {
-        title: 'Perdidos',
-        value: formatNumberBR(
-          filteredCandidates.filter((candidate) => candidate.statusLabel === 'Perdido').length,
-        ),
-        helperText: 'Registros marcados como perdidos dentro do recorte ativo.',
-      },
-      {
-        title: 'Sem atividade agendada',
-        value: formatNumberBR(
-          filteredCandidates.filter((candidate) => candidate.hasRegistro && !candidate.hasActivity)
-            .length,
-        ),
-        helperText:
-          'Registros presentes em registro_crm que ainda nÃ£o possuem atividade correspondente.',
-      },
-      {
-        title: 'Atividades agendadas',
-        value: formatNumberBR(
-          filteredCandidates.reduce(
-            (total, candidate) => total + candidate.activityCount,
-            0,
-          ),
-        ),
-        helperText: 'Quantidade total de atividades vinculadas aos candidatos do recorte.',
+        title: 'Leads matriculados',
+        value: formatNumberBR(filteredRows.filter((row) => row.hasMatricula).length),
+        helperText: 'Leads com Data da Matricula preenchida.',
       },
     ],
-    [filteredCandidates],
+    [filteredRows],
   )
 
-  const charts = useMemo(() => {
-    const activityLabels = filteredCandidates.flatMap((candidate) => candidate.activities)
-
-    return {
-      campus: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.campusLabel)),
-      process: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.processLabel)),
-      course: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.courseLabel)),
-      status: buildCountDataFromValues(filteredCandidates.map((candidate) => candidate.statusLabel)),
-      activity: buildCountDataFromValues(activityLabels),
-      objection: buildCountDataFromValues(
-        filteredCandidates.map((candidate) => candidate.objectionLabel),
+  const chartData = useMemo(
+    () => ({
+      course: countByLabel(filteredRows, (row) => row.course),
+      ingresso: countByLabel(filteredRows, (row) => row.ingresso),
+      campus: countByLabel(filteredRows, (row) => row.campus),
+      matriculadoCourse: countByLabel(
+        filteredRows.filter((row) => row.hasMatricula),
+        (row) => row.course,
       ),
-      lossObservation: buildCountDataFromValues(
-        filteredCandidates.map((candidate) => candidate.lossObservationLabel),
+      matriculadoIngresso: countByLabel(
+        filteredRows.filter((row) => row.hasMatricula),
+        (row) => row.matriculadoIngresso,
       ),
-    }
-  }, [filteredCandidates])
-
-  const candidatesPerPage = 10
-  const candidatePageCount = Math.max(
-    1,
-    Math.ceil(cardCandidateSummaries.length / candidatesPerPage),
+      matriculadoCampus: countByLabel(
+        filteredRows.filter((row) => row.hasMatricula),
+        (row) => row.matriculadoCampus,
+      ),
+      observation: countByLabel(filteredRows, (row) => row.observation),
+    }),
+    [filteredRows],
   )
-  const paginatedCandidateSummaries = useMemo(() => {
-    const startIndex = (candidatePage - 1) * candidatesPerPage
-    return cardCandidateSummaries.slice(startIndex, startIndex + candidatesPerPage)
-  }, [candidatePage, cardCandidateSummaries])
 
-  useEffect(() => {
-    setCandidatePage(1)
-  }, [activeSeller, cardFilters])
+  const visibleCards = useMemo(
+    () => [...filteredRows].sort((currentValue, nextValue) => nextValue.createdAtKey.localeCompare(currentValue.createdAtKey)),
+    [filteredRows],
+  )
 
-  useEffect(() => {
-    if (candidatePage > candidatePageCount) {
-      setCandidatePage(candidatePageCount)
+  const handleChartSelect = (chartKey: ChartFilterKey, label: string, append: boolean) => {
+    setChartSelections((currentValue) => {
+      const currentSelection = currentValue[chartKey]
+      const alreadySelected = currentSelection.includes(label)
+
+      if (!append) {
+        return {
+          ...currentValue,
+          [chartKey]: alreadySelected && currentSelection.length === 1 ? [] : [label],
+        }
+      }
+
+      return {
+        ...currentValue,
+        [chartKey]: alreadySelected
+          ? currentSelection.filter((value) => value !== label)
+          : [...currentSelection, label],
+      }
+    })
+  }
+
+  const clearChartSelections = () => {
+    setChartSelections(initialChartSelections)
+  }
+
+  const handleSaveObservation = async (row: LeadPrepared) => {
+    if (!supabase) {
+      return
     }
-  }, [candidatePage, candidatePageCount])
+
+    setSavingLeadId(row.id)
+    setNotice(null)
+
+    const observationValue = (observationDrafts[String(row.id)] ?? '').trim() || null
+
+    const { error: saveError } = await supabase
+      .from('leads_cursos')
+      .update({
+        observacao_captacao: observationValue,
+      })
+      .eq('id', row.id)
+
+    if (saveError) {
+      setNotice('Não foi possível salvar a observação deste lead.')
+      setSavingLeadId(null)
+      return
+    }
+
+    setRows((currentValue) =>
+      currentValue.map((item) =>
+        item.id === row.id
+          ? {
+              ...item,
+              observation: observationValue ? observationValue : 'Sem observação',
+            }
+          : item,
+      ),
+    )
+    setNotice('Observação salva com sucesso.')
+    setSavingLeadId(null)
+  }
+
+  const handleAssignLeadToSeller = async (row: LeadPrepared) => {
+    if (!supabase) {
+      return
+    }
+
+    const sellerToAssign =
+      selectedSeller !== 'Todos' ? selectedSeller : resolvedProfileSeller
+
+    if (!sellerToAssign) {
+      setNotice('Escolha um vendedor antes de assumir este lead.')
+      return
+    }
+
+    setSavingLeadId(row.id)
+    setNotice(null)
+
+    const { error: saveError } = await supabase
+      .from('leads_cursos')
+      .update({
+        vendedor_crm: sellerToAssign,
+      })
+      .eq('id', row.id)
+
+    if (saveError) {
+      setNotice('Não foi possível atribuir este lead agora.')
+      setSavingLeadId(null)
+      return
+    }
+
+    setRows((currentValue) =>
+      currentValue.map((item) =>
+        item.id === row.id
+          ? {
+              ...item,
+              seller: sellerToAssign,
+              sellerRaw: sellerToAssign,
+            }
+          : item,
+      ),
+    )
+    setNotice(`Lead atribuído para ${sellerToAssign}.`)
+    setSavingLeadId(null)
+  }
 
   if (loading) {
-    return <Loading message="Carregando a Visão CRM..." />
+    return <Loading message="Carregando a nova visão de leads..." />
   }
 
   if (error) {
-    return <EmptyState title="Não foi possível carregar a Visão CRM" description={error} />
+    return (
+      <EmptyState
+        title="Não foi possível carregar a visão de leads"
+        description={error}
+      />
+    )
   }
 
   return (
@@ -1425,56 +902,58 @@ export function VisaoCrm() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Operação CRM
+              Leads da captação
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Visão CRM
+              Nova visão de leads
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
-              A leitura cruza a base de atividades com a base de registros do CRM usando
-              identificador da pessoa, CPF, e-mail e nome como chaves de apoio.
+              Esta leitura usa a tabela{' '}
+              <span className="font-medium text-slate-700">leads_cursos_enriquecidos</span>,
+              mostrando apenas os leads a partir de {formatDateBR(MIN_LEAD_DATE)}. Cada vendedor
+              vê seus leads, e os sem responsável aparecem para todos.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void loadRows()}
-            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Atualizar dados
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {canChooseSeller ? (
+              <select
+                value={selectedSeller}
+                onChange={(event) => setSelectedSeller(event.target.value as SellerScope)}
+                className="h-14 min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 text-base font-medium text-slate-900 outline-none transition focus:border-sky-400"
+              >
+                <option value="Todos">Todos os vendedores</option>
+                {sellers.map((seller) => (
+                  <option key={seller} value={seller}>
+                    {seller}
+                  </option>
+                ))}
+              </select>
+            ) : resolvedProfileSeller ? (
+              <div className="inline-flex h-14 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-900">
+                {resolvedProfileSeller}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void loadRows()}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Atualizar
+            </button>
+          </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          {sellers.map((seller) => (
-            <button
-              key={seller}
-              type="button"
-              onClick={() => setActiveSeller(seller)}
-              className={cn(
-                'rounded-2xl border px-4 py-2.5 text-sm font-semibold transition',
-                activeSeller === seller
-                  ? 'border-slate-950 bg-slate-950 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
-              )}
-            >
-              {seller}
-            </button>
-          ))}
-        </div>
+        {notice ? (
+          <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+            {notice}
+          </div>
+        ) : null}
       </section>
 
-      <FilterPanel
-        title="Filtros operacionais"
-        description="Esses filtros controlam os indicadores e os gráficos do vendedor selecionado."
-        filters={filters}
-        setFilters={setFilters}
-        courseOptions={filterOptions.courses}
-        campusOptions={filterOptions.campuses}
-        processOptions={filterOptions.processes}
-        statusOptions={filterOptions.statuses}
-      />
+      <DataFilters filters={filters} setFilters={setFilters} />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {kpiCards.map((card) => (
@@ -1493,14 +972,14 @@ export function VisaoCrm() {
           <div>
             <h3 className="text-lg font-semibold text-slate-950">Filtros pelos gráficos</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Clique em uma barra para filtrar. Use <strong>Ctrl</strong> ou{' '}
-              <strong>Cmd</strong> para acumular mais de uma seleção.
+              Clique em uma barra para filtrar. Use <strong>Ctrl</strong> ou <strong>Cmd</strong>{' '}
+              para acumular mais de uma seleção.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => setChartSelections(initialChartSelections)}
+            onClick={clearChartSelections}
             className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
           >
             <Eraser className="h-4 w-4" />
@@ -1508,310 +987,239 @@ export function VisaoCrm() {
           </button>
         </div>
 
-        {hasActiveChartSelections(chartSelections) ? (
+        {(Object.keys(chartSelections) as ChartFilterKey[]).some(
+          (key) => chartSelections[key].length > 0,
+        ) ? (
           <div className="mt-4 flex flex-wrap gap-2">
-            {activeChartFilters.map((filterItem) => (
-              <button
-                key={`${filterItem.chartKey}-${filterItem.value}`}
-                type="button"
-                onClick={() =>
-                  handleChartSelection(filterItem.chartKey, filterItem.value, true)
-                }
-                className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
-              >
-                <span>{filterItem.label}</span>
-                <span className="text-white/80">{filterItem.value}</span>
-              </button>
-            ))}
+            {(Object.keys(chartSelections) as ChartFilterKey[]).flatMap((key) =>
+              chartSelections[key].map((value) => (
+                <button
+                  key={`${key}-${value}`}
+                  type="button"
+                  onClick={() => handleChartSelect(key, value, true)}
+                  className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                >
+                  {value}
+                </button>
+              )),
+            )}
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-slate-500">
-            Nenhum filtro visual ativo no momento.
-          </p>
-        )}
+        ) : null}
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <ChartCard
-          title="Por campus"
-          description="Distribuição dos registros por unidade padronizada."
-          data={charts.campus}
-          chartKey="campus"
-          selectedKeys={chartSelections.campus}
-          onSelect={handleChartSelection}
-        />
-        <ChartCard
-          title="Por processo seletivo"
-          description="Leitura dos registros pelo processo seletivo normalizado."
-          data={charts.process}
-          chartKey="process"
-          selectedKeys={chartSelections.process}
-          onSelect={handleChartSelection}
-        />
-        <ChartCard
-          title="Por curso"
-          description="Concentração dos registros por curso."
-          data={charts.course}
+          title="Leads x curso"
+          description="Distribuição dos leads visíveis por curso."
           chartKey="course"
-          selectedKeys={chartSelections.course}
-          onSelect={handleChartSelection}
+          data={chartData.course}
+          selectedValues={chartSelections.course}
+          onSelect={handleChartSelect}
         />
         <ChartCard
-          title="Por status"
-          description="Situação atual dos registros dentro do recorte ativo."
-          data={charts.status}
-          chartKey="status"
-          selectedKeys={chartSelections.status}
-          onSelect={handleChartSelection}
+          title="Leads x forma de ingresso"
+          description="Leitura da forma de ingresso registrada no lead."
+          chartKey="ingresso"
+          data={chartData.ingresso}
+          selectedValues={chartSelections.ingresso}
+          onSelect={handleChartSelect}
         />
         <ChartCard
-          title="Qual atividade"
-          description="Atividades mais recorrentes entre os candidatos filtrados."
-          data={charts.activity}
-          chartKey="activity"
-          selectedKeys={chartSelections.activity}
-          onSelect={handleChartSelection}
+          title="Leads x campus"
+          description="Distribuição dos leads por campus."
+          chartKey="campus"
+          data={chartData.campus}
+          selectedValues={chartSelections.campus}
+          onSelect={handleChartSelect}
         />
         <ChartCard
-          title="Objeções"
-          description="Principais objeções registradas no CRM."
-          data={charts.objection}
-          chartKey="objection"
-          selectedKeys={chartSelections.objection}
-          onSelect={handleChartSelection}
+          title="Leads x matriculados por curso"
+          description="Somente os leads já matriculados."
+          chartKey="matriculadoCourse"
+          data={chartData.matriculadoCourse}
+          selectedValues={chartSelections.matriculadoCourse}
+          onSelect={handleChartSelect}
         />
         <ChartCard
-          title="Observações da perda"
-          description="Motivos e anotações de perda mais recorrentes."
-          data={charts.lossObservation}
-          chartKey="lossObservation"
-          selectedKeys={chartSelections.lossObservation}
-          onSelect={handleChartSelection}
+          title="Leads x matriculados por forma de ingresso"
+          description="Somente os leads já matriculados."
+          chartKey="matriculadoIngresso"
+          data={chartData.matriculadoIngresso}
+          selectedValues={chartSelections.matriculadoIngresso}
+          onSelect={handleChartSelect}
+        />
+        <ChartCard
+          title="Leads x matriculados por campus"
+          description="Somente os leads já matriculados."
+          chartKey="matriculadoCampus"
+          data={chartData.matriculadoCampus}
+          selectedValues={chartSelections.matriculadoCampus}
+          onSelect={handleChartSelect}
+        />
+        <ChartCard
+          title="Leads x observações"
+          description="Observações preenchidas pela captação."
+          chartKey="observation"
+          data={chartData.observation}
+          selectedValues={chartSelections.observation}
+          onSelect={handleChartSelect}
         />
       </section>
 
-      <FilterPanel
-        title="Cards de candidatos"
-        description="Esses filtros controlam apenas os cards abaixo e não alteram os indicadores superiores."
-        filters={cardFilters}
-        setFilters={setCardFilters}
-        courseOptions={filterOptions.courses}
-        campusOptions={filterOptions.campuses}
-        processOptions={filterOptions.processes}
-        statusOptions={filterOptions.statuses}
-      />
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-950">Cards dos leads</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              Os cards abaixo respeitam o mesmo recorte de datas, vendedor e filtros aplicados pelos gráficos.
+            </p>
+          </div>
 
-      {cardCandidateSummaries.length === 0 ? (
-        <EmptyState
-          title="Nenhum candidato para os filtros atuais"
-          description="Limpe os filtros dos cards ou troque de vendedor para voltar a visualizar os candidatos desta visão."
-        />
-      ) : (
-        <>
-          <section className="rounded-[28px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-600">
-                Mostrando {formatNumberBR(paginatedCandidateSummaries.length)} de{' '}
-                {formatNumberBR(cardCandidateSummaries.length)} candidatos nesta página.
-              </p>
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">
+            <Users className="h-4 w-4" />
+            {formatNumberBR(visibleCards.length)} lead(s)
+          </div>
+        </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCandidatePage((currentValue) => Math.max(currentValue - 1, 1))}
-                  disabled={candidatePage === 1}
-                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Anterior
-                </button>
+        {visibleCards.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState
+              title="Nenhum lead encontrado"
+              description="Ajuste as datas, o vendedor selecionado ou limpe os filtros dos gráficos para voltar a ver os leads."
+            />
+          </div>
+        ) : (
+          <div className="mt-6 max-h-[980px] overflow-y-auto pr-2">
+            <div className="grid gap-4 xl:grid-cols-2">
+              {visibleCards.map((row) => {
+                const isSaving = savingLeadId === row.id
+                const draftObservation = observationDrafts[String(row.id)] ?? ''
+                const showAssignButton =
+                  row.seller === null && (selectedSeller !== 'Todos' || resolvedProfileSeller)
 
-                {Array.from({ length: candidatePageCount }, (_, index) => index + 1)
-                  .slice(
-                    Math.max(0, candidatePage - 3),
-                    Math.max(5, Math.min(candidatePageCount, candidatePage + 2)),
-                  )
-                  .map((pageNumber) => (
-                    <button
-                      key={pageNumber}
-                      type="button"
-                      onClick={() => setCandidatePage(pageNumber)}
-                      className={cn(
-                        'rounded-2xl border px-3 py-2 text-sm font-semibold transition',
-                        candidatePage === pageNumber
-                          ? 'border-slate-950 bg-slate-950 text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
-                      )}
-                    >
-                      {pageNumber}
-                    </button>
-                  ))}
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCandidatePage((currentValue) =>
-                      Math.min(currentValue + 1, candidatePageCount),
-                    )
-                  }
-                  disabled={candidatePage === candidatePageCount}
-                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Próxima
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-2">
-            {paginatedCandidateSummaries.map((candidate) => (
-              <article
-                key={candidate.key}
-                className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"
-              >
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
-                        Candidato
-                      </p>
-                      <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                        {candidate.contactName}
-                      </h3>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 xl:max-w-[240px] xl:justify-end">
-                      <span className="inline-flex items-center rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-                        {formatNumberBR(candidate.activityCount)} atividades
-                      </span>
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700">
-                        {candidate.statusLabel}
-                      </span>
-                      {candidate.hasInscrito ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-                          Inscrito
-                        </span>
-                      ) : null}
-                      {candidate.hasMatriculado ? (
-                        <span className="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
-                          Matriculado
-                        </span>
-                      ) : null}
-                      {candidate.hasRegistro && !candidate.hasActivity ? (
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
-                          Sem atividade
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
-                        Curso
-                      </p>
-                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
-                        {candidate.courseLabel}
-                      </p>
-                    </div>
-                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
-                        Campus
-                      </p>
-                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
-                        {candidate.campusLabel}
-                      </p>
-                    </div>
-                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
-                        Processo seletivo
-                      </p>
-                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
-                        {candidate.processLabel}
-                      </p>
-                    </div>
-                    <div className="min-h-[92px] min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
-                        {'Última movimentação'}
-                      </p>
-                      <p className="mt-2 break-words text-[13px] font-semibold leading-6 text-slate-900 sm:text-sm">
-                        {formatDateBR(candidate.latestDateKey)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                    <div className="flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-slate-500" />
-                      <p className="text-sm font-semibold text-slate-900">Atividades</p>
-                    </div>
-                    {candidate.activities.length > 0 ? (
-                      <div className="mt-4 flex min-h-[88px] flex-wrap content-start gap-2">
-                        {candidate.activities.map((activity) => (
-                          <span
-                            key={`${candidate.key}-${activity}`}
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm"
-                          >
-                            {activity}
+                return (
+                  <article
+                    key={String(row.id)}
+                    className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                          Lead
+                        </p>
+                        <h3 className="mt-2 text-xl font-semibold text-slate-950">
+                          {row.name}
+                        </h3>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">
+                            {row.course}
                           </span>
-                        ))}
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">
+                            {row.campus}
+                          </span>
+                          {row.hasInscricao ? (
+                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                              Inscrito
+                            </span>
+                          ) : null}
+                          {row.hasMatricula ? (
+                            <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">
+                              Matriculado
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                    ) : (
-                      <p className="mt-4 min-h-[88px] text-sm leading-6 text-slate-500">
-                        Nenhuma atividade agendada para este registro.
-                      </p>
-                    )}
-                  </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-slate-500" />
-                      <p className="text-sm font-semibold text-slate-900">Descrições</p>
-                    </div>
-                    <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
-                      {candidate.descriptions.map((description) => (
-                        <li
-                          key={`${candidate.key}-${description}`}
-                          className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm"
+                      <div className="flex flex-wrap gap-2 lg:max-w-[220px] lg:justify-end">
+                        <span
+                          className={cn(
+                            'rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em]',
+                            row.seller
+                              ? 'bg-slate-950 text-white'
+                              : 'bg-amber-50 text-amber-700',
+                          )}
                         >
-                          {description}
-                        </li>
-                      ))}
-                      {candidate.descriptions.length === 0 ? (
-                        <li className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm text-slate-500">
-                          Nenhuma descrição registrada nas atividades.
-                        </li>
-                      ) : null}
-                    </ul>
-                  </div>
-                </div>
+                          {row.seller ?? 'Sem vendedor'}
+                        </span>
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Objeção
-                    </p>
-                    <p className="mt-3 min-h-[48px] text-sm leading-6 text-slate-900">
-                      {candidate.objectionLabel}
-                    </p>
-                  </div>
+                        {showAssignButton ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleAssignLeadToSeller(row)}
+                            disabled={isSaving}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            Assumir lead
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Observações da perda
-                    </p>
-                    <p className="mt-3 min-h-[48px] text-sm leading-6 text-slate-900">
-                      {candidate.lossObservationLabel}
-                    </p>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </section>
-        </>
-      )}
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Telefone
+                        </p>
+                        <p className="mt-2 break-words text-sm font-medium text-slate-900">
+                          {row.phone || 'Não informado'}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Data de entrada
+                        </p>
+                        <p className="mt-2 break-words text-sm font-medium text-slate-900">
+                          {row.createdAtKey ? formatDateBR(row.createdAtKey) : 'Não informada'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4">
+                      <label
+                        htmlFor={`observacao-${row.id}`}
+                        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
+                      >
+                        Observação
+                      </label>
+                      <textarea
+                        id={`observacao-${row.id}`}
+                        value={draftObservation}
+                        onChange={(event) =>
+                          setObservationDrafts((currentValue) => ({
+                            ...currentValue,
+                            [String(row.id)]: event.target.value,
+                          }))
+                        }
+                        rows={4}
+                        className="mt-3 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-sky-400"
+                        placeholder="Escreva aqui a observação da captação."
+                      />
+
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs text-slate-500">
+                          Ingresso: <span className="font-medium text-slate-700">{row.ingresso}</span>
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveObservation(row)}
+                          disabled={isSaving}
+                          className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Save className="h-4 w-4" />
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
-
