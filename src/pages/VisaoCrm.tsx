@@ -46,6 +46,7 @@ type ChartFilterKey =
   | 'observation'
 
 type ChartSelections = Record<ChartFilterKey, string[]>
+type CardTab = 'unassigned' | 'seller'
 
 type GenericRow = Record<string, unknown>
 
@@ -643,6 +644,7 @@ export function VisaoCrm() {
     resolvedProfileSeller ?? 'Todos',
   )
   const [chartSelections, setChartSelections] = useState<ChartSelections>(initialChartSelections)
+  const [cardTab, setCardTab] = useState<CardTab>('seller')
   const [savingLeadId, setSavingLeadId] = useState<number | string | null>(null)
   const [observationDrafts, setObservationDrafts] = useState<Record<string, string>>({})
 
@@ -776,6 +778,30 @@ export function VisaoCrm() {
     () => [...filteredRows].sort((currentValue, nextValue) => nextValue.createdAtKey.localeCompare(currentValue.createdAtKey)),
     [filteredRows],
   )
+
+  const unassignedCards = useMemo(
+    () => visibleCards.filter((row) => row.seller === null),
+    [visibleCards],
+  )
+
+  const assignedCards = useMemo(
+    () => visibleCards.filter((row) => row.seller !== null),
+    [visibleCards],
+  )
+
+  const activeCards = cardTab === 'unassigned' ? unassignedCards : assignedCards
+
+  const sellerTabLabel = useMemo(() => {
+    if (selectedSeller !== 'Todos') {
+      return `Leads de ${selectedSeller}`
+    }
+
+    if (resolvedProfileSeller) {
+      return `Leads de ${resolvedProfileSeller}`
+    }
+
+    return 'Leads com vendedor'
+  }, [resolvedProfileSeller, selectedSeller])
 
   const handleChartSelect = (chartKey: ChartFilterKey, label: string, append: boolean) => {
     setChartSelections((currentValue) => {
@@ -1075,23 +1101,56 @@ export function VisaoCrm() {
             </p>
           </div>
 
-          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">
-            <Users className="h-4 w-4" />
-            {formatNumberBR(visibleCards.length)} lead(s)
+          <div className="flex flex-col gap-3 sm:items-end">
+            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setCardTab('unassigned')}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm font-semibold transition',
+                  cardTab === 'unassigned'
+                    ? 'bg-slate-950 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                Sem vendedor ({formatNumberBR(unassignedCards.length)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCardTab('seller')}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm font-semibold transition',
+                  cardTab === 'seller'
+                    ? 'bg-slate-950 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                {sellerTabLabel} ({formatNumberBR(assignedCards.length)})
+              </button>
+            </div>
+
+            <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">
+              <Users className="h-4 w-4" />
+              {formatNumberBR(activeCards.length)} lead(s)
+            </div>
           </div>
         </div>
 
-        {visibleCards.length === 0 ? (
+        {activeCards.length === 0 ? (
           <div className="mt-6">
             <EmptyState
               title="Nenhum lead encontrado"
-              description="Ajuste as datas, o vendedor selecionado ou limpe os filtros dos gráficos para voltar a ver os leads."
+              description={
+                cardTab === 'unassigned'
+                  ? 'Nenhum lead sem vendedor apareceu neste recorte. Ajuste as datas ou limpe os filtros dos gráficos.'
+                  : 'Nenhum lead com vendedor apareceu neste recorte. Ajuste as datas, o vendedor selecionado ou limpe os filtros dos gráficos.'
+              }
             />
           </div>
         ) : (
           <div className="mt-6 max-h-[980px] overflow-y-auto pr-2">
             <div className="grid gap-4 xl:grid-cols-2">
-              {visibleCards.map((row) => {
+              {activeCards.map((row) => {
                 const isSaving = savingLeadId === row.id
                 const draftObservation = observationDrafts[String(row.id)] ?? ''
                 const showAssignButton =
