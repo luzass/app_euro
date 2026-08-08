@@ -105,7 +105,7 @@ export function AppRoutes() {
           <Route
             path="visao-crm"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}>
+              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario', 'spike']}>
                 <VisaoCrm />
               </RequireRole>
             }

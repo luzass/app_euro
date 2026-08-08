@@ -22,7 +22,7 @@ export const navItems: NavItem[] = [
     title: 'Meu painel',
     path: '/app/painel-vendedor',
     icon: MonitorCog,
-    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario', 'spike'],
   },
   {
     title: 'Tráfego Pago - Spike',
