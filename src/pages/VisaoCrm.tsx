@@ -240,12 +240,13 @@ function normalizeCampus(value?: string | null) {
 function normalizeCourse(value?: string | null) {
   const text = cleanText(value)
   const normalized = normalizeString(value)
+  const compact = normalized.replace(/[^A-Z0-9]/g, '')
 
   if (!text) {
     return 'Não informado'
   }
 
-  if (normalized.includes('NUTRICAO')) {
+  if (normalized.includes('NUTRICAO') || compact === 'NUTRIO') {
     return 'Nutrição'
   }
 
