@@ -6,6 +6,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   Legend,
   Line,
@@ -40,11 +41,28 @@ import {
 import { supabase } from '../lib/supabase'
 
 const SUPABASE_BATCH_SIZE = 1000
+const SPIKE_LEADS_START_DATE = '2026-08-06'
 
 interface FilterState {
   startDate: string
   endDate: string
 }
+
+interface CountDatum {
+  label: string
+  value: number
+}
+
+type SpikeLeadChartKey =
+  | 'course'
+  | 'ingresso'
+  | 'campus'
+  | 'matriculadoCourse'
+  | 'matriculadoIngresso'
+  | 'matriculadoCampus'
+  | 'observation'
+
+type SpikeLeadChartSelections = Record<SpikeLeadChartKey, string[]>
 
 interface InscritoAnalysisRow {
   cpf: string | null
@@ -65,35 +83,6 @@ interface MatriculadoAnalysisRow {
   contrato: string | null
   status: string | null
   data_baixa_do_pagamento: string | null
-}
-
-interface ClarityResumoRow {
-  id: number
-  created_at: string
-  data_referencia: string
-  periodo: string | null
-  sessions: string | number | null
-  bot_sessions: string | number | null
-  total_sessions_incluindo_bots: string | number | null
-  unique_users: string | number | null
-  pages_per_session: string | number | null
-  scroll_depth_percentage: string | number | null
-  active_time_spent_seconds: string | number | null
-  total_time_spent_seconds: string | number | null
-}
-
-interface ClarityDeviceRow {
-  id: number
-  created_at: string
-  data_referencia: string
-  periodo: string | null
-  device: string | null
-  sessions: string | number | null
-  bot_sessions: string | number | null
-  total_sessions_incluindo_bots: string | number | null
-  unique_users: string | number | null
-  pages_per_session: string | number | null
-  session_percentage: string | number | null
 }
 
 type ReportType = 'semanal' | 'mensal'
@@ -142,6 +131,16 @@ interface FunilGeralRow {
 const initialFilters: FilterState = {
   startDate: '',
   endDate: '',
+}
+
+const initialSpikeLeadChartSelections: SpikeLeadChartSelections = {
+  course: [],
+  ingresso: [],
+  campus: [],
+  matriculadoCourse: [],
+  matriculadoIngresso: [],
+  matriculadoCampus: [],
+  observation: [],
 }
 
 const cpfFieldCandidates = [
@@ -297,32 +296,33 @@ function titleizeText(value?: string | null) {
     return 'Não informado'
   }
 
-  return value
+  const decodedValue = String(value)
+    .replace(/Ã§/g, 'ç')
+    .replace(/Ã£/g, 'ã')
+    .replace(/Ã¡/g, 'á')
+    .replace(/Ã©/g, 'é')
+    .replace(/Ãª/g, 'ê')
+    .replace(/Ã­/g, 'í')
+    .replace(/Ã³/g, 'ó')
+    .replace(/Ãµ/g, 'õ')
+    .replace(/Ãº/g, 'ú')
+    .replace(/Ã¢/g, 'â')
+    .replace(/Ã´/g, 'ô')
+    .replace(/��/g, 'çã')
+    .replace(/�/g, '')
+
+  const normalizedValue = normalizeText(decodedValue)
+
+  if (normalizedValue.includes('NUTRICAO') || normalizedValue.includes('NUTRIO')) {
+    return 'Nutrição'
+  }
+
+  return decodedValue
     .toLowerCase()
     .split(' ')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
-}
-
-function formatDurationMinutes(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '0 min'
-  }
-
-  const totalSeconds = Math.round(seconds)
-  const minutes = Math.floor(totalSeconds / 60)
-  const remainingSeconds = totalSeconds % 60
-
-  if (minutes === 0) {
-    return `${remainingSeconds}s`
-  }
-
-  if (remainingSeconds === 0) {
-    return `${minutes} min`
-  }
-
-  return `${minutes} min ${remainingSeconds}s`
 }
 
 function cleanPlaceholderText(value?: string | null) {
@@ -424,6 +424,50 @@ function countByLabel<T>(rows: T[], getLabel: (row: T) => string, limit = 8) {
     .map(([label, value]) => ({ label, value }))
     .sort((currentItem, nextItem) => nextItem.value - currentItem.value)
     .slice(0, limit)
+}
+
+function countByLabelFiltered<T>(
+  rows: T[],
+  getLabel: (row: T) => string,
+  options?: {
+    limit?: number
+    excludedLabels?: string[]
+  },
+) {
+  const counts = new Map<string, number>()
+  const excludedLabels = new Set(options?.excludedLabels ?? [])
+
+  rows.forEach((row) => {
+    const label = getLabel(row) || 'Não informado'
+
+    if (excludedLabels.has(label)) {
+      return
+    }
+
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  })
+
+  return Array.from(counts.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((currentItem, nextItem) => nextItem.value - currentItem.value)
+    .slice(0, options?.limit ?? 8)
+}
+
+function isMultiSelectEvent(event: unknown) {
+  if (!event || typeof event !== 'object') {
+    return false
+  }
+
+  const mouseEvent = event as {
+    ctrlKey?: boolean
+    metaKey?: boolean
+  }
+
+  return Boolean(mouseEvent.ctrlKey || mouseEvent.metaKey)
+}
+
+function getMaxDateKey(firstDate: string, secondDate: string) {
+  return firstDate >= secondDate ? firstDate : secondDate
 }
 
 function extractAnalysisText(payload: unknown): string {
@@ -595,6 +639,108 @@ function applyLeadTableDateFilter(rows: GenericRow[], filters: FilterState) {
   })
 }
 
+function dedupeLeadRowsByCpf(rows: GenericRow[]) {
+  const rowsMap = new Map<string, GenericRow>()
+
+  rows.forEach((row) => {
+    const cpf = normalizeCpf(getRowField(row, ...cpfFieldCandidates))
+    const key = cpf ?? String(row.id ?? crypto.randomUUID())
+    const currentDateKey = getLeadTableDateKey(row)
+    const existingRow = rowsMap.get(key)
+
+    if (!existingRow) {
+      rowsMap.set(key, row)
+      return
+    }
+
+    const existingDateKey = getLeadTableDateKey(existingRow)
+
+    if (currentDateKey >= existingDateKey) {
+      rowsMap.set(key, row)
+    }
+  })
+
+  return Array.from(rowsMap.values())
+}
+
+function rowHasLeadInscricao(row: GenericRow) {
+  return Boolean(getRowField(row, 'data_inscricao', 'Data da Inscrição'))
+}
+
+function rowHasLeadMatricula(row: GenericRow) {
+  const dataMatricula = getRowField(row, 'data_matricula', 'Data da Matricula')
+  const matriculadoValue = normalizeText(getRowField(row, 'matriculado', 'Matriculado'))
+
+  return Boolean(dataMatricula) || matriculadoValue === 'TRUE'
+}
+
+function getLeadCourseLabel(row: GenericRow) {
+  return titleizeText(getRowField(row, 'curso', 'Curso', 'curso_interesse', 'Curso de interesse'))
+}
+
+function getLeadIngressoLabel(row: GenericRow) {
+  return normalizeIngresso(
+    getRowField(
+      row,
+      'forma_de_ingresso',
+      'forma_ingresso',
+      'Forma de ingresso',
+      'Forma de Ingresso',
+      'forma_ingresso_inscricao',
+      'Forma de Ingresso Inscrição',
+      'forma_ingresso_matricula',
+      'Forma de Ingresso Matricula',
+    ),
+  )
+}
+
+function getLeadCampusLabel(row: GenericRow) {
+  return normalizeBranch(getRowField(row, 'campus', 'Campus', 'filial', 'Filial', 'unidade', 'Unidade'))
+}
+
+function getLeadObservationLabel(row: GenericRow) {
+  return titleizeText(getRowField(row, 'observacao_captacao', 'Observação captação') || 'Sem observação')
+}
+
+function applySpikeLeadChartSelections(
+  rows: GenericRow[],
+  selections: SpikeLeadChartSelections,
+) {
+  return rows.filter((row) => {
+    const values: Record<SpikeLeadChartKey, string> = {
+      course: getLeadCourseLabel(row),
+      ingresso: getLeadIngressoLabel(row),
+      campus: getLeadCampusLabel(row),
+      matriculadoCourse: rowHasLeadMatricula(row) ? getLeadCourseLabel(row) : '__SEM_MATRICULA__',
+      matriculadoIngresso: rowHasLeadMatricula(row)
+        ? normalizeIngresso(
+            getRowField(
+              row,
+              'forma_ingresso_matricula',
+              'Forma de Ingresso Matricula',
+              'forma_de_ingresso',
+              'forma_ingresso',
+            ),
+          )
+        : '__SEM_MATRICULA__',
+      matriculadoCampus: rowHasLeadMatricula(row)
+        ? normalizeBranch(getRowField(row, 'filial', 'Filial', 'campus', 'Campus', 'unidade', 'Unidade'))
+        : '__SEM_MATRICULA__',
+      observation: getLeadObservationLabel(row),
+    }
+
+    return (Object.keys(selections) as SpikeLeadChartKey[]).every((key) => {
+      const selectedValues = selections[key]
+
+      if (selectedValues.length === 0) {
+        return true
+      }
+
+      return selectedValues.includes(values[key])
+    })
+  })
+}
+
 function countIntersectedCpfs(leadsRows: GenericRow[], matriculadosRows: GenericRow[]) {
   const leadsCpfs = extractCpfSet(leadsRows)
   const matriculadosCpfs = extractCpfSet(matriculadosRows)
@@ -673,6 +819,86 @@ function ChartContainer({
   )
 }
 
+function SpikeLeadChartCard({
+  title,
+  description,
+  chartKey,
+  data,
+  selectedValues,
+  onSelect,
+}: {
+  title: string
+  description: string
+  chartKey: SpikeLeadChartKey
+  data: CountDatum[]
+  selectedValues: string[]
+  onSelect: (chartKey: SpikeLeadChartKey, label: string, event?: unknown) => void
+}) {
+  const chartHeight = Math.max(280, data.length * 46)
+
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-5">
+        <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="flex h-[280px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+          Nenhum dado encontrado para este recorte.
+        </div>
+      ) : (
+        <div className="max-h-[420px] overflow-y-auto pr-2">
+          <div style={{ height: chartHeight, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" stroke="#64748b" allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={160}
+                  stroke="#64748b"
+                  tickLine={false}
+                  interval={0}
+                />
+                <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
+                <Bar
+                  dataKey="value"
+                  radius={[0, 12, 12, 0]}
+                  onClick={(dataPoint, _index, event) => {
+                    const payload = dataPoint as { payload?: CountDatum }
+                    const label = payload.payload?.label
+
+                    if (!label) {
+                      return
+                    }
+
+                    onSelect(chartKey, label, event)
+                  }}
+                >
+                  {data.map((entry) => {
+                    const active = selectedValues.includes(entry.label)
+
+                    return (
+                      <Cell
+                        key={`${chartKey}-${entry.label}`}
+                        cursor="pointer"
+                        fill={active ? '#020617' : '#0ea5e9'}
+                      />
+                    )
+                  })}
+                  <LabelList dataKey="value" content={renderSmartBarLabel} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function TrafegoPagoSpike() {
   const { profile } = useProfile()
   const [viewportWidth, setViewportWidth] = useState(
@@ -683,8 +909,6 @@ export function TrafegoPagoSpike() {
   const [inscritoRows, setInscritoRows] = useState<GenericRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
   const [funilGeralRow, setFunilGeralRow] = useState<FunilGeralRow | null>(null)
-  const [clarityResumoRows, setClarityResumoRows] = useState<ClarityResumoRow[]>([])
-  const [clarityDeviceRows, setClarityDeviceRows] = useState<ClarityDeviceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<FilterState>(initialFilters)
@@ -700,6 +924,9 @@ export function TrafegoPagoSpike() {
   const [reportsLoading, setReportsLoading] = useState(true)
   const [reportsError, setReportsError] = useState<string | null>(null)
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('semanal')
+  const [spikeLeadsOnlyView, setSpikeLeadsOnlyView] = useState(true)
+  const [spikeLeadChartSelections, setSpikeLeadChartSelections] =
+    useState<SpikeLeadChartSelections>(initialSpikeLeadChartSelections)
 
   const loadRows = async () => {
     if (!supabase) {
@@ -717,8 +944,6 @@ export function TrafegoPagoSpike() {
       inscritosResponse,
       matriculadosResponse,
       funilGeralResponse,
-      clarityResumoResponse,
-      clarityDevicesResponse,
     ] = await Promise.all([
       fetchAllRows('campanha_euro_20262', '*', {
         orderBy: 'data_inicio',
@@ -734,22 +959,6 @@ export function TrafegoPagoSpike() {
         )
         .limit(1)
         .maybeSingle(),
-      fetchAllRows(
-        'clarity_resumo_diario',
-        'id, created_at, data_referencia, periodo, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, scroll_depth_percentage, active_time_spent_seconds, total_time_spent_seconds',
-        {
-          orderBy: 'data_referencia',
-          ascending: true,
-        },
-      ),
-      fetchAllRows(
-        'clarity_devices_diario',
-        'id, created_at, data_referencia, periodo, device, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, session_percentage',
-        {
-          orderBy: 'data_referencia',
-          ascending: true,
-        },
-      ),
     ])
 
     if (campaignResponse.error) {
@@ -766,8 +975,6 @@ export function TrafegoPagoSpike() {
     setLeadRows(((leadsResponse.data ?? []) as unknown) as GenericRow[])
     setInscritoRows(((inscritosResponse.data ?? []) as unknown) as GenericRow[])
     setFunilGeralRow((funilGeralResponse.data as FunilGeralRow | null) ?? null)
-    setClarityResumoRows(((clarityResumoResponse.data ?? []) as unknown) as ClarityResumoRow[])
-    setClarityDeviceRows(((clarityDevicesResponse.data ?? []) as unknown) as ClarityDeviceRow[])
 
     if (!leadsResponse.error && !inscritosResponse.error && !matriculadosResponse.error) {
       setMatriculados(
@@ -783,13 +990,6 @@ export function TrafegoPagoSpike() {
         matriculadosError: matriculadosResponse.error,
       })
       setMatriculados(0)
-    }
-
-    if (clarityResumoResponse.error || clarityDevicesResponse.error) {
-      console.warn('Não foi possível carregar as tabelas do Clarity.', {
-        clarityResumoError: clarityResumoResponse.error,
-        clarityDevicesError: clarityDevicesResponse.error,
-      })
     }
 
     if (funilGeralResponse.error) {
@@ -1129,30 +1329,148 @@ export function TrafegoPagoSpike() {
     })
   }, [filters.endDate, filters.startDate, rows])
 
-  const clarityResumoFiltered = useMemo(() => {
-    return clarityResumoRows.filter((row) => {
-      const dateKey = getDateKey(row.data_referencia)
-      const startDatePass = !filters.startDate || dateKey >= filters.startDate
-      const endDatePass = !filters.endDate || dateKey <= filters.endDate
-
-      return startDatePass && endDatePass
-    })
-  }, [clarityResumoRows, filters.endDate, filters.startDate])
-
-  const clarityDeviceFiltered = useMemo(() => {
-    return clarityDeviceRows.filter((row) => {
-      const dateKey = getDateKey(row.data_referencia)
-      const startDatePass = !filters.startDate || dateKey >= filters.startDate
-      const endDatePass = !filters.endDate || dateKey <= filters.endDate
-
-      return startDatePass && endDatePass
-    })
-  }, [clarityDeviceRows, filters.endDate, filters.startDate])
-
   const filteredLeadRows = useMemo(
     () => applyLeadTableDateFilter(leadRows, filters),
     [filters, leadRows],
   )
+
+  const spikeLeadsSectionFilters = useMemo<FilterState>(
+    () => ({
+      startDate: spikeLeadsOnlyView
+        ? filters.startDate
+          ? getMaxDateKey(filters.startDate, SPIKE_LEADS_START_DATE)
+          : SPIKE_LEADS_START_DATE
+        : filters.startDate,
+      endDate: filters.endDate,
+    }),
+    [filters.endDate, filters.startDate, spikeLeadsOnlyView],
+  )
+
+  const spikeLeadRowsBase = useMemo(
+    () => dedupeLeadRowsByCpf(applyLeadTableDateFilter(leadRows, spikeLeadsSectionFilters)),
+    [leadRows, spikeLeadsSectionFilters],
+  )
+
+  const spikeLeadRowsFiltered = useMemo(
+    () => applySpikeLeadChartSelections(spikeLeadRowsBase, spikeLeadChartSelections),
+    [spikeLeadChartSelections, spikeLeadRowsBase],
+  )
+
+  const spikeLeadCards = useMemo(
+    () => [
+      {
+        title: 'Leads',
+        value: formatNumberBR(spikeLeadRowsFiltered.length),
+      },
+      {
+        title: 'Inscritos',
+        value: formatNumberBR(spikeLeadRowsFiltered.filter((row) => rowHasLeadInscricao(row)).length),
+      },
+      {
+        title: 'Matriculados',
+        value: formatNumberBR(spikeLeadRowsFiltered.filter((row) => rowHasLeadMatricula(row)).length),
+      },
+    ],
+    [spikeLeadRowsFiltered],
+  )
+
+  const spikeLeadCharts = useMemo(
+    () => ({
+      course: countByLabelFiltered(
+        spikeLeadRowsFiltered,
+        (row) => getLeadCourseLabel(row),
+        {
+          limit: 12,
+          excludedLabels: ['Não informado'],
+        },
+      ),
+      ingresso: countByLabelFiltered(
+        spikeLeadRowsFiltered,
+        (row) => getLeadIngressoLabel(row),
+        {
+          limit: 12,
+          excludedLabels: ['Não informado'],
+        },
+      ),
+      campus: countByLabelFiltered(
+        spikeLeadRowsFiltered,
+        (row) => getLeadCampusLabel(row),
+        {
+          limit: 12,
+          excludedLabels: ['Não informado'],
+        },
+      ),
+      matriculadoCourse: countByLabelFiltered(
+        spikeLeadRowsFiltered.filter((row) => rowHasLeadMatricula(row)),
+        (row) => getLeadCourseLabel(row),
+        {
+          limit: 12,
+          excludedLabels: ['Não informado'],
+        },
+      ),
+      matriculadoIngresso: countByLabelFiltered(
+        spikeLeadRowsFiltered.filter((row) => rowHasLeadMatricula(row)),
+        (row) =>
+          normalizeIngresso(
+            getRowField(
+              row,
+              'forma_ingresso_matricula',
+              'Forma de Ingresso Matricula',
+              'forma_de_ingresso',
+              'forma_ingresso',
+              'Forma de ingresso',
+            ),
+          ),
+        {
+          limit: 12,
+          excludedLabels: ['Não informado'],
+        },
+      ),
+      matriculadoCampus: countByLabelFiltered(
+        spikeLeadRowsFiltered.filter((row) => rowHasLeadMatricula(row)),
+        (row) =>
+          normalizeBranch(getRowField(row, 'filial', 'Filial', 'campus', 'Campus', 'unidade', 'Unidade')),
+        {
+          limit: 12,
+          excludedLabels: ['Não informado'],
+        },
+      ),
+      observation: countByLabelFiltered(
+        spikeLeadRowsFiltered,
+        (row) => getLeadObservationLabel(row),
+        {
+          limit: 12,
+          excludedLabels: ['Sem observação'],
+        },
+      ),
+    }),
+    [spikeLeadRowsFiltered],
+  )
+
+  const handleSpikeLeadChartSelect = (
+    chartKey: SpikeLeadChartKey,
+    label: string,
+    event?: unknown,
+  ) => {
+    setSpikeLeadChartSelections((currentValue) => {
+      const alreadySelected = currentValue[chartKey].includes(label)
+      const multiSelect = isMultiSelectEvent(event)
+
+      if (!multiSelect) {
+        return {
+          ...initialSpikeLeadChartSelections,
+          [chartKey]: alreadySelected ? [] : [label],
+        }
+      }
+
+      return {
+        ...currentValue,
+        [chartKey]: alreadySelected
+          ? currentValue[chartKey].filter((value) => value !== label)
+          : [...currentValue[chartKey], label],
+      }
+    })
+  }
 
   const filteredInscritoRows = useMemo(
     () => applyGenericDateFilter(inscritoRows, filters),
@@ -1236,183 +1554,6 @@ export function TrafegoPagoSpike() {
   )
 
   const topOfFunnel = funnelSteps[0]?.value ?? 0
-
-  const latestClarityDate = useMemo(
-    () =>
-      clarityResumoFiltered.reduce((latestDate, row) => {
-        const dateKey = getDateKey(row.data_referencia)
-        return dateKey > latestDate ? dateKey : latestDate
-      }, ''),
-    [clarityResumoFiltered],
-  )
-
-  const latestClarityResumo = useMemo(
-    () =>
-      clarityResumoFiltered.find(
-        (row) => getDateKey(row.data_referencia) === latestClarityDate,
-      ) ?? null,
-    [clarityResumoFiltered, latestClarityDate],
-  )
-
-  const latestClarityDevices = useMemo(
-    () => {
-      const averageUsersByDevice = clarityDeviceFiltered.reduce(
-        (accumulator, row) => {
-          const deviceLabel = titleizeText(row.device)
-          const currentValue = accumulator.get(deviceLabel) ?? {
-            totalUniqueUsers: 0,
-            totalRows: 0,
-          }
-
-          currentValue.totalUniqueUsers += toNumber(row.unique_users)
-          currentValue.totalRows += 1
-          accumulator.set(deviceLabel, currentValue)
-          return accumulator
-        },
-        new Map<string, { totalUniqueUsers: number; totalRows: number }>(),
-      )
-
-      return clarityDeviceFiltered
-        .filter((row) => getDateKey(row.data_referencia) === latestClarityDate)
-        .map((row) => {
-          const deviceLabel = titleizeText(row.device)
-          const deviceAverage = averageUsersByDevice.get(deviceLabel)
-
-          return {
-            device: deviceLabel,
-            sessions: toNumber(row.sessions),
-            uniqueUsers: toNumber(row.unique_users),
-            averageUniqueUsers:
-              deviceAverage && deviceAverage.totalRows > 0
-                ? deviceAverage.totalUniqueUsers / deviceAverage.totalRows
-                : 0,
-            sessionPercentage: toNumber(row.session_percentage),
-          }
-        })
-        .sort((currentItem, nextItem) => nextItem.sessions - currentItem.sessions)
-    },
-    [clarityDeviceFiltered, latestClarityDate],
-  )
-
-  const claritySeries = useMemo(
-    () =>
-      clarityResumoFiltered.map((row) => ({
-        date: getDateKey(row.data_referencia),
-        sessions: toNumber(row.sessions),
-        unique_users: toNumber(row.unique_users),
-        pages_per_session: toNumber(row.pages_per_session),
-        scroll_depth_percentage: toNumber(row.scroll_depth_percentage),
-        active_time_spent_seconds: toNumber(row.active_time_spent_seconds),
-      })),
-    [clarityResumoFiltered],
-  )
-
-  const clarityPeriodCards = useMemo(() => {
-    if (clarityResumoFiltered.length === 0) {
-      return []
-    }
-
-    const totalSessions = clarityResumoFiltered.reduce(
-      (accumulator, row) => accumulator + toNumber(row.sessions),
-      0,
-    )
-    const totalUniqueUsers = clarityResumoFiltered.reduce(
-      (accumulator, row) => accumulator + toNumber(row.unique_users),
-      0,
-    )
-    const weightedPagesPerSession =
-      totalSessions > 0
-        ? clarityResumoFiltered.reduce(
-            (accumulator, row) =>
-              accumulator + toNumber(row.pages_per_session) * toNumber(row.sessions),
-            0,
-          ) / totalSessions
-        : 0
-    const weightedScrollDepth =
-      totalSessions > 0
-        ? clarityResumoFiltered.reduce(
-            (accumulator, row) =>
-              accumulator +
-              toNumber(row.scroll_depth_percentage) * toNumber(row.sessions),
-            0,
-          ) / totalSessions
-        : 0
-    const weightedActiveTime =
-      totalSessions > 0
-        ? clarityResumoFiltered.reduce(
-            (accumulator, row) =>
-              accumulator +
-              toNumber(row.active_time_spent_seconds) * toNumber(row.sessions),
-            0,
-          ) / totalSessions
-        : 0
-
-    return [
-      {
-        title: 'Sessões no período',
-        value: formatNumberBR(totalSessions),
-        helperText: 'Somatória das Sessões dentro do recorte filtrado.',
-        emphasis: 'primary' as const,
-      },
-      {
-        title: 'usuários únicos somados',
-        value: formatNumberBR(totalUniqueUsers),
-        helperText: 'Soma diária do Clarity, sem deduplicação entre dias.',
-      },
-      {
-        title: 'páginas por sessão',
-        value: formatDecimalBR(weightedPagesPerSession),
-        helperText: 'média ponderada pelo volume de Sessões.',
-      },
-      {
-        title: 'Scroll médio do período',
-        value: formatPercentBR(weightedScrollDepth),
-        helperText: 'média ponderada da profundidade de rolagem.',
-      },
-      {
-        title: 'Tempo ativo médio',
-        value: formatDurationMinutes(weightedActiveTime),
-        helperText: 'média ponderada do tempo ativo por sessão.',
-      },
-    ]
-  }, [clarityResumoFiltered])
-
-  const clarityCards = useMemo(
-    () =>
-      latestClarityResumo
-        ? [
-            {
-              title: 'Sessões no dia',
-              value: formatNumberBR(toNumber(latestClarityResumo.sessions)),
-              helperText: `Base em ${formatDateBR(latestClarityDate)}.`,
-              emphasis: 'primary' as const,
-            },
-            {
-              title: 'usuários únicos',
-              value: formatNumberBR(toNumber(latestClarityResumo.unique_users)),
-              helperText: 'Pessoas únicas navegando na landing page.',
-            },
-            {
-              title: 'páginas por sessão',
-              value: formatDecimalBR(toNumber(latestClarityResumo.pages_per_session)),
-              helperText: 'Profundidade média de navegacao.',
-            },
-            {
-              title: 'Scroll médio',
-              value: formatPercentBR(toNumber(latestClarityResumo.scroll_depth_percentage)),
-              helperText: 'Percentual médio de profundidade de rolagem.',
-            },
-            {
-              title: 'Tempo ativo',
-              value: formatDurationMinutes(
-                toNumber(latestClarityResumo.active_time_spent_seconds),
-              ),
-              helperText: 'Tempo ativo médio registrado pelo Clarity.',
-            },
-          ]
-        : [],
-    [latestClarityDate, latestClarityResumo],
-  )
 
   const kpiCards = useMemo(
     () => [
@@ -1505,141 +1646,6 @@ export function TrafegoPagoSpike() {
     [inscritosForTrafficCards, kpis],
   )
 
-  const enrichedLeadCounts = useMemo(() => {
-    const total = filteredLeadRows.length
-    const inscritos = filteredLeadRows.filter((row) =>
-      Boolean(getRowField(row, 'data_inscricao', 'Data da Inscrição')),
-    ).length
-    const matriculados = filteredLeadRows.filter((row) =>
-      Boolean(getRowField(row, 'data_matricula', 'Data da Matricula')),
-    ).length
-
-    return {
-      total,
-      inscritos,
-      matriculados,
-      naoConvertidos: Math.max(total - inscritos - matriculados, 0),
-    }
-  }, [filteredLeadRows])
-
-  const enrichedLeadFunnelSteps = useMemo(
-    () => [
-      {
-        label: 'Leads',
-        value: enrichedLeadCounts.total,
-        helperText: 'Todos os leads da tabela enriquecida.',
-      },
-      {
-        label: 'Inscritos',
-        value: enrichedLeadCounts.inscritos,
-        helperText: 'Leads com Data da Inscrição preenchida.',
-      },
-      {
-        label: 'Matriculados',
-        value: enrichedLeadCounts.matriculados,
-        helperText: 'Leads com Data da Matricula preenchida.',
-      },
-    ],
-    [enrichedLeadCounts],
-  )
-
-  const enrichedLeadInscritosByIngresso = useMemo(
-    () =>
-      countByLabel(
-        filteredLeadRows.filter((row) => Boolean(getRowField(row, 'data_inscricao', 'Data da Inscrição'))),
-        (row) =>
-          normalizeIngresso(
-            getRowField(
-              row,
-              'forma_ingresso_inscricao',
-              'Forma de Ingresso Inscrição',
-            ),
-          ),
-        12,
-      ),
-    [filteredLeadRows],
-  )
-
-  const enrichedLeadMatriculadosByIngresso = useMemo(
-    () =>
-      countByLabel(
-        filteredLeadRows.filter((row) => Boolean(getRowField(row, 'data_matricula', 'Data da Matricula'))),
-        (row) =>
-          normalizeIngresso(
-            getRowField(
-              row,
-              'forma_ingresso_matricula',
-              'Forma de Ingresso Matricula',
-            ),
-          ),
-        12,
-      ),
-    [filteredLeadRows],
-  )
-
-  const spikeVsNormalByIngresso = useMemo(() => {
-    const leadCpfs = extractCpfSet(filteredLeadRows)
-    const rowsMap = new Map<
-      string,
-      {
-        label: string
-        spike: number
-        normal: number
-        total: number
-      }
-    >()
-
-    filteredInscritoRows.forEach((row) => {
-      const label = normalizeIngresso(
-        getRowField(row, 'forma_de_ingresso', 'FORMA DE INGRESSO'),
-      )
-      const currentRow = rowsMap.get(label) ?? {
-        label,
-        spike: 0,
-        normal: 0,
-        total: 0,
-      }
-
-      const cpf = normalizeCpf(
-        getRowField(row, 'cpf', 'CPF'),
-      )
-      const isSpike = cpf !== null && leadCpfs.has(cpf)
-
-      currentRow.total += 1
-
-      if (isSpike) {
-        currentRow.spike += 1
-      } else {
-        currentRow.normal += 1
-      }
-
-      rowsMap.set(label, currentRow)
-    })
-
-    const totals = Array.from(rowsMap.values()).reduce(
-      (accumulator, row) => ({
-        spike: accumulator.spike + row.spike,
-        normal: accumulator.normal + row.normal,
-        total: accumulator.total + row.total,
-      }),
-      { spike: 0, normal: 0, total: 0 },
-    )
-
-    return {
-      rows: Array.from(rowsMap.values())
-        .map((row) => ({
-          ...row,
-          spikeShareOfSpike: totals.spike > 0 ? safeDivide(row.spike, totals.spike, 100) : 0,
-          normalShareOfNormal:
-            totals.normal > 0 ? safeDivide(row.normal, totals.normal, 100) : 0,
-          spikeShareOfRow: row.total > 0 ? safeDivide(row.spike, row.total, 100) : 0,
-          normalShareOfRow: row.total > 0 ? safeDivide(row.normal, row.total, 100) : 0,
-        }))
-        .sort((currentItem, nextItem) => nextItem.total - currentItem.total),
-      totals,
-    }
-  }, [filteredInscritoRows, filteredLeadRows])
-
   const selectedStoredReport = storedReports[selectedReportType] ?? null
   const isMobileViewport = viewportWidth < 640
   const selectedSessionReport =
@@ -1653,309 +1659,110 @@ export function TrafegoPagoSpike() {
 
   const spikeLeadSection = (
     <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="max-w-3xl">
-        <h3 className="text-lg font-semibold text-slate-950">Funil de leads da Spike</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Esta leitura usa a tabela <span className="font-medium text-slate-700">leads_cursos_enriquecidos</span>,
-          removendo CPF&apos;s duplicados antes da contagem e cruzando inscrição e matrícula no mesmo registro.
-        </p>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
-        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
-          CPF&apos;s duplicados removidos
-        </span>
-        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-700">
-          Leads no recorte: {formatNumberBR(enrichedLeadCounts.total)}
-        </span>
-      </div>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          {enrichedLeadFunnelSteps.map((step, index) => {
-            const previousValue =
-              index === 0 ? step.value : enrichedLeadFunnelSteps[index - 1].value
-            const conversionFromPrevious =
-              index === 0 ? 100 : safeDivide(step.value, previousValue, 100)
-            const shareOfTop =
-              enrichedLeadCounts.total > 0
-                ? safeDivide(step.value, enrichedLeadCounts.total, 100)
-                : 0
-
-            return (
-              <article
-                key={step.label}
-                className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                      Etapa {index + 1}
-                    </p>
-                    <h4 className="mt-1 text-lg font-semibold text-slate-950">
-                      {step.label}
-                    </h4>
-                    <p className="mt-1 text-sm text-slate-500">{step.helperText}</p>
-                  </div>
-
-                  <div className="sm:text-right">
-                    <p className="text-2xl font-semibold tracking-tight text-slate-950">
-                      {formatNumberBR(step.value)}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-slate-500">
-                      {index === 0
-                        ? '100% da base de leads'
-                        : `${formatPercentBR(conversionFromPrevious)} da etapa anterior`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200">
-                  <div
-                    className={`h-full rounded-full bg-gradient-to-r ${funnelAccentClasses[index % funnelAccentClasses.length]}`}
-                    style={{ width: `${Math.max(shareOfTop, step.value > 0 ? 2 : 0)}%` }}
-                  />
-                </div>
-
-                <div className="mt-3 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                  <span>{formatPercentBR(shareOfTop)} da base deduplicada</span>
-                  <span>{formatPercentBR(conversionFromPrevious)} de conversão</span>
-                </div>
-              </article>
-            )
-          })}
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ChartContainer
-            title="Inscritos por forma de ingresso"
-            description="Somente os leads enriquecidos que já têm Data da Inscrição."
-          >
-            {enrichedLeadInscritosByIngresso.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-                Nenhum inscrito encontrado neste recorte.
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={enrichedLeadInscritosByIngresso}
-                  layout="vertical"
-                  margin={{ left: 12, right: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" stroke="#64748b" allowDecimals={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="label"
-                    width={120}
-                    stroke="#64748b"
-                    tickLine={false}
-                  />
-                  <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                  <Bar dataKey="value" fill="#0ea5e9" radius={[0, 12, 12, 0]}>
-                    <LabelList dataKey="value" content={renderSmartBarLabel} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </ChartContainer>
-
-          <ChartContainer
-            title="Matriculados por forma de ingresso"
-            description="Somente os leads enriquecidos que já têm Data da Matricula."
-          >
-            {enrichedLeadMatriculadosByIngresso.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-                Nenhum matriculado encontrado neste recorte.
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={enrichedLeadMatriculadosByIngresso}
-                  layout="vertical"
-                  margin={{ left: 12, right: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" stroke="#64748b" allowDecimals={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="label"
-                    width={120}
-                    stroke="#64748b"
-                    tickLine={false}
-                  />
-                  <Tooltip formatter={(value) => formatNumberBR(Number(value ?? 0))} />
-                  <Bar dataKey="value" fill="#0f766e" radius={[0, 12, 12, 0]}>
-                    <LabelList dataKey="value" content={renderSmartBarLabel} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </ChartContainer>
-        </div>
-      </div>
-
-      <div className="mt-8 rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
-        <div className="max-w-3xl">
-          <h3 className="text-lg font-semibold text-slate-950">
-            Spike x Normal por forma de ingresso
-          </h3>
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-950">Leads Spike</h3>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Aqui cruzamos os inscritos do recorte com a base de leads pelo CPF. Se o CPF do inscrito
-            estiver na base de leads, ele entra como <span className="font-medium text-slate-700">Spike</span>.
-            Se não estiver, entra como <span className="font-medium text-slate-700">Normal</span>.
+            Leitura deduplicada por CPF usando a base de leads enriquecidos.
           </p>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <article className="rounded-2xl border border-sky-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
-              Spike
-            </p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              {formatNumberBR(spikeVsNormalByIngresso.totals.spike)}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              {formatPercentBR(
-                spikeVsNormalByIngresso.totals.total > 0
-                  ? safeDivide(
-                      spikeVsNormalByIngresso.totals.spike,
-                      spikeVsNormalByIngresso.totals.total,
-                      100,
-                    )
-                  : 0,
-                0,
-              )}{' '}
-              do total de inscritos filtrados.
-            </p>
-          </article>
+        <button
+          type="button"
+          onClick={() => {
+            setSpikeLeadsOnlyView((currentValue) => !currentValue)
+            setSpikeLeadChartSelections(initialSpikeLeadChartSelections)
+          }}
+          className={`inline-flex h-11 items-center rounded-full border px-4 text-sm font-semibold transition ${
+            spikeLeadsOnlyView
+              ? 'border-sky-200 bg-sky-50 text-sky-700'
+              : 'border-slate-200 bg-white text-slate-700'
+          }`}
+        >
+          Só essa visão
+        </button>
+      </div>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-              Normal
-            </p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              {formatNumberBR(spikeVsNormalByIngresso.totals.normal)}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              {formatPercentBR(
-                spikeVsNormalByIngresso.totals.total > 0
-                  ? safeDivide(
-                      spikeVsNormalByIngresso.totals.normal,
-                      spikeVsNormalByIngresso.totals.total,
-                      100,
-                    )
-                  : 0,
-                0,
-              )}{' '}
-              do total de inscritos filtrados.
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-              Total comparado
-            </p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              {formatNumberBR(spikeVsNormalByIngresso.totals.total)}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              Usa o mesmo recorte de datas aplicado no restante da página.
-            </p>
-          </article>
-        </div>
-
-        <div className="mt-6 overflow-x-auto">
-          <table className="min-w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="sticky left-0 z-10 bg-slate-50/70 px-4 py-3 font-semibold">
-                  Forma de ingresso
-                </th>
-                <th className="px-4 py-3 font-semibold">Spike</th>
-                <th className="px-4 py-3 font-semibold">% no Spike</th>
-                <th className="px-4 py-3 font-semibold">Normal</th>
-                <th className="px-4 py-3 font-semibold">% no Normal</th>
-                <th className="px-4 py-3 font-semibold">Total</th>
-                <th className="px-4 py-3 font-semibold">% Spike na forma</th>
-                <th className="px-4 py-3 font-semibold">% Normal na forma</th>
-              </tr>
-            </thead>
-            <tbody>
-              {spikeVsNormalByIngresso.rows.map((row) => (
-                <tr key={row.label} className="border-t border-slate-200/80">
-                  <td className="sticky left-0 z-10 bg-slate-50/70 px-4 py-4 font-semibold text-slate-950">
-                    {row.label}
-                  </td>
-                  <td className="px-4 py-4 text-slate-800">{formatNumberBR(row.spike)}</td>
-                  <td className="px-4 py-4 text-slate-600">
-                    {formatPercentBR(row.spikeShareOfSpike, 0)}
-                  </td>
-                  <td className="px-4 py-4 text-slate-800">{formatNumberBR(row.normal)}</td>
-                  <td className="px-4 py-4 text-slate-600">
-                    {formatPercentBR(row.normalShareOfNormal, 0)}
-                  </td>
-                  <td className="px-4 py-4 font-semibold text-slate-950">
-                    {formatNumberBR(row.total)}
-                  </td>
-                  <td className="px-4 py-4 text-sky-700">
-                    {formatPercentBR(row.spikeShareOfRow, 0)}
-                  </td>
-                  <td className="px-4 py-4 text-slate-600">
-                    {formatPercentBR(row.normalShareOfRow, 0)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-slate-200 bg-white">
-                <td className="sticky left-0 z-10 bg-white px-4 py-4 font-semibold text-slate-950">
-                  Total
-                </td>
-                <td className="px-4 py-4 font-semibold text-slate-950">
-                  {formatNumberBR(spikeVsNormalByIngresso.totals.spike)}
-                </td>
-                <td className="px-4 py-4 font-semibold text-slate-700">
-                  {formatPercentBR(100, 0)}
-                </td>
-                <td className="px-4 py-4 font-semibold text-slate-950">
-                  {formatNumberBR(spikeVsNormalByIngresso.totals.normal)}
-                </td>
-                <td className="px-4 py-4 font-semibold text-slate-700">
-                  {formatPercentBR(100, 0)}
-                </td>
-                <td className="px-4 py-4 font-semibold text-slate-950">
-                  {formatNumberBR(spikeVsNormalByIngresso.totals.total)}
-                </td>
-                <td className="px-4 py-4 font-semibold text-sky-700">
-                  {formatPercentBR(
-                    spikeVsNormalByIngresso.totals.total > 0
-                      ? safeDivide(
-                          spikeVsNormalByIngresso.totals.spike,
-                          spikeVsNormalByIngresso.totals.total,
-                          100,
-                        )
-                      : 0,
-                    0,
-                  )}
-                </td>
-                <td className="px-4 py-4 font-semibold text-slate-700">
-                  {formatPercentBR(
-                    spikeVsNormalByIngresso.totals.total > 0
-                      ? safeDivide(
-                          spikeVsNormalByIngresso.totals.normal,
-                          spikeVsNormalByIngresso.totals.total,
-                          100,
-                        )
-                      : 0,
-                    0,
-                  )}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+          Leads a partir do dia {formatDateBR(SPIKE_LEADS_START_DATE)}
         </div>
       </div>
+
+      <section className="mt-6 grid gap-4 md:grid-cols-3">
+        {spikeLeadCards.map((card) => (
+          <article
+            key={card.title}
+            className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <p className="text-sm font-medium text-slate-600">{card.title}</p>
+            <p className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
+              {card.value}
+            </p>
+          </article>
+        ))}
+      </section>
+
+      <section className="mt-6 grid gap-6 xl:grid-cols-2">
+        <SpikeLeadChartCard
+          title="Leads x curso"
+          description="Distribuição dos leads visíveis por curso."
+          chartKey="course"
+          data={spikeLeadCharts.course}
+          selectedValues={spikeLeadChartSelections.course}
+          onSelect={handleSpikeLeadChartSelect}
+        />
+        <SpikeLeadChartCard
+          title="Leads x forma de ingresso"
+          description="Leitura da forma de ingresso registrada no lead."
+          chartKey="ingresso"
+          data={spikeLeadCharts.ingresso}
+          selectedValues={spikeLeadChartSelections.ingresso}
+          onSelect={handleSpikeLeadChartSelect}
+        />
+        <SpikeLeadChartCard
+          title="Leads x campus"
+          description="Distribuição dos leads por campus."
+          chartKey="campus"
+          data={spikeLeadCharts.campus}
+          selectedValues={spikeLeadChartSelections.campus}
+          onSelect={handleSpikeLeadChartSelect}
+        />
+        <SpikeLeadChartCard
+          title="Leads x matriculados por curso"
+          description="Somente os leads já matriculados."
+          chartKey="matriculadoCourse"
+          data={spikeLeadCharts.matriculadoCourse}
+          selectedValues={spikeLeadChartSelections.matriculadoCourse}
+          onSelect={handleSpikeLeadChartSelect}
+        />
+        <SpikeLeadChartCard
+          title="Leads x matriculados por forma de ingresso"
+          description="Somente os leads já matriculados."
+          chartKey="matriculadoIngresso"
+          data={spikeLeadCharts.matriculadoIngresso}
+          selectedValues={spikeLeadChartSelections.matriculadoIngresso}
+          onSelect={handleSpikeLeadChartSelect}
+        />
+        <SpikeLeadChartCard
+          title="Leads x matriculados por campus"
+          description="Somente os leads já matriculados."
+          chartKey="matriculadoCampus"
+          data={spikeLeadCharts.matriculadoCampus}
+          selectedValues={spikeLeadChartSelections.matriculadoCampus}
+          onSelect={handleSpikeLeadChartSelect}
+        />
+        <div className="xl:col-span-2">
+          <SpikeLeadChartCard
+            title="Leads x observações"
+            description="Observações preenchidas pela captação."
+            chartKey="observation"
+            data={spikeLeadCharts.observation}
+            selectedValues={spikeLeadChartSelections.observation}
+            onSelect={handleSpikeLeadChartSelect}
+          />
+        </div>
+      </section>
     </section>
   )
 
@@ -2602,265 +2409,6 @@ export function TrafegoPagoSpike() {
                 </div>
               )}
             </section>
-          </section>
-
-          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="mb-5">
-              <h3 className="text-lg font-semibold text-slate-950">Dados da Landing Page</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                Leitura de comportamento da página com base no Clarity, usando o mesmo recorte
-                de datas aplicado ao restante do dashboard.
-              </p>
-            </div>
-
-            {clarityCards.length === 0 ? (
-              <EmptyState
-                title="Sem dados do Clarity para o período atual"
-                description="Assim que as tabelas clarity_resumo_diario e clarity_devices_diario tiverem registros dentro do recorte, esta seção será preenchida automaticamente."
-              />
-            ) : (
-              <>
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-slate-900">Consolidado do período</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Leitura geral do recorte filtrado para entender o tamanho da audiencia e a
-                    qualidade media da navegacao.
-                  </p>
-                </div>
-
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                  {clarityPeriodCards.map((card) => (
-                    <KpiCard
-                      key={card.title}
-                      title={card.title}
-                      value={card.value}
-                      helperText={card.helperText}
-                      emphasis={card.emphasis}
-                    />
-                  ))}
-                </section>
-
-                <div className="mb-4 mt-8">
-                  <p className="text-sm font-semibold text-slate-900">Última leitura disponível</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Foto mais recente do Clarity dentro do período para acompanhar o comportamento
-                    mais atual da landing page.
-                  </p>
-                </div>
-
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                  {clarityCards.map((card) => (
-                    <KpiCard
-                      key={card.title}
-                      title={card.title}
-                      value={card.value}
-                      helperText={card.helperText}
-                      emphasis={card.emphasis}
-                    />
-                  ))}
-                </section>
-
-                <section className="mt-6 grid gap-6 xl:grid-cols-2">
-                  <ChartContainer
-                    title="Sessões e usuários por dia"
-                    description="Série diária do Clarity para acompanhar volume e alcance da landing page."
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={claritySeries}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#64748b"
-                          tickFormatter={(value) => formatDateShortBR(String(value))}
-                        />
-                        <YAxis
-                          stroke="#64748b"
-                          tickFormatter={(value) => formatCompactNumberBR(Number(value))}
-                        />
-                        <Tooltip
-                          formatter={(value) => formatNumberBR(Number(value ?? 0))}
-                          labelFormatter={(label) => formatDateBR(String(label))}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="sessions"
-                          name="Sessões"
-                          stroke="#0ea5e9"
-                          strokeWidth={2.5}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="unique_users"
-                          name="usuários únicos"
-                          stroke="#0f172a"
-                          strokeWidth={2.5}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-
-                  <ChartContainer
-                    title="Dispositivos na Última leitura"
-                    description="distribuição de Sessões por device na data mais recente do Clarity dentro do filtro."
-                  >
-                    <div className="flex h-full flex-col gap-4">
-                      <div className="min-h-0 flex-1">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={latestClarityDevices}
-                            layout="vertical"
-                            margin={{ top: 0, right: 16, left: 12, bottom: 0 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis
-                              type="number"
-                              stroke="#64748b"
-                              tickFormatter={(value) => formatCompactNumberBR(Number(value))}
-                            />
-                            <YAxis
-                              type="category"
-                              dataKey="device"
-                              width={90}
-                              stroke="#64748b"
-                              tick={{ fontSize: 12 }}
-                            />
-                            <Tooltip
-                              formatter={(value) => formatNumberBR(Number(value ?? 0))}
-                              labelFormatter={(label) => `Device: ${label}`}
-                            />
-                            <Legend />
-                            <Bar
-                              dataKey="sessions"
-                              name="Sessoes"
-                              fill="#0ea5e9"
-                              radius={[0, 12, 12, 0]}
-                            />
-                            <Bar
-                              dataKey="averageUniqueUsers"
-                              name="Média de usuários"
-                              fill="#0f172a"
-                              radius={[0, 12, 12, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {latestClarityDevices.map((item) => (
-                          <div
-                            key={item.device}
-                            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-sm font-semibold text-slate-900">
-                                {item.device}
-                              </span>
-                              <span className="text-sm font-semibold text-slate-600">
-                                {formatPercentBR(item.sessionPercentage)}
-                              </span>
-                            </div>
-                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                              <div
-                                className="h-full rounded-full bg-sky-500"
-                                style={{
-                                  width: `${Math.min(
-                                    Math.max(
-                                      item.sessionPercentage,
-                                      item.sessionPercentage > 0 ? 4 : 0,
-                                    ),
-                                    100,
-                                  )}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </ChartContainer>
-
-
-                  <ChartContainer
-                    title="Qualidade da visita"
-                    description="Profundidade de scroll e páginas por sessão ao longo dos dias filtrados."
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={claritySeries}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#64748b"
-                          tickFormatter={(value) => formatDateShortBR(String(value))}
-                        />
-                        <YAxis stroke="#64748b" />
-                        <Tooltip
-                          formatter={(value, name) =>
-                            name === 'Scroll médio'
-                              ? formatPercentBR(Number(value ?? 0))
-                              : formatDecimalBR(Number(value ?? 0))
-                          }
-                          labelFormatter={(label) => formatDateBR(String(label))}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="scroll_depth_percentage"
-                          name="Scroll médio"
-                          stroke="#7c3aed"
-                          strokeWidth={2.5}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="pages_per_session"
-                          name="páginas por sessão"
-                          stroke="#0f766e"
-                          strokeWidth={2.5}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-
-                  <ChartContainer
-                    title="Tempo ativo por dia"
-                    description="Tempo ativo médio identificado pelo Clarity em cada data."
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={claritySeries}>
-                        <defs>
-                          <linearGradient id="clarityActiveTime" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.4} />
-                            <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0.05} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#64748b"
-                          tickFormatter={(value) => formatDateShortBR(String(value))}
-                        />
-                        <YAxis
-                          stroke="#64748b"
-                          tickFormatter={(value) => formatDurationMinutes(Number(value ?? 0))}
-                        />
-                        <Tooltip
-                          formatter={(value) => formatDurationMinutes(Number(value ?? 0))}
-                          labelFormatter={(label) => formatDateBR(String(label))}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="active_time_spent_seconds"
-                          name="Tempo ativo"
-                          stroke="#0ea5e9"
-                          fill="url(#clarityActiveTime)"
-                          strokeWidth={2.5}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </section>
-              </>
-            )}
           </section>
 
           {spikeLeadSection}
