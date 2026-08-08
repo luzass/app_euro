@@ -24,15 +24,15 @@ const MIN_LEAD_DATE = '2026-08-06'
 const SUPABASE_BATCH_SIZE = 1000
 const observationOptions = [
   'Mensagem bloqueada',
-  'Sem interaÃ§Ã£o',
+  'Sem interação',
   'Abordagem - coleta de dados',
-  'Abordagem - parou interaÃ§Ã£o',
-  'NegociaÃ§Ã£o - inicio',
-  'NegociaÃ§Ã£o - aguardando documentaÃ§Ã£o',
-  'NegociaÃ§Ã£o - parou interaÃ§Ã£o',
-  'FinalizaÃ§Ã£o - aguardando aproveitamento',
-  'FinalizaÃ§Ã£o - aguardando pagamento',
-  'FinalizaÃ§Ã£o - parou interaÃ§Ã£o',
+  'Abordagem - parou interação',
+  'Negociação - início',
+  'Negociação - aguardando documentação',
+  'Negociação - parou interação',
+  'Finalização - aguardando aproveitamento',
+  'Finalização - aguardando pagamento',
+  'Finalização - parou interação',
 ] as const
 
 type SellerScope = Seller | 'Todos'
@@ -174,7 +174,7 @@ function readField(row: Record<string, unknown>, ...keys: string[]) {
   return ''
 }
 
-function titleize(value?: string | null, fallback = 'NÃ£o informado') {
+function titleize(value?: string | null, fallback = 'Não informado') {
   const text = cleanText(value)
 
   if (!text) {
@@ -227,7 +227,7 @@ function normalizeCampus(value?: string | null) {
   const normalized = normalizeString(value)
 
   if (normalized.includes('AGUAS CLARAS') || normalized.includes('GUAS CLARAS')) {
-    return 'Ãguas Claras'
+    return 'Águas Claras'
   }
 
   if (normalized.includes('ASA SUL')) {
@@ -241,7 +241,7 @@ function normalizeCourse(value?: string | null) {
   const text = cleanText(value)
 
   if (!text) {
-    return 'NÃ£o informado'
+    return 'Não informado'
   }
 
   return titleize(text)
@@ -251,7 +251,7 @@ function normalizeLeadIngresso(value?: string | null) {
   const normalized = normalizeString(value)
 
   if (!normalized) {
-    return 'NÃ£o informado'
+    return 'Não informado'
   }
 
   if (normalized.includes('PROUNI')) {
@@ -279,7 +279,7 @@ function normalizeLeadIngresso(value?: string | null) {
   }
 
   if (normalized.includes('READMISSAO')) {
-    return 'ReadmissÃ£o'
+    return 'Readmissão'
   }
 
   if (normalized.includes('FIES')) {
@@ -298,14 +298,14 @@ function normalizeLeadIngresso(value?: string | null) {
 }
 
 function normalizeObservation(value?: string | null) {
-  return cleanText(value) || 'Sem observaÃ§Ã£o'
+  return cleanText(value) || 'Sem observação'
 }
 
 function countByLabel<T>(rows: T[], getLabel: (row: T) => string, limit = 12) {
   const counts = new Map<string, number>()
 
   rows.forEach((row) => {
-    const label = getLabel(row) || 'NÃ£o informado'
+    const label = getLabel(row) || 'Não informado'
     counts.set(label, (counts.get(label) ?? 0) + 1)
   })
 
@@ -372,7 +372,7 @@ function renderSmartBarLabel(props: {
 
 async function fetchAllRows(tableName: string, selectClause = '*') {
   if (!supabase) {
-    return { data: [] as GenericRow[], error: new Error('Supabase nÃ£o configurado.') }
+    return { data: [] as GenericRow[], error: new Error('Supabase não configurado.') }
   }
 
   const allRows: GenericRow[] = []
@@ -404,8 +404,8 @@ async function fetchAllRows(tableName: string, selectClause = '*') {
 function buildLeadRow(row: GenericRow): LeadPrepared {
   const id = (row.id as number | string | undefined) ?? crypto.randomUUID()
   const sellerRaw = readField(row, 'vendedor_crm', 'Vendedor CRM')
-  const createdAtLabel = readField(row, 'created_at', 'Data da criaÃ§Ã£o', 'Data de criaÃ§Ã£o')
-  const inscricaoDate = readField(row, 'data_inscricao', 'Data da InscriÃ§Ã£o')
+  const createdAtLabel = readField(row, 'created_at', 'Data da criação', 'Data de criação')
+  const inscricaoDate = readField(row, 'data_inscricao', 'Data da Inscrição')
   const matriculaDate = readField(row, 'data_matricula', 'Data da Matricula')
 
   return {
@@ -448,14 +448,14 @@ function buildLeadRow(row: GenericRow): LeadPrepared {
         'Forma de ingresso',
         'Forma de Ingresso',
         'forma_ingresso_inscricao',
-        'Forma de Ingresso InscriÃ§Ã£o',
+        'Forma de Ingresso Inscrição',
       ),
     ),
     campus: normalizeCampus(
       readField(row, 'campus', 'Campus', 'unidade', 'Unidade', 'local', 'Local'),
     ),
     observation: normalizeObservation(
-      readField(row, 'observacao_captacao', 'ObservaÃ§Ã£o captaÃ§Ã£o'),
+      readField(row, 'observacao_captacao', 'Observação captação'),
     ),
     createdAtKey: toDateKey(createdAtLabel),
     createdAtLabel,
@@ -509,7 +509,7 @@ function DataFilters({
         <div className="max-w-3xl">
           <h3 className="text-lg font-semibold text-slate-950">Filtro por data</h3>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Esta visÃ£o considera apenas os leads a partir de{' '}
+            Esta visão considera apenas os leads a partir de{' '}
             <span className="font-medium text-slate-700">{formatDateBR(MIN_LEAD_DATE)}</span>.
           </p>
         </div>
@@ -670,7 +670,7 @@ export function VisaoCrm() {
 
   const loadRows = async () => {
     if (!supabase) {
-      setError('Configure o Supabase antes de abrir esta visÃ£o.')
+      setError('Configure o Supabase antes de abrir esta visão.')
       setLoading(false)
       return
     }
@@ -683,7 +683,7 @@ export function VisaoCrm() {
 
     if (loadError) {
       setError(
-        'NÃ£o foi possÃ­vel carregar os leads enriquecidos. Confere se a tabela leads_cursos_enriquecidos estÃ¡ liberada no Supabase.',
+        'Não foi possível carregar os leads enriquecidos. Confere se a tabela leads_cursos_enriquecidos está liberada no Supabase.',
       )
       setRows([])
       setLoading(false)
@@ -697,7 +697,7 @@ export function VisaoCrm() {
     setRows(preparedRows)
     setObservationDrafts(
       preparedRows.reduce<Record<string, string>>((accumulator, row) => {
-        accumulator[String(row.id)] = row.observation === 'Sem observaÃ§Ã£o' ? '' : row.observation
+        accumulator[String(row.id)] = row.observation === 'Sem observação' ? '' : row.observation
         return accumulator
       }, {}),
     )
@@ -754,18 +754,18 @@ export function VisaoCrm() {
       {
         title: 'Leads totais',
         value: formatNumberBR(filteredRows.length),
-        helperText: 'Todos os leads visÃ­veis no recorte atual.',
+        helperText: 'Todos os leads visíveis no recorte atual.',
         emphasis: 'primary' as const,
       },
       {
-        title: 'Leads nÃ£o se inscreveram',
+        title: 'Leads não se inscreveram',
         value: formatNumberBR(filteredRows.filter((row) => !row.hasInscricao).length),
-        helperText: 'Leads ainda sem Data da InscriÃ§Ã£o preenchida.',
+        helperText: 'Leads ainda sem Data da Inscrição preenchida.',
       },
       {
         title: 'Leads inscritos',
         value: formatNumberBR(filteredRows.filter((row) => row.hasInscricao).length),
-        helperText: 'Leads com Data da InscriÃ§Ã£o preenchida.',
+        helperText: 'Leads com Data da Inscrição preenchida.',
       },
       {
         title: 'Leads matriculados',
@@ -870,7 +870,7 @@ export function VisaoCrm() {
       .eq('id', row.id)
 
     if (saveError) {
-      setNotice('NÃ£o foi possÃ­vel salvar a observaÃ§Ã£o deste lead.')
+      setNotice('Não foi possível salvar a observação deste lead.')
       setSavingLeadId(null)
       return
     }
@@ -880,12 +880,12 @@ export function VisaoCrm() {
         item.id === row.id
           ? {
               ...item,
-              observation: observationValue ? observationValue : 'Sem observaÃ§Ã£o',
+              observation: observationValue ? observationValue : 'Sem observação',
             }
           : item,
       ),
     )
-    setNotice('ObservaÃ§Ã£o salva com sucesso.')
+    setNotice('Observação salva com sucesso.')
     setSavingLeadId(null)
   }
 
@@ -915,7 +915,7 @@ export function VisaoCrm() {
       .eq('id', row.id)
 
     if (saveError) {
-      setNotice('NÃ£o foi possÃ­vel atribuir este lead agora.')
+      setNotice('Não foi possível atribuir este lead agora.')
       setSavingLeadId(null)
       return
     }
@@ -931,18 +931,18 @@ export function VisaoCrm() {
           : item,
       ),
     )
-    setNotice(`Lead atribuÃ­do para ${sellerToAssign}.`)
+    setNotice(`Lead atribuído para ${sellerToAssign}.`)
     setSavingLeadId(null)
   }
 
   if (loading) {
-    return <Loading message="Carregando a nova visÃ£o de leads..." />
+    return <Loading message="Carregando a nova visão de leads..." />
   }
 
   if (error) {
     return (
       <EmptyState
-        title="NÃ£o foi possÃ­vel carregar a visÃ£o de leads"
+        title="Não foi possível carregar a visão de leads"
         description={error}
       />
     )
@@ -954,16 +954,16 @@ export function VisaoCrm() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Leads da captaÃ§Ã£o
+              Leads da captação
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Nova visÃ£o de leads
+              Nova visão de leads
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-500">
               Esta leitura usa a tabela{' '}
               <span className="font-medium text-slate-700">leads_cursos_enriquecidos</span>,
               mostrando apenas os leads a partir de {formatDateBR(MIN_LEAD_DATE)}. Cada vendedor
-              vÃª seus leads, e os sem responsÃ¡vel aparecem para todos.
+              vê seus leads, e os sem responsável aparecem para todos.
             </p>
           </div>
 
@@ -1022,10 +1022,10 @@ export function VisaoCrm() {
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-950">Filtros pelos grÃ¡ficos</h3>
+            <h3 className="text-lg font-semibold text-slate-950">Filtros pelos gráficos</h3>
             <p className="mt-1 text-sm text-slate-500">
               Clique em uma barra para filtrar. Use <strong>Ctrl</strong> ou <strong>Cmd</strong>{' '}
-              para acumular mais de uma seleÃ§Ã£o.
+              para acumular mais de uma seleção.
             </p>
           </div>
 
@@ -1062,7 +1062,7 @@ export function VisaoCrm() {
       <section className="grid gap-4 xl:grid-cols-2">
         <ChartCard
           title="Leads x curso"
-          description="DistribuiÃ§Ã£o dos leads visÃ­veis por curso."
+          description="Distribuição dos leads visíveis por curso."
           chartKey="course"
           data={chartData.course}
           selectedValues={chartSelections.course}
@@ -1078,7 +1078,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Leads x campus"
-          description="DistribuiÃ§Ã£o dos leads por campus."
+          description="Distribuição dos leads por campus."
           chartKey="campus"
           data={chartData.campus}
           selectedValues={chartSelections.campus}
@@ -1086,7 +1086,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Leads x matriculados por curso"
-          description="Somente os leads jÃ¡ matriculados."
+          description="Somente os leads já matriculados."
           chartKey="matriculadoCourse"
           data={chartData.matriculadoCourse}
           selectedValues={chartSelections.matriculadoCourse}
@@ -1094,7 +1094,7 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Leads x matriculados por forma de ingresso"
-          description="Somente os leads jÃ¡ matriculados."
+          description="Somente os leads já matriculados."
           chartKey="matriculadoIngresso"
           data={chartData.matriculadoIngresso}
           selectedValues={chartSelections.matriculadoIngresso}
@@ -1102,15 +1102,15 @@ export function VisaoCrm() {
         />
         <ChartCard
           title="Leads x matriculados por campus"
-          description="Somente os leads jÃ¡ matriculados."
+          description="Somente os leads já matriculados."
           chartKey="matriculadoCampus"
           data={chartData.matriculadoCampus}
           selectedValues={chartSelections.matriculadoCampus}
           onSelect={handleChartSelect}
         />
         <ChartCard
-          title="Leads x observaÃ§Ãµes"
-          description="ObservaÃ§Ãµes preenchidas pela captaÃ§Ã£o."
+          title="Leads x observações"
+          description="Observações preenchidas pela captação."
           chartKey="observation"
           data={chartData.observation}
           selectedValues={chartSelections.observation}
@@ -1123,7 +1123,7 @@ export function VisaoCrm() {
           <div>
             <h3 className="text-lg font-semibold text-slate-950">Cards dos leads</h3>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Os cards abaixo respeitam o mesmo recorte de datas, vendedor e filtros aplicados pelos grÃ¡ficos.
+              Os cards abaixo respeitam o mesmo recorte de datas, vendedor e filtros aplicados pelos gráficos.
             </p>
           </div>
 
@@ -1168,8 +1168,8 @@ export function VisaoCrm() {
               title="Nenhum lead encontrado"
               description={
                 cardTab === 'unassigned'
-                  ? 'Nenhum lead sem vendedor apareceu neste recorte. Ajuste as datas ou limpe os filtros dos grÃ¡ficos.'
-                  : 'Nenhum lead com vendedor apareceu neste recorte. Ajuste as datas, o vendedor selecionado ou limpe os filtros dos grÃ¡ficos.'
+                  ? 'Nenhum lead sem vendedor apareceu neste recorte. Ajuste as datas ou limpe os filtros dos gráficos.'
+                  : 'Nenhum lead com vendedor apareceu neste recorte. Ajuste as datas, o vendedor selecionado ou limpe os filtros dos gráficos.'
               }
             />
           </div>
@@ -1280,7 +1280,7 @@ export function VisaoCrm() {
                           Telefone
                         </p>
                         <p className="mt-2 break-words text-sm font-medium text-slate-900">
-                          {row.phone || 'NÃ£o informado'}
+                          {row.phone || 'Não informado'}
                         </p>
                       </div>
 
@@ -1289,7 +1289,7 @@ export function VisaoCrm() {
                           Data de entrada
                         </p>
                         <p className="mt-2 break-words text-sm font-medium text-slate-900">
-                          {row.createdAtKey ? formatDateBR(row.createdAtKey) : 'NÃ£o informada'}
+                          {row.createdAtKey ? formatDateBR(row.createdAtKey) : 'Não informada'}
                         </p>
                       </div>
                     </div>
@@ -1299,7 +1299,7 @@ export function VisaoCrm() {
                         htmlFor={`observacao-${row.id}`}
                         className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
                       >
-                        ObservaÃ§Ã£o
+                        Observação
                       </label>
                       <select
                         id={`observacao-${row.id}`}
@@ -1346,3 +1346,4 @@ export function VisaoCrm() {
     </div>
   )
 }
+
