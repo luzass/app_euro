@@ -239,9 +239,14 @@ function normalizeCampus(value?: string | null) {
 
 function normalizeCourse(value?: string | null) {
   const text = cleanText(value)
+  const normalized = normalizeString(value)
 
   if (!text) {
     return 'Não informado'
+  }
+
+  if (normalized.includes('NUTRICAO')) {
+    return 'Nutrição'
   }
 
   return titleize(text)
@@ -301,11 +306,22 @@ function normalizeObservation(value?: string | null) {
   return cleanText(value) || 'Sem observação'
 }
 
-function countByLabel<T>(rows: T[], getLabel: (row: T) => string, limit = 12) {
+function countByLabel<T>(
+  rows: T[],
+  getLabel: (row: T) => string,
+  limit = 12,
+  excludedLabels: string[] = [],
+) {
   const counts = new Map<string, number>()
+  const excluded = new Set(excludedLabels)
 
   rows.forEach((row) => {
     const label = getLabel(row) || 'Não informado'
+
+    if (excluded.has(label)) {
+      return
+    }
+
     counts.set(label, (counts.get(label) ?? 0) + 1)
   })
 
@@ -779,20 +795,26 @@ export function VisaoCrm() {
 
   const chartData = useMemo(
     () => ({
-      course: countByLabel(filteredRows, (row) => row.course),
-      ingresso: countByLabel(filteredRows, (row) => row.ingresso),
-      campus: countByLabel(filteredRows, (row) => row.campus),
+      course: countByLabel(filteredRows, (row) => row.course, 12, ['Não informado']),
+      ingresso: countByLabel(filteredRows, (row) => row.ingresso, 12, ['Não informado']),
+      campus: countByLabel(filteredRows, (row) => row.campus, 12, ['Não informado']),
       matriculadoCourse: countByLabel(
         filteredRows.filter((row) => row.hasMatricula),
         (row) => row.course,
+        12,
+        ['Não informado'],
       ),
       matriculadoIngresso: countByLabel(
         filteredRows.filter((row) => row.hasMatricula),
         (row) => row.matriculadoIngresso,
+        12,
+        ['Não informado'],
       ),
       matriculadoCampus: countByLabel(
         filteredRows.filter((row) => row.hasMatricula),
         (row) => row.matriculadoCampus,
+        12,
+        ['Não informado'],
       ),
       observation: countByLabel(filteredRows, (row) => row.observation),
     }),
