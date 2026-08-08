@@ -658,6 +658,7 @@ export function VisaoCrm() {
   )
   const [chartSelections, setChartSelections] = useState<ChartSelections>(initialChartSelections)
   const [cardTab, setCardTab] = useState<CardTab>('seller')
+  const [cardSearch, setCardSearch] = useState('')
   const [savingLeadId, setSavingLeadId] = useState<number | string | null>(null)
   const [observationDrafts, setObservationDrafts] = useState<Record<string, string>>({})
   const [sellerDrafts, setSellerDrafts] = useState<Record<string, Seller>>({})
@@ -814,6 +815,16 @@ export function VisaoCrm() {
   )
 
   const activeCards = cardTab === 'unassigned' ? unassignedCards : assignedCards
+
+  const searchedCards = useMemo(() => {
+    const normalizedSearch = normalizeString(cardSearch)
+
+    if (!normalizedSearch) {
+      return activeCards
+    }
+
+    return activeCards.filter((row) => normalizeString(row.name).includes(normalizedSearch))
+  }, [activeCards, cardSearch])
 
   const sellerTabLabel = useMemo(() => {
     if (selectedSeller !== 'Todos') {
@@ -1157,12 +1168,23 @@ export function VisaoCrm() {
 
             <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">
               <Users className="h-4 w-4" />
-              {formatNumberBR(activeCards.length)} lead(s)
+              {formatNumberBR(searchedCards.length)} lead(s)
             </div>
           </div>
         </div>
 
-        {activeCards.length === 0 ? (
+        <div className="mt-5">
+          <label className="text-sm font-medium text-slate-700">Buscar por nome</label>
+          <input
+            type="text"
+            value={cardSearch}
+            onChange={(event) => setCardSearch(event.target.value)}
+            placeholder="Digite o nome do lead"
+            className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400"
+          />
+        </div>
+
+        {searchedCards.length === 0 ? (
           <div className="mt-6">
             <EmptyState
               title="Nenhum lead encontrado"
@@ -1176,7 +1198,7 @@ export function VisaoCrm() {
         ) : (
           <div className="mt-6 max-h-[980px] overflow-y-auto pr-2">
             <div className="grid gap-4 xl:grid-cols-2">
-              {activeCards.map((row) => {
+              {searchedCards.map((row) => {
                 const isSaving = savingLeadId === row.id
                 const draftObservation = observationDrafts[String(row.id)] ?? ''
                 const draftSeller =
