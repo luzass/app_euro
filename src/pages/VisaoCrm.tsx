@@ -873,12 +873,11 @@ export function VisaoCrm() {
 
     const observationValue = (observationDrafts[String(row.id)] ?? '').trim() || null
 
-    const { error: saveError } = await supabase
-      .from('leads_cursos')
-      .update({
-        observacao_captacao: observationValue,
-      })
-      .eq('id', row.id)
+    const { error: saveError } = await supabase.rpc('atualizar_lead_captacao', {
+      p_id: Number(row.id),
+      p_vendedor_crm: null,
+      p_observacao_captacao: observationValue,
+    })
 
     if (saveError) {
       setNotice('Não foi possível salvar a observação deste lead.')
@@ -918,12 +917,11 @@ export function VisaoCrm() {
     setSavingLeadId(row.id)
     setNotice(null)
 
-    const { error: saveError } = await supabase
-      .from('leads_cursos')
-      .update({
-        vendedor_crm: sellerToAssign,
-      })
-      .eq('id', row.id)
+    const { error: saveError } = await supabase.rpc('atualizar_lead_captacao', {
+      p_id: Number(row.id),
+      p_vendedor_crm: sellerToAssign,
+      p_observacao_captacao: null,
+    })
 
     if (saveError) {
       setNotice('Não foi possível atribuir este lead agora.')
