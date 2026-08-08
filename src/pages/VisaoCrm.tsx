@@ -772,23 +772,23 @@ export function VisaoCrm() {
       {
         title: 'Leads totais',
         value: formatNumberBR(filteredRows.length),
-        helperText: 'Todos os leads visíveis no recorte atual.',
+        helperText: '',
         emphasis: 'primary' as const,
       },
       {
         title: 'Leads não se inscreveram',
         value: formatNumberBR(filteredRows.filter((row) => !row.hasInscricao).length),
-        helperText: 'Leads ainda sem Data da Inscrição preenchida.',
+        helperText: '',
       },
       {
         title: 'Leads inscritos',
         value: formatNumberBR(filteredRows.filter((row) => row.hasInscricao).length),
-        helperText: 'Leads com Data da Inscrição preenchida.',
+        helperText: '',
       },
       {
         title: 'Leads matriculados',
         value: formatNumberBR(filteredRows.filter((row) => row.hasMatricula).length),
-        helperText: 'Leads com Data da Matricula preenchida.',
+        helperText: '',
       },
     ],
     [filteredRows],
@@ -991,12 +991,6 @@ export function VisaoCrm() {
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
               Nova visão de leads
             </h2>
-            <p className="mt-4 text-sm leading-7 text-slate-500">
-              Esta leitura usa a tabela{' '}
-              <span className="font-medium text-slate-700">leads_cursos_enriquecidos</span>,
-              mostrando apenas os leads a partir de {formatDateBR(MIN_LEAD_DATE)}. Cada vendedor
-              vê seus leads, e os sem responsável aparecem para todos.
-            </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
