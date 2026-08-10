@@ -346,6 +346,26 @@ function titleizeText(value?: string | null) {
     .join(' ')
 }
 
+function formatDurationMinutes(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '0 min'
+  }
+
+  const totalSeconds = Math.round(seconds)
+  const minutes = Math.floor(totalSeconds / 60)
+  const remainingSeconds = totalSeconds % 60
+
+  if (minutes === 0) {
+    return `${remainingSeconds}s`
+  }
+
+  if (remainingSeconds === 0) {
+    return `${minutes} min`
+  }
+
+  return `${minutes} min ${remainingSeconds}s`
+}
+
 function cleanPlaceholderText(value?: string | null) {
   const normalized = String(value ?? '')
     .replace(/\s+/g, ' ')
@@ -1505,7 +1525,7 @@ export function TrafegoPagoSpike() {
       },
       {
         title: 'Tempo ativo médio',
-        value: `${Math.round(weightedActiveTime / 60)} min`,
+        value: formatDurationMinutes(weightedActiveTime),
         helperText: 'Média ponderada do tempo ativo por sessão.',
       },
     ]
@@ -1538,7 +1558,9 @@ export function TrafegoPagoSpike() {
             },
             {
               title: 'Tempo ativo',
-              value: `${Math.round(toNumber(latestClarityResumo.active_time_spent_seconds) / 60)} min`,
+              value: formatDurationMinutes(
+                toNumber(latestClarityResumo.active_time_spent_seconds),
+              ),
               helperText: 'Tempo ativo médio registrado pelo Clarity.',
             },
           ]
