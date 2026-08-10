@@ -85,7 +85,23 @@ interface MatriculadoAnalysisRow {
   data_baixa_do_pagamento: string | null
 }
 
+interface ClarityResumoRow {
+  id: number
+  created_at: string
+  data_referencia: string
+  periodo: string | null
+  sessions: string | number | null
+  bot_sessions: string | number | null
+  total_sessions_incluindo_bots: string | number | null
+  unique_users: string | number | null
+  pages_per_session: string | number | null
+  scroll_depth_percentage: string | number | null
+  active_time_spent_seconds: string | number | null
+  total_time_spent_seconds: string | number | null
+}
+
 type ReportType = 'semanal' | 'mensal'
+type SpikeLeadRangeMode = 'general' | 'from_start'
 
 interface ReportRange {
   type: ReportType
@@ -129,6 +145,11 @@ interface FunilGeralRow {
 }
 
 const initialFilters: FilterState = {
+  startDate: '',
+  endDate: '',
+}
+
+const initialSpikeLeadFilters: FilterState = {
   startDate: '',
   endDate: '',
 }
@@ -909,6 +930,7 @@ export function TrafegoPagoSpike() {
   const [inscritoRows, setInscritoRows] = useState<GenericRow[]>([])
   const [matriculados, setMatriculados] = useState(0)
   const [funilGeralRow, setFunilGeralRow] = useState<FunilGeralRow | null>(null)
+  const [clarityResumoRows, setClarityResumoRows] = useState<ClarityResumoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<FilterState>(initialFilters)
@@ -924,7 +946,8 @@ export function TrafegoPagoSpike() {
   const [reportsLoading, setReportsLoading] = useState(true)
   const [reportsError, setReportsError] = useState<string | null>(null)
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('semanal')
-  const [spikeLeadsOnlyView, setSpikeLeadsOnlyView] = useState(true)
+  const [spikeLeadRangeMode, setSpikeLeadRangeMode] = useState<SpikeLeadRangeMode>('from_start')
+  const [spikeLeadFilters, setSpikeLeadFilters] = useState<FilterState>(initialSpikeLeadFilters)
   const [spikeLeadChartSelections, setSpikeLeadChartSelections] =
     useState<SpikeLeadChartSelections>(initialSpikeLeadChartSelections)
 
@@ -944,6 +967,7 @@ export function TrafegoPagoSpike() {
       inscritosResponse,
       matriculadosResponse,
       funilGeralResponse,
+      clarityResumoResponse,
     ] = await Promise.all([
       fetchAllRows('campanha_euro_20262', '*', {
         orderBy: 'data_inicio',
@@ -959,6 +983,14 @@ export function TrafegoPagoSpike() {
         )
         .limit(1)
         .maybeSingle(),
+      fetchAllRows(
+        'clarity_resumo_diario',
+        'id, created_at, data_referencia, periodo, sessions, bot_sessions, total_sessions_incluindo_bots, unique_users, pages_per_session, scroll_depth_percentage, active_time_spent_seconds, total_time_spent_seconds',
+        {
+          orderBy: 'data_referencia',
+          ascending: true,
+        },
+      ),
     ])
 
     if (campaignResponse.error) {
@@ -975,6 +1007,7 @@ export function TrafegoPagoSpike() {
     setLeadRows(((leadsResponse.data ?? []) as unknown) as GenericRow[])
     setInscritoRows(((inscritosResponse.data ?? []) as unknown) as GenericRow[])
     setFunilGeralRow((funilGeralResponse.data as FunilGeralRow | null) ?? null)
+    setClarityResumoRows(((clarityResumoResponse.data ?? []) as unknown) as ClarityResumoRow[])
 
     if (!leadsResponse.error && !inscritosResponse.error && !matriculadosResponse.error) {
       setMatriculados(
@@ -995,6 +1028,12 @@ export function TrafegoPagoSpike() {
     if (funilGeralResponse.error) {
       console.warn('Não foi possível carregar a tabela funil_euro_20262_geral.', {
         funilGeralError: funilGeralResponse.error,
+      })
+    }
+
+    if (clarityResumoResponse.error) {
+      console.warn('Não foi possível carregar a tabela clarity_resumo_diario.', {
+        clarityResumoError: clarityResumoResponse.error,
       })
     }
 
@@ -1329,6 +1368,16 @@ export function TrafegoPagoSpike() {
     })
   }, [filters.endDate, filters.startDate, rows])
 
+  const clarityResumoFiltered = useMemo(() => {
+    return clarityResumoRows.filter((row) => {
+      const dateKey = getDateKey(row.data_referencia)
+      const startDatePass = !filters.startDate || dateKey >= filters.startDate
+      const endDatePass = !filters.endDate || dateKey <= filters.endDate
+
+      return startDatePass && endDatePass
+    })
+  }, [clarityResumoRows, filters.endDate, filters.startDate])
+
   const filteredLeadRows = useMemo(
     () => applyLeadTableDateFilter(leadRows, filters),
     [filters, leadRows],
@@ -1336,14 +1385,15 @@ export function TrafegoPagoSpike() {
 
   const spikeLeadsSectionFilters = useMemo<FilterState>(
     () => ({
-      startDate: spikeLeadsOnlyView
-        ? filters.startDate
-          ? getMaxDateKey(filters.startDate, SPIKE_LEADS_START_DATE)
-          : SPIKE_LEADS_START_DATE
-        : filters.startDate,
-      endDate: filters.endDate,
+      startDate:
+        spikeLeadRangeMode === 'from_start'
+          ? spikeLeadFilters.startDate
+            ? getMaxDateKey(spikeLeadFilters.startDate, SPIKE_LEADS_START_DATE)
+            : SPIKE_LEADS_START_DATE
+          : spikeLeadFilters.startDate,
+      endDate: spikeLeadFilters.endDate,
     }),
-    [filters.endDate, filters.startDate, spikeLeadsOnlyView],
+    [spikeLeadFilters.endDate, spikeLeadFilters.startDate, spikeLeadRangeMode],
   )
 
   const spikeLeadRowsBase = useMemo(
@@ -1372,6 +1422,128 @@ export function TrafegoPagoSpike() {
       },
     ],
     [spikeLeadRowsFiltered],
+  )
+
+  const latestClarityDate = useMemo(
+    () =>
+      clarityResumoFiltered.reduce((latestDate, row) => {
+        const dateKey = getDateKey(row.data_referencia)
+        return dateKey > latestDate ? dateKey : latestDate
+      }, ''),
+    [clarityResumoFiltered],
+  )
+
+  const latestClarityResumo = useMemo(
+    () =>
+      clarityResumoFiltered.find(
+        (row) => getDateKey(row.data_referencia) === latestClarityDate,
+      ) ?? null,
+    [clarityResumoFiltered, latestClarityDate],
+  )
+
+  const clarityPeriodCards = useMemo(() => {
+    if (clarityResumoFiltered.length === 0) {
+      return []
+    }
+
+    const totalSessions = clarityResumoFiltered.reduce(
+      (accumulator, row) => accumulator + toNumber(row.sessions),
+      0,
+    )
+    const totalUniqueUsers = clarityResumoFiltered.reduce(
+      (accumulator, row) => accumulator + toNumber(row.unique_users),
+      0,
+    )
+    const weightedPagesPerSession =
+      totalSessions > 0
+        ? clarityResumoFiltered.reduce(
+            (accumulator, row) =>
+              accumulator + toNumber(row.pages_per_session) * toNumber(row.sessions),
+            0,
+          ) / totalSessions
+        : 0
+    const weightedScrollDepth =
+      totalSessions > 0
+        ? clarityResumoFiltered.reduce(
+            (accumulator, row) =>
+              accumulator +
+              toNumber(row.scroll_depth_percentage) * toNumber(row.sessions),
+            0,
+          ) / totalSessions
+        : 0
+    const weightedActiveTime =
+      totalSessions > 0
+        ? clarityResumoFiltered.reduce(
+            (accumulator, row) =>
+              accumulator +
+              toNumber(row.active_time_spent_seconds) * toNumber(row.sessions),
+            0,
+          ) / totalSessions
+        : 0
+
+    return [
+      {
+        title: 'Sessões no período',
+        value: formatNumberBR(totalSessions),
+        helperText: 'Somatória das sessões no recorte filtrado.',
+        emphasis: 'primary' as const,
+      },
+      {
+        title: 'Usuários únicos somados',
+        value: formatNumberBR(totalUniqueUsers),
+        helperText: 'Soma diária do Clarity sem deduplicação entre dias.',
+      },
+      {
+        title: 'Páginas por sessão',
+        value: formatDecimalBR(weightedPagesPerSession),
+        helperText: 'Média ponderada pelo volume de sessões.',
+      },
+      {
+        title: 'Scroll médio do período',
+        value: formatPercentBR(weightedScrollDepth),
+        helperText: 'Média ponderada da profundidade de rolagem.',
+      },
+      {
+        title: 'Tempo ativo médio',
+        value: `${Math.round(weightedActiveTime / 60)} min`,
+        helperText: 'Média ponderada do tempo ativo por sessão.',
+      },
+    ]
+  }, [clarityResumoFiltered])
+
+  const clarityCards = useMemo(
+    () =>
+      latestClarityResumo
+        ? [
+            {
+              title: 'Sessões no dia',
+              value: formatNumberBR(toNumber(latestClarityResumo.sessions)),
+              helperText: `Base em ${formatDateBR(latestClarityDate)}.`,
+              emphasis: 'primary' as const,
+            },
+            {
+              title: 'Usuários únicos',
+              value: formatNumberBR(toNumber(latestClarityResumo.unique_users)),
+              helperText: 'Pessoas únicas na landing page.',
+            },
+            {
+              title: 'Páginas por sessão',
+              value: formatDecimalBR(toNumber(latestClarityResumo.pages_per_session)),
+              helperText: 'Profundidade média de navegação.',
+            },
+            {
+              title: 'Scroll médio',
+              value: formatPercentBR(toNumber(latestClarityResumo.scroll_depth_percentage)),
+              helperText: 'Percentual médio de profundidade de rolagem.',
+            },
+            {
+              title: 'Tempo ativo',
+              value: `${Math.round(toNumber(latestClarityResumo.active_time_spent_seconds) / 60)} min`,
+              helperText: 'Tempo ativo médio registrado pelo Clarity.',
+            },
+          ]
+        : [],
+    [latestClarityDate, latestClarityResumo],
   )
 
   const spikeLeadCharts = useMemo(
@@ -1657,35 +1829,142 @@ export function TrafegoPagoSpike() {
         }
       : null
 
+  const landingPageSection = (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-5">
+        <h3 className="text-lg font-semibold text-slate-950">Dados da Landing Page</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Leitura de comportamento da página com base no Clarity, usando o mesmo recorte de datas aplicado ao restante do dashboard.
+        </p>
+      </div>
+
+      {clarityCards.length === 0 ? (
+        <EmptyState
+          title="Sem dados do Clarity para o período atual"
+          description="Assim que a tabela clarity_resumo_diario tiver registros dentro do recorte, esta seção será preenchida automaticamente."
+        />
+      ) : (
+        <>
+          <div className="mb-4">
+            <p className="text-sm font-semibold text-slate-900">Consolidado do período</p>
+          </div>
+
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {clarityPeriodCards.map((card) => (
+              <KpiCard
+                key={card.title}
+                title={card.title}
+                value={card.value}
+                helperText={card.helperText}
+                emphasis={card.emphasis}
+              />
+            ))}
+          </section>
+
+          <div className="mb-4 mt-8">
+            <p className="text-sm font-semibold text-slate-900">Última leitura disponível</p>
+          </div>
+
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {clarityCards.map((card) => (
+              <KpiCard
+                key={card.title}
+                title={card.title}
+                value={card.value}
+                helperText={card.helperText}
+                emphasis={card.emphasis}
+              />
+            ))}
+          </section>
+        </>
+      )}
+    </section>
+  )
+
   const spikeLeadSection = (
     <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-slate-950">Leads Spike</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Leitura deduplicada por CPF usando a base de leads enriquecidos.
-          </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setSpikeLeadsOnlyView((currentValue) => !currentValue)
-            setSpikeLeadChartSelections(initialSpikeLeadChartSelections)
-          }}
-          className={`inline-flex h-11 items-center rounded-full border px-4 text-sm font-semibold transition ${
-            spikeLeadsOnlyView
-              ? 'border-sky-200 bg-sky-50 text-sky-700'
-              : 'border-slate-200 bg-white text-slate-700'
-          }`}
-        >
-          Só essa visão
-        </button>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
-          Leads a partir do dia {formatDateBR(SPIKE_LEADS_START_DATE)}
+      <div className="mt-5 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setSpikeLeadRangeMode('general')
+              setSpikeLeadChartSelections(initialSpikeLeadChartSelections)
+            }}
+            className={`inline-flex h-10 items-center rounded-full border px-4 text-sm font-semibold transition ${
+              spikeLeadRangeMode === 'general'
+                ? 'border-slate-950 bg-slate-950 text-white'
+                : 'border-slate-200 bg-white text-slate-700'
+            }`}
+          >
+            Geral
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSpikeLeadRangeMode('from_start')
+              setSpikeLeadChartSelections(initialSpikeLeadChartSelections)
+            }}
+            className={`inline-flex h-10 items-center rounded-full border px-4 text-sm font-semibold transition ${
+              spikeLeadRangeMode === 'from_start'
+                ? 'border-sky-200 bg-sky-50 text-sky-700'
+                : 'border-slate-200 bg-white text-slate-700'
+            }`}
+          >
+            06/08/2026
+          </button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-slate-700">Data inicial</span>
+            <input
+              type="date"
+              value={spikeLeadFilters.startDate}
+              onChange={(event) =>
+                setSpikeLeadFilters((currentValue) => ({
+                  ...currentValue,
+                  startDate: event.target.value,
+                }))
+              }
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-slate-700">Data final</span>
+            <input
+              type="date"
+              value={spikeLeadFilters.endDate}
+              onChange={(event) =>
+                setSpikeLeadFilters((currentValue) => ({
+                  ...currentValue,
+                  endDate: event.target.value,
+                }))
+              }
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            />
+          </label>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSpikeLeadFilters(initialSpikeLeadFilters)
+                setSpikeLeadChartSelections(initialSpikeLeadChartSelections)
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              <Eraser className="h-4 w-4" />
+              Limpar datas
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2410,6 +2689,8 @@ export function TrafegoPagoSpike() {
               )}
             </section>
           </section>
+
+          {landingPageSection}
 
           {spikeLeadSection}
 
