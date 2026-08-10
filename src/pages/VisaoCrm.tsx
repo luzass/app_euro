@@ -25,6 +25,7 @@ const SUPABASE_BATCH_SIZE = 1000
 const observationOptions = [
   'Mensagem bloqueada',
   'Sem interação',
+  'Sem interesse',
   'Abordagem - coleta de dados',
   'Abordagem - parou interação',
   'Negociação - início',
@@ -82,6 +83,11 @@ type LeadPrepared = {
   matriculadoCampus: string
   hasInscricao: boolean
   hasMatricula: boolean
+}
+
+type CardFeedback = {
+  type: 'success' | 'error'
+  message: string
 }
 
 const initialFilters: FilterState = {
@@ -679,6 +685,7 @@ export function VisaoCrm() {
   const [savingLeadId, setSavingLeadId] = useState<number | string | null>(null)
   const [observationDrafts, setObservationDrafts] = useState<Record<string, string>>({})
   const [sellerDrafts, setSellerDrafts] = useState<Record<string, Seller>>({})
+  const [cardFeedbacks, setCardFeedbacks] = useState<Record<string, CardFeedback>>({})
 
   useEffect(() => {
     if (resolvedProfileSeller && !canChooseSeller) {
@@ -886,6 +893,30 @@ export function VisaoCrm() {
     setChartSelections(initialChartSelections)
   }
 
+  const showCardFeedback = (
+    rowId: number | string,
+    type: CardFeedback['type'],
+    message: string,
+  ) => {
+    const key = String(rowId)
+
+    setCardFeedbacks((currentValue) => ({
+      ...currentValue,
+      [key]: {
+        type,
+        message,
+      },
+    }))
+
+    window.setTimeout(() => {
+      setCardFeedbacks((currentValue) => {
+        const nextValue = { ...currentValue }
+        delete nextValue[key]
+        return nextValue
+      })
+    }, 3000)
+  }
+
   const handleSaveObservation = async (row: LeadPrepared) => {
     if (!supabase) {
       return
@@ -894,16 +925,22 @@ export function VisaoCrm() {
     setSavingLeadId(row.id)
     setNotice(null)
 
+    const sellerToPersist =
+      sellerDrafts[String(row.id)] ??
+      row.seller ??
+      (selectedSeller !== 'Todos' ? selectedSeller : resolvedProfileSeller) ??
+      null
     const observationValue = (observationDrafts[String(row.id)] ?? '').trim() || null
 
     const { error: saveError } = await supabase.rpc('atualizar_lead_captacao', {
       p_id: Number(row.id),
-      p_vendedor_crm: null,
+      p_vendedor_crm: sellerToPersist,
       p_observacao_captacao: observationValue,
     })
 
     if (saveError) {
       setNotice('Não foi possível salvar a observação deste lead.')
+      showCardFeedback(row.id, 'error', 'Não foi possível salvar agora.')
       setSavingLeadId(null)
       return
     }
@@ -914,11 +951,22 @@ export function VisaoCrm() {
           ? {
               ...item,
               observation: observationValue ? observationValue : 'Sem observação',
+              seller: sellerToPersist,
+              sellerRaw: sellerToPersist ?? '',
             }
           : item,
       ),
     )
-    setNotice('Observação salva com sucesso.')
+
+    if (row.seller === null && sellerToPersist) {
+      setCardTab('seller')
+      setNotice('Informações atualizadas.')
+      showCardFeedback(row.id, 'success', 'Informações atualizadas.')
+    } else {
+      setNotice('Informações atualizadas.')
+      showCardFeedback(row.id, 'success', 'Informações atualizadas.')
+    }
+
     setSavingLeadId(null)
   }
 
@@ -934,6 +982,7 @@ export function VisaoCrm() {
 
     if (!sellerToAssign) {
       setNotice('Escolha um vendedor antes de assumir este lead.')
+      showCardFeedback(row.id, 'error', 'Escolha um vendedor antes de salvar.')
       return
     }
 
@@ -948,6 +997,7 @@ export function VisaoCrm() {
 
     if (saveError) {
       setNotice('Não foi possível atribuir este lead agora.')
+      showCardFeedback(row.id, 'error', 'Não foi possível salvar agora.')
       setSavingLeadId(null)
       return
     }
@@ -963,7 +1013,13 @@ export function VisaoCrm() {
           : item,
       ),
     )
-    setNotice(`Lead atribuído para ${sellerToAssign}.`)
+
+    if (cardTab === 'unassigned') {
+      setCardTab('seller')
+    }
+
+    setNotice('Informações atualizadas.')
+    showCardFeedback(row.id, 'success', 'Informações atualizadas.')
     setSavingLeadId(null)
   }
 
@@ -1216,6 +1272,7 @@ export function VisaoCrm() {
               {searchedCards.map((row) => {
                 const isSaving = savingLeadId === row.id
                 const draftObservation = observationDrafts[String(row.id)] ?? ''
+                const feedback = cardFeedbacks[String(row.id)] ?? null
                 const draftSeller =
                   sellerDrafts[String(row.id)] ??
                   resolvedProfileSeller ??
@@ -1372,6 +1429,19 @@ export function VisaoCrm() {
                           Salvar
                         </button>
                       </div>
+
+                      {feedback ? (
+                        <div
+                          className={cn(
+                            'mt-3 rounded-2xl px-3 py-2 text-sm font-medium',
+                            feedback.type === 'success'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-rose-50 text-rose-700',
+                          )}
+                        >
+                          {feedback.message}
+                        </div>
+                      ) : null}
                     </div>
                   </article>
                 )
