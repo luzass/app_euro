@@ -88,7 +88,14 @@ export function AppRoutes() {
             path="dashboard-euro"
             element={
               <RequireRole
-                allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
+                allowedRoles={[
+                  'admin',
+                  'reitoria',
+                  'coordenador',
+                  'captacao',
+                  'captacao_gerente',
+                  'funcionario',
+                ]}
               >
                 <DashboardEuro />
               </RequireRole>

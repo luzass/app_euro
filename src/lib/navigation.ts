@@ -34,7 +34,7 @@ export const navItems: NavItem[] = [
     title: 'Dashboard - Euro',
     path: '/app/dashboard-euro',
     icon: LayoutDashboard,
-    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
+    allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
     title: 'Metas',
@@ -62,6 +62,7 @@ export function getDefaultRoute(role?: Role | null) {
   }
 
   if (
+    role === 'coordenador' ||
     role === 'captacao' ||
     role === 'captacao_gerente' ||
     role === 'funcionario' ||

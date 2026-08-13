@@ -7,7 +7,15 @@ const corsHeaders = {
   'Content-Type': 'application/json',
 }
 
-const allowedRoles = new Set(['admin', 'reitoria', 'spike', 'captacao', 'captacao_gerente', 'funcionario'])
+const allowedRoles = new Set([
+  'admin',
+  'reitoria',
+  'coordenador',
+  'spike',
+  'captacao',
+  'captacao_gerente',
+  'funcionario',
+])
 
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {

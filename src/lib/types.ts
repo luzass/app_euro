@@ -1,6 +1,7 @@
 export type Role =
   | 'admin'
   | 'reitoria'
+  | 'coordenador'
   | 'spike'
   | 'captacao'
   | 'captacao_gerente'
@@ -20,6 +21,8 @@ export function formatRoleLabel(role?: Role | null) {
       return 'Admin'
     case 'reitoria':
       return 'Reitoria'
+    case 'coordenador':
+      return 'Coordenador'
     case 'spike':
       return 'Spike'
     case 'captacao':

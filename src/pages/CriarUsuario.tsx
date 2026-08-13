@@ -168,6 +168,7 @@ export function CriarUsuario() {
               >
                 <option value="admin">Admin</option>
                 <option value="reitoria">Reitoria</option>
+                <option value="coordenador">Coordenador</option>
                 <option value="spike">Spike</option>
                 <option value="captacao">Captação - Vendedor</option>
                 <option value="captacao_gerente">Captação - Gerente</option>

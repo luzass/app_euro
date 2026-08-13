@@ -2,7 +2,17 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   nome text not null,
   email text not null unique,
-  role text not null default 'captacao' check (role in ('admin', 'reitoria', 'spike', 'captacao', 'funcionario')),
+  role text not null default 'captacao' check (
+    role in (
+      'admin',
+      'reitoria',
+      'coordenador',
+      'spike',
+      'captacao',
+      'captacao_gerente',
+      'funcionario'
+    )
+  ),
   created_at timestamptz not null default timezone('utc', now())
 );
 
