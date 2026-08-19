@@ -1572,20 +1572,19 @@ export function DashboardEuro() {
   const matriculadosTodayRows = useMemo(
     () =>
       matriculadosFiltered.filter(
-        (row) =>
-          row.dateKey === matriculadosReferenceDate &&
-          row.contratoLabel === 'Ativo' &&
-          row.periodoLabel === '1',
+        (row) => row.dateKey === matriculadosReferenceDate && row.contratoLabel === 'Ativo',
       ),
     [matriculadosFiltered, matriculadosReferenceDate],
   )
 
   const matriculadosAtivosFiltered = useMemo(
-    () =>
-      matriculadosFiltered.filter(
-        (row) => row.contratoLabel === 'Ativo' && row.periodoLabel === '1',
-      ),
+    () => matriculadosFiltered.filter((row) => row.contratoLabel === 'Ativo'),
     [matriculadosFiltered],
+  )
+
+  const matriculadosAtivosPeriodo1Filtered = useMemo(
+    () => matriculadosAtivosFiltered.filter((row) => row.periodoLabel === '1'),
+    [matriculadosAtivosFiltered],
   )
 
   const manualMatriculadosAtivosFiltered = useMemo(
@@ -2164,7 +2163,7 @@ export function DashboardEuro() {
     const aggregateByFilial = (filial: 'Asa Sul' | 'Águas Claras') => {
       const rowsMap = new Map<string, FilialTableRow>()
 
-      matriculadosAtivosFiltered.forEach((row) => {
+      matriculadosAtivosPeriodo1Filtered.forEach((row) => {
         if (row.filialLabel !== filial) {
           return
         }
@@ -2259,7 +2258,7 @@ export function DashboardEuro() {
       asaSul: aggregateByFilial('Asa Sul'),
       aguasClaras: aggregateByFilial('Águas Claras'),
     }
-  }, [manualMatriculadosAtivosFiltered, matriculadosAtivosFiltered])
+  }, [manualMatriculadosAtivosFiltered, matriculadosAtivosPeriodo1Filtered])
 
   const inscritosActiveFilters = useMemo(
     () =>
