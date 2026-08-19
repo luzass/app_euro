@@ -121,19 +121,6 @@ interface FilialTableRow {
   graduado: number
   transferenciaExterna: number
   total: number
-  manualAdjustmentCount: number
-}
-
-interface ManualMatriculadoPrepared {
-  aluno: string
-  dateKey: string
-  filialLabel: string
-  cursoLabel: string
-  turnoLabel: string
-  ingressoLabel: string
-  statusLabel: string
-  contratoLabel: string
-  periodoLabel: string
 }
 
 interface ComparativeKpiCard {
@@ -154,163 +141,6 @@ const initialDateRange: DateRangeFilter = {
   startDate: '',
   endDate: '',
 }
-
-const manualTurmaRows = [
-  {
-    aluno: 'JULIA STEFANI SANTANA DE ARAUJO',
-    filial: 'Águas Claras',
-    curso: 'Biomedicina',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'YASMIN DE CARVALHO DA SILVA',
-    filial: 'Águas Claras',
-    curso: 'Biomedicina',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'LETICIA SANTOS DIAS',
-    filial: 'Águas Claras',
-    curso: 'Direito',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - DIREITO MATUTINO 02',
-    filial: 'Águas Claras',
-    curso: 'Direito',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'GRAZIELLE GOMES SILVA DE OLIVEIRA',
-    filial: 'Águas Claras',
-    curso: 'Fisioterapia',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ENFERMAGEM MATUTINO 01',
-    filial: 'Águas Claras',
-    curso: 'Enfermagem',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - FISIOTERAPIA NOTURNO 01',
-    filial: 'Águas Claras',
-    curso: 'Fisioterapia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - FISIOTERAPIA NOTURNO 02',
-    filial: 'Águas Claras',
-    curso: 'Fisioterapia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 01',
-    filial: 'Águas Claras',
-    curso: 'Odontologia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 02',
-    filial: 'Águas Claras',
-    curso: 'Odontologia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 03',
-    filial: 'Águas Claras',
-    curso: 'Odontologia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 04',
-    filial: 'Águas Claras',
-    curso: 'Odontologia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA NOTURNO 05',
-    filial: 'Águas Claras',
-    curso: 'Odontologia',
-    turno: 'Noturno',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - PSICOLOGIA MATUTINO 01',
-    filial: 'Águas Claras',
-    curso: 'Psicologia',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - PSICOLOGIA MATUTINO 02',
-    filial: 'Águas Claras',
-    curso: 'Psicologia',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 01',
-    filial: 'Asa Sul',
-    curso: 'Medicina',
-    turno: 'Integral',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 02',
-    filial: 'Asa Sul',
-    curso: 'Medicina',
-    turno: 'Integral',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 03',
-    filial: 'Asa Sul',
-    curso: 'Medicina',
-    turno: 'Integral',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 04',
-    filial: 'Asa Sul',
-    curso: 'Medicina',
-    turno: 'Integral',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - MEDICINA 05',
-    filial: 'Asa Sul',
-    curso: 'Medicina',
-    turno: 'Integral',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ENFERMAGEM MATUTINO ASA SUL 01',
-    filial: 'Asa Sul',
-    curso: 'Enfermagem',
-    turno: 'Matutino',
-    ingresso: 'PROUNI',
-  },
-  {
-    aluno: 'AJUSTE MANUAL PROUNI - ODONTOLOGIA INTEGRAL ASA SUL 01',
-    filial: 'Asa Sul',
-    curso: 'Odontologia',
-    turno: 'Integral',
-    ingresso: 'PROUNI',
-  },
-] as const
 
 const activeBarColor = '#0f172a'
 const defaultBarColor = '#0ea5e9'
@@ -1364,22 +1194,6 @@ export function DashboardEuro() {
     [matriculados20252Rows],
   )
 
-  const manualMatriculadosPrepared = useMemo<ManualMatriculadoPrepared[]>(
-    () =>
-      manualTurmaRows.map((row) => ({
-        aluno: row.aluno,
-        dateKey: '',
-        filialLabel: normalizeBranch(row.filial),
-        cursoLabel: titleize(row.curso),
-        turnoLabel: titleize(row.turno),
-        ingressoLabel: row.ingresso,
-        statusLabel: 'Não informado',
-        contratoLabel: 'Ativo',
-        periodoLabel: '',
-      })),
-    [],
-  )
-
   const inscritosFiltered = useMemo(
     () =>
       inscritosPrepared.filter((row) => {
@@ -1525,42 +1339,6 @@ export function DashboardEuro() {
     [matriculadosDateRange, matriculadosPrepared, matriculadosSelections],
   )
 
-  const manualMatriculadosFiltered = useMemo(
-    () =>
-      manualMatriculadosPrepared.filter((row) => {
-        if (!applyDateRange(row.dateKey, matriculadosDateRange)) {
-          return false
-        }
-
-        if (matriculadosSelections.filial && row.filialLabel !== matriculadosSelections.filial) {
-          return false
-        }
-
-        if (matriculadosSelections.curso && row.cursoLabel !== matriculadosSelections.curso) {
-          return false
-        }
-
-        if (matriculadosSelections.ingresso && row.ingressoLabel !== matriculadosSelections.ingresso) {
-          return false
-        }
-
-        if (matriculadosSelections.turno && row.turnoLabel !== matriculadosSelections.turno) {
-          return false
-        }
-
-        if (matriculadosSelections.contrato && row.contratoLabel !== matriculadosSelections.contrato) {
-          return false
-        }
-
-        if (matriculadosSelections.status && row.statusLabel !== matriculadosSelections.status) {
-          return false
-        }
-
-        return true
-      }),
-    [manualMatriculadosPrepared, matriculadosDateRange, matriculadosSelections],
-  )
-
   const inscritosReferenceDate = useMemo(() => getLatestDate(inscritosFiltered), [inscritosFiltered])
   const matriculadosReferenceDate = useMemo(() => getPreviousDayDateKey(), [])
 
@@ -1587,14 +1365,9 @@ export function DashboardEuro() {
     [matriculadosAtivosFiltered],
   )
 
-  const manualMatriculadosAtivosFiltered = useMemo(
-    () => manualMatriculadosFiltered.filter((row) => row.contratoLabel === 'Ativo'),
-    [manualMatriculadosFiltered],
-  )
-
   const matriculadosGeraisComAjustes = useMemo(
-    () => [...matriculadosAtivosFiltered, ...manualMatriculadosAtivosFiltered],
-    [manualMatriculadosAtivosFiltered, matriculadosAtivosFiltered],
+    () => matriculadosAtivosFiltered,
+    [matriculadosAtivosFiltered],
   )
 
   const matriculadosGerais20262 = useMemo(
@@ -1603,16 +1376,8 @@ export function DashboardEuro() {
   )
 
   const matriculadosGeraisComMedicina = useMemo(
-    () => [
-      ...matriculadosAtivosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
-      ...manualMatriculadosAtivosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
-    ],
-    [manualMatriculadosAtivosFiltered, matriculadosAtivosFiltered],
-  )
-
-  const matriculadosGeraisComReadmissao = useMemo(
-    () => manualMatriculadosAtivosFiltered.filter((row) => !isMedicineCourse(row.cursoLabel)),
-    [manualMatriculadosAtivosFiltered],
+    () => matriculadosAtivosFiltered.filter((row) => isMedicineCourse(row.cursoLabel)),
+    [matriculadosAtivosFiltered],
   )
 
   const inscritosCards = useMemo(
@@ -1708,47 +1473,27 @@ export function DashboardEuro() {
       {
         title: 'Matriculados 26.2',
         value: formatNumberBR(matriculadosGerais20262.length),
-        helperText: 'Base 26.2 com contrato ativo, sem Medicina e sem os ajustes manuais de PROUNI 26.1.',
+        helperText: 'Base 26.2 com contrato ativo, sem Medicina.',
       },
       {
         title: 'Matriculados 26.2 - Asa Sul',
         value: formatNumberBR(
           matriculadosGerais20262.filter((row) => row.filialLabel === 'Asa Sul').length,
         ),
-        helperText: 'Base 26.2 da filial Asa Sul com contrato ativo, sem Medicina e sem os ajustes manuais.',
+        helperText: 'Base 26.2 da filial Asa Sul com contrato ativo, sem Medicina.',
       },
       {
         title: 'Matriculados 26.2 - Águas Claras',
         value: formatNumberBR(
           matriculadosGerais20262.filter((row) => row.filialLabel === 'Águas Claras').length,
         ),
-        helperText: 'Base 26.2 da filial Águas Claras com contrato ativo, sem Medicina e sem os ajustes manuais.',
-      },
-      {
-        title: 'Matriculados + PROUNI 26.1 (Readmissão)',
-        value: formatNumberBR(matriculadosGeraisComReadmissao.length),
-        helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo.',
-      },
-      {
-        title: 'Matriculados + PROUNI 26.1 - Asa Sul',
-        value: formatNumberBR(
-          matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Asa Sul').length,
-        ),
-        helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo na filial Asa Sul.',
-      },
-      {
-        title: 'Matriculados + PROUNI 26.1 - Águas Claras',
-        value: formatNumberBR(
-          matriculadosGeraisComReadmissao.filter((row) => row.filialLabel === 'Águas Claras').length,
-        ),
-        helperText: 'Somente os ajustes manuais de PROUNI 26.1 com contrato ativo na filial Águas Claras.',
+        helperText: 'Base 26.2 da filial Águas Claras com contrato ativo, sem Medicina.',
       },
     ],
     [
       matriculadosGeraisComAjustes,
       matriculadosGerais20262,
       matriculadosGeraisComMedicina,
-      matriculadosGeraisComReadmissao,
       matriculadosReferenceDate,
       matriculadosTodayRows,
     ],
@@ -2189,7 +1934,6 @@ export function DashboardEuro() {
             graduado: 0,
             transferenciaExterna: 0,
             total: 0,
-            manualAdjustmentCount: 0,
           }
 
         if (ingresso === 'Vestibular') {
@@ -2213,38 +1957,6 @@ export function DashboardEuro() {
         rowsMap.set(mapKey, currentRow)
       })
 
-      manualMatriculadosAtivosFiltered.forEach((manualRow) => {
-        if (manualRow.filialLabel !== filial) {
-          return
-        }
-
-        const mapKey = `${manualRow.cursoLabel}-${manualRow.turnoLabel}`
-        const currentRow =
-          rowsMap.get(mapKey) ??
-          {
-            curso: manualRow.cursoLabel,
-            turno: manualRow.turnoLabel,
-            vestibular: 0,
-            enem: 0,
-            prouni: 0,
-            graduado: 0,
-            transferenciaExterna: 0,
-            total: 0,
-            manualAdjustmentCount: 0,
-          }
-
-        currentRow.prouni += 1
-
-        currentRow.manualAdjustmentCount += 1
-        currentRow.total =
-          currentRow.vestibular +
-          currentRow.enem +
-          currentRow.prouni +
-          currentRow.graduado +
-          currentRow.transferenciaExterna
-        rowsMap.set(mapKey, currentRow)
-      })
-
       return Array.from(rowsMap.values()).sort((currentItem, nextItem) => {
         if (currentItem.total !== nextItem.total) {
           return nextItem.total - currentItem.total
@@ -2258,7 +1970,7 @@ export function DashboardEuro() {
       asaSul: aggregateByFilial('Asa Sul'),
       aguasClaras: aggregateByFilial('Águas Claras'),
     }
-  }, [manualMatriculadosAtivosFiltered, matriculadosAtivosPeriodo1Filtered])
+  }, [matriculadosAtivosPeriodo1Filtered])
 
   const inscritosActiveFilters = useMemo(
     () =>
@@ -2862,7 +2574,6 @@ export function DashboardEuro() {
                               >
                                 <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
                                   {row.curso}
-                                  {row.manualAdjustmentCount > 0 ? ' *' : ''}
                                 </td>
                                 <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-700">
                                   {row.turno}
@@ -2940,12 +2651,6 @@ export function DashboardEuro() {
                         </table>
                       </div>
 
-                      {table.rows.some((row) => row.manualAdjustmentCount > 0) ? (
-                        <p className="mt-4 text-xs leading-5 text-slate-500">
-                          * Inclui ajustes manuais fora da meta de vendedores. PROUNI referente a
-                          2026.1 com matrícula realizada apenas em 2026.2.
-                        </p>
-                      ) : null}
                     </div>
                   ))}
                 </div>
