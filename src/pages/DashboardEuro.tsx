@@ -1365,6 +1365,14 @@ export function DashboardEuro() {
     [matriculadosAtivosFiltered],
   )
 
+  const matriculadosChartsBase = useMemo(
+    () =>
+      matriculadosSelections.contrato
+        ? matriculadosFiltered
+        : matriculadosFiltered.filter((row) => row.contratoLabel === 'Ativo'),
+    [matriculadosFiltered, matriculadosSelections.contrato],
+  )
+
   const matriculadosGeraisComAjustes = useMemo(
     () => matriculadosAtivosFiltered,
     [matriculadosAtivosFiltered],
@@ -1512,14 +1520,14 @@ export function DashboardEuro() {
 
   const matriculadosCharts = useMemo(
     () => ({
-      filial: buildCountData(matriculadosFiltered, (row) => row.filialLabel),
-      cursos: buildCountData(matriculadosFiltered, (row) => row.cursoLabel),
-      ingresso: buildCountData(matriculadosFiltered, (row) => row.ingressoLabel),
-      turnos: buildCountData(matriculadosFiltered, (row) => row.turnoLabel),
+      filial: buildCountData(matriculadosChartsBase, (row) => row.filialLabel),
+      cursos: buildCountData(matriculadosChartsBase, (row) => row.cursoLabel),
+      ingresso: buildCountData(matriculadosChartsBase, (row) => row.ingressoLabel),
+      turnos: buildCountData(matriculadosChartsBase, (row) => row.turnoLabel),
       contratos: buildCountData(matriculadosFiltered, (row) => row.contratoLabel),
-      status: buildCountData(matriculadosFiltered, (row) => row.statusLabel),
+      status: buildCountData(matriculadosChartsBase, (row) => row.statusLabel),
     }),
-    [matriculadosFiltered],
+    [matriculadosChartsBase, matriculadosFiltered],
   )
 
   const comparativoTodayMonthDayKey = useMemo(() => {
