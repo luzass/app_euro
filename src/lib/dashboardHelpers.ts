@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 export const SUPABASE_PAGE_SIZE = 1000
 
 export type GenericRow = Record<string, unknown>
+export type StudentTypeFilter = 'all' | 'calouro' | 'veterano'
 
 export interface PeriodTable {
   period: string
@@ -218,6 +219,45 @@ export function normalizeIngresso(value?: string | null) {
   return titleize(value)
 }
 
+export function resolveStudentType(row: GenericRow): 'calouro' | 'veterano' {
+  const explicitType = normalizeText(pickText(row, ['tipo_aluno', 'Tipo Aluno', 'tipoAluno']))
+
+  if (explicitType.includes('VETERANO')) {
+    return 'veterano'
+  }
+
+  if (explicitType.includes('CALOURO')) {
+    return 'calouro'
+  }
+
+  const ingresso = normalizeText(
+    pickText(row, [
+      'tipo_de_ingresso',
+      'forma_de_ingresso',
+      'forma_ingresso',
+      'forma_ingresso_inscricao',
+      'forma_ingresso_matricula',
+      'Forma de Ingresso',
+    ]),
+  )
+
+  if (
+    ingresso.includes('TRANSFERENCIA') ||
+    ingresso.includes('TRANSFERÊNCIA') ||
+    ingresso.includes('REINGRESSO') ||
+    ingresso.includes('READMISSAO') ||
+    ingresso.includes('READMISSÃO')
+  ) {
+    return 'veterano'
+  }
+
+  return 'calouro'
+}
+
+export function matchesStudentType(row: GenericRow, filter: StudentTypeFilter) {
+  return filter === 'all' || resolveStudentType(row) === filter
+}
+
 export function getUniqueCpfCount(rows: GenericRow[]) {
   const cpfs = new Set<string>()
 
@@ -253,6 +293,5 @@ export function countBy<T>(
 
   return Array.from(totals, ([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, options.limit ?? 12)
+    .slice(0, options.limit ?? Number.POSITIVE_INFINITY)
 }
-

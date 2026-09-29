@@ -16,12 +16,14 @@ import {
   countBy,
   fetchAllRows,
   getUniqueCpfCount,
+  matchesStudentType,
   normalizeCampus,
   normalizeCpf,
   normalizeIngresso,
   pickText,
   titleize,
   type GenericRow,
+  type StudentTypeFilter,
 } from '../lib/dashboardHelpers'
 import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
@@ -115,12 +117,15 @@ function ChartCard({
   title: string
   data: Array<{ label: string; value: number }>
 }) {
+  const chartHeight = Math.max(260, data.length * 44)
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
 
       {data.length ? (
-        <div className="mt-5 h-72">
+        <div className="mt-5 max-h-[560px] overflow-y-auto pr-2">
+          <div style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 16, right: 28 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
@@ -128,7 +133,8 @@ function ChartCard({
               <YAxis
                 dataKey="label"
                 type="category"
-                width={120}
+                width={180}
+                interval={0}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 12 }}
@@ -137,6 +143,7 @@ function ChartCard({
               <Bar dataKey="value" fill="#0ea5e9" radius={[0, 10, 10, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       ) : (
         <p className="mt-5 rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
@@ -150,6 +157,7 @@ function ChartCard({
 export function DashboardFunil() {
   const [state, setState] = useState<FunilState>(initialState)
   const [onlyTraffic, setOnlyTraffic] = useState(false)
+  const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
 
   const loadData = async () => {
     if (!isSupabaseConfigured) {
@@ -198,21 +206,30 @@ export function DashboardFunil() {
 
   const analysis = useMemo(() => {
     const leadCpfSet = buildCpfSet(state.leads)
+    const typeFilteredLeads = state.leads.filter((row) =>
+      matchesStudentType(row, studentTypeFilter),
+    )
+    const typeFilteredInscritos = state.inscritos.filter((row) =>
+      matchesStudentType(row, studentTypeFilter),
+    )
+    const typeFilteredMatriculados = state.matriculados.filter((row) =>
+      matchesStudentType(row, studentTypeFilter),
+    )
     const filteredInscritos = onlyTraffic
-      ? state.inscritos.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
-      : state.inscritos
+      ? typeFilteredInscritos.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
+      : typeFilteredInscritos
     const filteredMatriculados = onlyTraffic
-      ? state.matriculados.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
-      : state.matriculados
+      ? typeFilteredMatriculados.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
+      : typeFilteredMatriculados
 
     const combinedRows = [
-      ...state.leads.map(mapLead),
+      ...typeFilteredLeads.map(mapLead),
       ...filteredInscritos.map(mapInscrito),
       ...filteredMatriculados.map(mapMatriculado),
     ]
 
     return {
-      leadsCount: getUniqueCpfCount(state.leads),
+      leadsCount: getUniqueCpfCount(typeFilteredLeads),
       inscritosCount: getUniqueCpfCount(filteredInscritos),
       matriculadosCount: getUniqueCpfCount(filteredMatriculados),
       courseData: countBy(combinedRows, (row) => row.curso),
@@ -220,7 +237,7 @@ export function DashboardFunil() {
       processoData: countBy(combinedRows, (row) => row.processo),
       sourceData: countBy(combinedRows, (row) => row.origin, { includeEmpty: true }),
     }
-  }, [onlyTraffic, state.inscritos, state.leads, state.matriculados])
+  }, [onlyTraffic, state.inscritos, state.leads, state.matriculados, studentTypeFilter])
 
   if (state.loading) {
     return <Loading message="Carregando Dashboard - Funil..." />
@@ -258,6 +275,24 @@ export function DashboardFunil() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            {[
+              { id: 'all', label: 'Todos' },
+              { id: 'calouro', label: 'Calouros' },
+              { id: 'veterano', label: 'Veteranos' },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setStudentTypeFilter(option.id as StudentTypeFilter)}
+                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                  studentTypeFilter === option.id
+                    ? 'border-slate-950 bg-slate-950 text-white'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => setOnlyTraffic((current) => !current)}

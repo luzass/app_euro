@@ -18,12 +18,14 @@ import { Loading } from '../components/UI/Loading'
 import {
   fetchAllRows,
   getUniqueCpfCount,
+  matchesStudentType,
   normalizeCampus,
   normalizeIngresso,
   periodTables,
   pickText,
   titleize,
   type GenericRow,
+  type StudentTypeFilter,
 } from '../lib/dashboardHelpers'
 import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
@@ -89,16 +91,18 @@ function groupByLabel(
 
   return Array.from(totals.values())
     .sort((a, b) => b.inscritos + b.matriculados - (a.inscritos + a.matriculados))
-    .slice(0, 12)
 }
 
 function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedDatum[] }) {
+  const chartHeight = Math.max(280, data.length * 46)
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
 
       {data.length ? (
-        <div className="mt-5 h-80">
+        <div className="mt-5 max-h-[600px] overflow-y-auto pr-2">
+          <div style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 20, right: 24 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
@@ -106,7 +110,8 @@ function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedD
               <YAxis
                 dataKey="label"
                 type="category"
-                width={132}
+                width={190}
+                interval={0}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 12 }}
@@ -122,6 +127,7 @@ function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedD
               />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       ) : (
         <p className="mt-5 rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
@@ -135,6 +141,7 @@ function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedD
 export function DashboardHistorico() {
   const [state, setState] = useState<HistoricoState>(initialState)
   const [semester, setSemester] = useState<SemesterFilter>('1')
+  const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
 
   const loadData = async () => {
     if (!isSupabaseConfigured) {
@@ -189,7 +196,15 @@ export function DashboardHistorico() {
   }, [])
 
   const analysis = useMemo(() => {
-    const filteredPeriods = state.periods.filter((period) => period.semester === semester)
+    const filteredPeriods = state.periods
+      .filter((period) => period.semester === semester)
+      .map((period) => ({
+        ...period,
+        inscritos: period.inscritos.filter((row) => matchesStudentType(row, studentTypeFilter)),
+        matriculados: period.matriculados.filter((row) =>
+          matchesStudentType(row, studentTypeFilter),
+        ),
+      }))
 
     const timeline = filteredPeriods.map((period) => ({
       periodo: period.label,
@@ -227,7 +242,7 @@ export function DashboardHistorico() {
         (row) => normalizeIngresso(pickText(row, ['tipo_de_ingresso'])),
       ),
     }
-  }, [semester, state.periods])
+  }, [semester, state.periods, studentTypeFilter])
 
   if (state.loading) {
     return <Loading message="Carregando Dashboard - Histórico..." />
@@ -265,6 +280,24 @@ export function DashboardHistorico() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            {[
+              { id: 'all', label: 'Todos' },
+              { id: 'calouro', label: 'Calouros' },
+              { id: 'veterano', label: 'Veteranos' },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setStudentTypeFilter(option.id as StudentTypeFilter)}
+                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                  studentTypeFilter === option.id
+                    ? 'border-slate-950 bg-slate-950 text-white'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => setSemester('1')}
@@ -351,4 +384,3 @@ export function DashboardHistorico() {
     </div>
   )
 }
-
