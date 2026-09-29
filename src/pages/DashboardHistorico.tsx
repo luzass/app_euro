@@ -93,6 +93,40 @@ function groupByLabel(
     .sort((a, b) => b.inscritos + b.matriculados - (a.inscritos + a.matriculados))
 }
 
+function getInscritoIngresso(row: GenericRow) {
+  return normalizeIngresso(pickText(row, ['forma_de_ingresso']))
+}
+
+function getMatriculadoIngresso(row: GenericRow) {
+  return normalizeIngresso(pickText(row, ['tipo_de_ingresso']))
+}
+
+function buildProcessOptions(periods: PeriodRows[]) {
+  const totals = new Map<string, number>()
+
+  periods.forEach((period) => {
+    period.inscritos.forEach((row) => {
+      const label = getInscritoIngresso(row)
+
+      if (label !== 'Não informado') {
+        totals.set(label, (totals.get(label) ?? 0) + 1)
+      }
+    })
+
+    period.matriculados.forEach((row) => {
+      const label = getMatriculadoIngresso(row)
+
+      if (label !== 'Não informado') {
+        totals.set(label, (totals.get(label) ?? 0) + 1)
+      }
+    })
+  })
+
+  return Array.from(totals, ([label, total]) => ({ label, total })).sort(
+    (current, next) => next.total - current.total,
+  )
+}
+
 function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedDatum[] }) {
   const chartHeight = Math.max(250, data.length * 36)
 
@@ -142,6 +176,7 @@ export function DashboardHistorico() {
   const [state, setState] = useState<HistoricoState>(initialState)
   const [semester, setSemester] = useState<SemesterFilter>('1')
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
+  const [selectedProcesses, setSelectedProcesses] = useState<string[]>([])
 
   const loadData = async () => {
     if (!isSupabaseConfigured) {
@@ -196,7 +231,7 @@ export function DashboardHistorico() {
   }, [])
 
   const analysis = useMemo(() => {
-    const filteredPeriods = state.periods
+    const basePeriods = state.periods
       .filter((period) => period.semester === semester)
       .map((period) => ({
         ...period,
@@ -205,6 +240,21 @@ export function DashboardHistorico() {
           matchesStudentType(row, studentTypeFilter),
         ),
       }))
+
+    const processOptions = buildProcessOptions(basePeriods)
+    const filteredPeriods = basePeriods.map((period) => ({
+      ...period,
+      inscritos:
+        selectedProcesses.length === 0
+          ? period.inscritos
+          : period.inscritos.filter((row) => selectedProcesses.includes(getInscritoIngresso(row))),
+      matriculados:
+        selectedProcesses.length === 0
+          ? period.matriculados
+          : period.matriculados.filter((row) =>
+              selectedProcesses.includes(getMatriculadoIngresso(row)),
+            ),
+    }))
 
     const timeline = filteredPeriods.map((period) => ({
       periodo: period.label,
@@ -226,6 +276,7 @@ export function DashboardHistorico() {
       timeline,
       totalInscritos,
       totalMatriculados,
+      processOptions,
       campusData: groupByLabel(
         filteredPeriods,
         (row) => normalizeCampus(pickText(row, ['campus'])),
@@ -238,11 +289,19 @@ export function DashboardHistorico() {
       ),
       ingressoData: groupByLabel(
         filteredPeriods,
-        (row) => normalizeIngresso(pickText(row, ['forma_de_ingresso'])),
-        (row) => normalizeIngresso(pickText(row, ['tipo_de_ingresso'])),
+        getInscritoIngresso,
+        getMatriculadoIngresso,
       ),
     }
-  }, [semester, state.periods, studentTypeFilter])
+  }, [selectedProcesses, semester, state.periods, studentTypeFilter])
+
+  const handleProcessToggle = (process: string) => {
+    setSelectedProcesses((currentProcesses) =>
+      currentProcesses.includes(process)
+        ? currentProcesses.filter((currentProcess) => currentProcess !== process)
+        : [...currentProcesses, process],
+    )
+  }
 
   if (state.loading) {
     return <Loading message="Carregando Dashboard - Histórico..." />
@@ -329,6 +388,57 @@ export function DashboardHistorico() {
               Atualizar
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">Processo seletivo</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Selecione um ou mais processos para comparar dentro do histórico.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedProcesses([])}
+            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+              selectedProcesses.length === 0
+                ? 'border-slate-950 bg-slate-950 text-white'
+                : 'border-slate-200 bg-white text-slate-700'
+            }`}
+          >
+            Todos
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {analysis.processOptions.map((option) => {
+            const selected = selectedProcesses.includes(option.label)
+
+            return (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => handleProcessToggle(option.label)}
+                className={`flex min-h-20 items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition ${
+                  selected
+                    ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <span className="text-sm font-semibold leading-5">{option.label}</span>
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                    selected ? 'bg-white/15 text-white' : 'bg-white text-slate-500'
+                  }`}
+                >
+                  {formatNumberBR(option.total)}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </section>
 
