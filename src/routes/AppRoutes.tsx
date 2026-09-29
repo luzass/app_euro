@@ -68,7 +68,7 @@ export function AppRoutes() {
           <Route
             path="spike"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'spike', 'captacao_gerente']}>
+              <RequireRole allowedRoles={['admin', 'reitoria', 'spike']}>
                 <TrafegoPagoSpike />
               </RequireRole>
             }
@@ -81,7 +81,6 @@ export function AppRoutes() {
                   'admin',
                   'reitoria',
                   'coordenador',
-                  'spike',
                   'captacao',
                   'captacao_gerente',
                   'funcionario',
@@ -99,7 +98,6 @@ export function AppRoutes() {
                   'admin',
                   'reitoria',
                   'coordenador',
-                  'spike',
                   'captacao',
                   'captacao_gerente',
                   'funcionario',

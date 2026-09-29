@@ -52,6 +52,11 @@ const initialState: FunilState = {
   matriculados: [],
 }
 
+const activeFunnelTables = {
+  inscritos: 'inscritos_20262',
+  matriculados: 'matriculados_20262',
+}
+
 function buildCpfSet(rows: GenericRow[]) {
   const cpfs = new Set<string>()
 
@@ -160,8 +165,8 @@ export function DashboardFunil() {
 
     const [leadsResult, inscritosResult, matriculadosResult] = await Promise.all([
       fetchAllRows('leads_cursos'),
-      fetchAllRows('inscritos_20271'),
-      fetchAllRows('matriculados_20271'),
+      fetchAllRows(activeFunnelTables.inscritos),
+      fetchAllRows(activeFunnelTables.matriculados),
     ])
 
     const error =
@@ -292,4 +297,3 @@ export function DashboardFunil() {
     </div>
   )
 }
-

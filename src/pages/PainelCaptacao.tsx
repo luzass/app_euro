@@ -328,7 +328,7 @@ export function PainelCaptacao() {
   const [selectedMonth, setSelectedMonth] = useState<GoalMonthKey>(getCurrentGoalMonthKey())
   const [teamSize, setTeamSize] = useState<ActiveTeamSize>(getDefaultActiveTeamSize())
   const [selectedView, setSelectedView] = useState<CaptacaoView>(
-    canManage ? 'Equipe' : profileSeller ?? 'Agestone',
+    canManage ? 'Equipe' : profileSeller ?? 'Equipe',
   )
 
   useEffect(() => {
@@ -409,7 +409,11 @@ export function PainelCaptacao() {
     [eligibleRows],
   )
 
-  const viewSeller = selectedView === 'Equipe' ? null : selectedView
+  const viewSeller = canManage
+    ? selectedView === 'Equipe'
+      ? null
+      : selectedView
+    : profileSeller
   const visibleNormalRows = useMemo(() => {
     const normalRows = monthRows.filter((row) => !isProuni(row))
     return viewSeller ? normalRows.filter((row) => row.vendedor === viewSeller) : normalRows
@@ -453,10 +457,10 @@ export function PainelCaptacao() {
 
   const normalStages = useMemo(
     () =>
-      selectedView === 'Equipe'
+      canManage && selectedView === 'Equipe'
         ? buildTeamNormalStages(selectedMonth, teamSize)
         : buildNormalStages(selectedMonth, teamSize),
-    [selectedMonth, selectedView, teamSize],
+    [canManage, selectedMonth, selectedView, teamSize],
   )
   const prouniStages = useMemo(() => buildProuniStages(), [])
   const normalResolution = useMemo(
@@ -567,6 +571,15 @@ export function PainelCaptacao() {
     )
   }
 
+  if (!canManage && !profileSeller) {
+    return (
+      <EmptyState
+        title="Vendedor não identificado"
+        description="Não foi possível vincular seu usuário a um vendedor da captação. Ajuste o nome ou e-mail do perfil para William, Gustavo, Jordana ou Agestone."
+      />
+    )
+  }
+
   return (
     <div className="space-y-8">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -576,9 +589,9 @@ export function PainelCaptacao() {
               Painel de Captação
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              {selectedView === 'Equipe'
+              {canManage && selectedView === 'Equipe'
                 ? 'Visão gerencial da equipe'
-                : `Painel do vendedor - ${selectedView}`}
+                : `Painel do vendedor - ${viewSeller}`}
             </h1>
           </div>
 
@@ -636,9 +649,11 @@ export function PainelCaptacao() {
         <KpiCard
           title="Leads CRM"
           value={formatNumberBR(
-            selectedView === 'Equipe'
+            canManage && selectedView === 'Equipe'
               ? Array.from(sellerCrmCounts.values()).reduce((total, value) => total + value, 0)
-              : sellerCrmCounts.get(selectedView) ?? 0,
+              : viewSeller
+                ? sellerCrmCounts.get(viewSeller) ?? 0
+                : 0,
           )}
           helperText=""
           emphasis="primary"
@@ -776,7 +791,7 @@ export function PainelCaptacao() {
           </div>
           <div className="hidden items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500 sm:inline-flex">
             <Users className="h-4 w-4" />
-            {selectedView === 'Equipe' ? 'Equipe' : selectedView}
+              {canManage && selectedView === 'Equipe' ? 'Equipe' : viewSeller}
           </div>
         </div>
 
@@ -846,4 +861,3 @@ export function PainelCaptacao() {
     </div>
   )
 }
-
