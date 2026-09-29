@@ -7,13 +7,12 @@ import { useProfile } from '../hooks/useProfile'
 import { getDefaultRouteForProfile } from '../lib/navigation'
 import type { Role } from '../lib/types'
 import { CriarUsuario } from '../pages/CriarUsuario'
-import { DashboardEuro } from '../pages/DashboardEuro'
+import { DashboardFunil } from '../pages/DashboardFunil'
+import { DashboardHistorico } from '../pages/DashboardHistorico'
 import { Login } from '../pages/Login'
-import { Metas } from '../pages/Metas'
 import { NotFound } from '../pages/NotFound'
-import { PainelVendedor } from '../pages/PainelVendedor'
+import { PainelCaptacao } from '../pages/PainelCaptacao'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
-import { VisaoCrm } from '../pages/VisaoCrm'
 
 function RootRedirect() {
   const { user, loading: authLoading } = useAuth()
@@ -67,53 +66,56 @@ export function AppRoutes() {
         <Route path="/app" element={<ProtectedLayout />}>
           <Route index element={<RoleHomeRedirect />} />
           <Route
-            path="painel-vendedor"
-            element={
-              <RequireRole
-                allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
-              >
-                <PainelVendedor />
-              </RequireRole>
-            }
-          />
-          <Route
             path="spike"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'spike']}>
+              <RequireRole allowedRoles={['admin', 'reitoria', 'spike', 'captacao_gerente']}>
                 <TrafegoPagoSpike />
               </RequireRole>
             }
           />
           <Route
-            path="dashboard-euro"
+            path="dashboard-funil"
             element={
               <RequireRole
                 allowedRoles={[
                   'admin',
                   'reitoria',
                   'coordenador',
+                  'spike',
                   'captacao',
                   'captacao_gerente',
                   'funcionario',
                 ]}
               >
-                <DashboardEuro />
+                <DashboardFunil />
               </RequireRole>
             }
           />
           <Route
-            path="metas"
+            path="dashboard-historico"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao_gerente']}>
-                <Metas />
+              <RequireRole
+                allowedRoles={[
+                  'admin',
+                  'reitoria',
+                  'coordenador',
+                  'spike',
+                  'captacao',
+                  'captacao_gerente',
+                  'funcionario',
+                ]}
+              >
+                <DashboardHistorico />
               </RequireRole>
             }
           />
           <Route
-            path="visao-crm"
+            path="painel-captacao"
             element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}>
-                <VisaoCrm />
+              <RequireRole
+                allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
+              >
+                <PainelCaptacao />
               </RequireRole>
             }
           />

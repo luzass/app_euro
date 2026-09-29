@@ -2714,7 +2714,7 @@ export function TrafegoPagoSpike() {
 
           {landingPageSection}
 
-          {spikeLeadSection}
+          {false ? spikeLeadSection : null}
 
           {reportSection}
         </>

@@ -1,13 +1,11 @@
 import {
   BarChart3,
   type LucideIcon,
-  Building2,
+  History,
   LayoutDashboard,
-  MonitorCog,
   Target,
   UserRoundPlus,
 } from 'lucide-react'
-import { resolveSellerFromProfile } from './sellers'
 import type { Profile, Role } from './types'
 
 export interface NavItem {
@@ -19,37 +17,47 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   {
-    title: 'Meu painel',
-    path: '/app/painel-vendedor',
-    icon: MonitorCog,
-    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
-  },
-  {
     title: 'Tráfego Pago - Spike',
     path: '/app/spike',
     icon: BarChart3,
-    allowedRoles: ['admin', 'reitoria', 'spike'],
+    allowedRoles: ['admin', 'reitoria', 'spike', 'captacao_gerente'],
   },
   {
-    title: 'Dashboard - Euro',
-    path: '/app/dashboard-euro',
+    title: 'Dashboard - Funil',
+    path: '/app/dashboard-funil',
     icon: LayoutDashboard,
-    allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
+    allowedRoles: [
+      'admin',
+      'reitoria',
+      'coordenador',
+      'spike',
+      'captacao',
+      'captacao_gerente',
+      'funcionario',
+    ],
   },
   {
-    title: 'Metas',
-    path: '/app/metas',
+    title: 'Dashboard - Histórico',
+    path: '/app/dashboard-historico',
+    icon: History,
+    allowedRoles: [
+      'admin',
+      'reitoria',
+      'coordenador',
+      'spike',
+      'captacao',
+      'captacao_gerente',
+      'funcionario',
+    ],
+  },
+  {
+    title: 'Painel de Captação',
+    path: '/app/painel-captacao',
     icon: Target,
     allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
-    title: 'Visão CRM',
-    path: '/app/visao-crm',
-    icon: Building2,
-    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
-  },
-  {
-    title: 'Criar Usuário',
+    title: 'Adicionar colaboradores',
     path: '/app/criar-usuario',
     icon: UserRoundPlus,
     allowedRoles: ['admin'],
@@ -61,26 +69,14 @@ export function getDefaultRoute(role?: Role | null) {
     return '/app/spike'
   }
 
-  if (
-    role === 'coordenador' ||
-    role === 'captacao' ||
-    role === 'captacao_gerente' ||
-    role === 'funcionario' ||
-    role === 'reitoria'
-  ) {
-    return '/app/dashboard-euro'
+  if (role === 'captacao' || role === 'captacao_gerente' || role === 'funcionario') {
+    return '/app/painel-captacao'
   }
 
-  return '/app/spike'
+  return '/app/dashboard-funil'
 }
 
 export function getDefaultRouteForProfile(profile?: Profile | null) {
-  const seller = resolveSellerFromProfile(profile)
-
-  if (seller && (profile?.role === 'captacao' || profile?.role === 'funcionario')) {
-    return '/app/painel-vendedor'
-  }
-
   return getDefaultRoute(profile?.role)
 }
 
