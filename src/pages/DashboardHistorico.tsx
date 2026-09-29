@@ -94,27 +94,27 @@ function groupByLabel(
 }
 
 function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedDatum[] }) {
-  const chartHeight = Math.max(280, data.length * 46)
+  const chartHeight = Math.max(250, data.length * 36)
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="flex h-[450px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
 
       {data.length ? (
-        <div className="mt-5 max-h-[600px] overflow-y-auto pr-2">
+        <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-2">
           <div style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ left: 20, right: 24 }}>
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
               <XAxis type="number" tickLine={false} axisLine={false} />
               <YAxis
                 dataKey="label"
                 type="category"
-                width={190}
+                width={158}
                 interval={0}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 11 }}
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
               <Legend />

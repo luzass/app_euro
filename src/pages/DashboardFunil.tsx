@@ -117,27 +117,27 @@ function ChartCard({
   title: string
   data: Array<{ label: string; value: number }>
 }) {
-  const chartHeight = Math.max(260, data.length * 44)
+  const chartHeight = Math.max(240, data.length * 34)
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="flex h-[430px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
 
       {data.length ? (
-        <div className="mt-5 max-h-[560px] overflow-y-auto pr-2">
+        <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-2">
           <div style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ left: 16, right: 28 }}>
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 28, top: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
               <XAxis type="number" tickLine={false} axisLine={false} />
               <YAxis
                 dataKey="label"
                 type="category"
-                width={180}
+                width={154}
                 interval={0}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 11 }}
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
               <Bar dataKey="value" fill="#0ea5e9" radius={[0, 10, 10, 0]} />
