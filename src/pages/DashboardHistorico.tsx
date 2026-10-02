@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   Legend,
   Line,
@@ -32,6 +33,8 @@ import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
 
 type SemesterFilter = '1' | '2'
+type HistoricoChartKey = 'campus' | 'curso' | 'ingresso'
+type HistoricoChartSelections = Record<HistoricoChartKey, string[]>
 
 function getSemesterPeriodLabels(semester: SemesterFilter) {
   return periodTables
@@ -63,6 +66,12 @@ const initialState: HistoricoState = {
   loading: true,
   error: null,
   periods: [],
+}
+
+const initialChartSelections: HistoricoChartSelections = {
+  campus: [],
+  curso: [],
+  ingresso: [],
 }
 
 function incrementGrouped(map: Map<string, GroupedDatum>, label: string, key: 'inscritos' | 'matriculados') {
@@ -108,6 +117,18 @@ function getMatriculadoIngresso(row: GenericRow) {
   return normalizeIngresso(pickText(row, ['tipo_de_ingresso']))
 }
 
+function getInscritoCampus(row: GenericRow) {
+  return normalizeCampus(pickText(row, ['campus']))
+}
+
+function getMatriculadoCampus(row: GenericRow) {
+  return normalizeCampus(pickText(row, ['filial', 'campus']))
+}
+
+function getCourse(row: GenericRow) {
+  return titleize(pickText(row, ['curso']))
+}
+
 function buildProcessOptions(periods: PeriodRows[]) {
   const totals = new Map<string, number>()
 
@@ -134,8 +155,21 @@ function buildProcessOptions(periods: PeriodRows[]) {
   )
 }
 
-function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedDatum[] }) {
+function HorizontalGroupedChart({
+  title,
+  data,
+  chartKey,
+  selectedValues,
+  onSelect,
+}: {
+  title: string
+  data: GroupedDatum[]
+  chartKey: HistoricoChartKey
+  selectedValues: string[]
+  onSelect: (chartKey: HistoricoChartKey, label: string, event?: unknown) => void
+}) {
   const chartHeight = Math.max(250, data.length * 36)
+  const hasSelection = selectedValues.length > 0
 
   return (
     <section className="flex h-[450px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -159,7 +193,28 @@ function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedD
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
               <Legend />
-              <Bar dataKey="inscritos" name="Inscritos" fill="#0ea5e9" radius={[0, 8, 8, 0]}>
+              <Bar
+                dataKey="inscritos"
+                name="Inscritos"
+                radius={[0, 8, 8, 0]}
+                cursor="pointer"
+                onClick={(payload, _index, event) => {
+                  const label = String(payload?.payload?.label ?? '')
+                  if (label) {
+                    onSelect(chartKey, label, event)
+                  }
+                }}
+              >
+                {data.map((row) => {
+                  const selected = selectedValues.includes(row.label)
+
+                  return (
+                    <Cell
+                      key={`inscritos-${row.label}`}
+                      fill={!hasSelection || selected ? '#0ea5e9' : '#cbd5e1'}
+                    />
+                  )
+                })}
                 <LabelList
                   dataKey="inscritos"
                   position="right"
@@ -172,9 +227,25 @@ function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedD
               <Bar
                 dataKey="matriculados"
                 name="Matriculados"
-                fill="#10b981"
                 radius={[0, 8, 8, 0]}
+                cursor="pointer"
+                onClick={(payload, _index, event) => {
+                  const label = String(payload?.payload?.label ?? '')
+                  if (label) {
+                    onSelect(chartKey, label, event)
+                  }
+                }}
               >
+                {data.map((row) => {
+                  const selected = selectedValues.includes(row.label)
+
+                  return (
+                    <Cell
+                      key={`matriculados-${row.label}`}
+                      fill={!hasSelection || selected ? '#10b981' : '#cbd5e1'}
+                    />
+                  )
+                })}
                 <LabelList
                   dataKey="matriculados"
                   position="right"
@@ -203,6 +274,8 @@ export function DashboardHistorico() {
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([])
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(getSemesterPeriodLabels('1'))
+  const [chartSelections, setChartSelections] =
+    useState<HistoricoChartSelections>(initialChartSelections)
 
   const loadData = async () => {
     if (!isSupabaseConfigured) {
@@ -269,7 +342,7 @@ export function DashboardHistorico() {
       }))
 
     const processOptions = buildProcessOptions(basePeriods)
-    const filteredPeriods = basePeriods.map((period) => ({
+    const processFilteredPeriods = basePeriods.map((period) => ({
       ...period,
       inscritos:
         selectedProcesses.length === 0
@@ -281,6 +354,33 @@ export function DashboardHistorico() {
           : period.matriculados.filter((row) =>
               selectedProcesses.includes(getMatriculadoIngresso(row)),
             ),
+    }))
+    const filteredPeriods = processFilteredPeriods.map((period) => ({
+      ...period,
+      inscritos: period.inscritos.filter((row) => {
+        const values: Record<HistoricoChartKey, string> = {
+          campus: getInscritoCampus(row),
+          curso: getCourse(row),
+          ingresso: getInscritoIngresso(row),
+        }
+
+        return (Object.keys(chartSelections) as HistoricoChartKey[]).every((key) => {
+          const selectedValues = chartSelections[key]
+          return selectedValues.length === 0 || selectedValues.includes(values[key])
+        })
+      }),
+      matriculados: period.matriculados.filter((row) => {
+        const values: Record<HistoricoChartKey, string> = {
+          campus: getMatriculadoCampus(row),
+          curso: getCourse(row),
+          ingresso: getMatriculadoIngresso(row),
+        }
+
+        return (Object.keys(chartSelections) as HistoricoChartKey[]).every((key) => {
+          const selectedValues = chartSelections[key]
+          return selectedValues.length === 0 || selectedValues.includes(values[key])
+        })
+      }),
     }))
 
     const timeline = filteredPeriods.map((period) => ({
@@ -306,13 +406,13 @@ export function DashboardHistorico() {
       processOptions,
       campusData: groupByLabel(
         filteredPeriods,
-        (row) => normalizeCampus(pickText(row, ['campus'])),
-        (row) => normalizeCampus(pickText(row, ['filial', 'campus'])),
+        getInscritoCampus,
+        getMatriculadoCampus,
       ),
       cursoData: groupByLabel(
         filteredPeriods,
-        (row) => titleize(pickText(row, ['curso'])),
-        (row) => titleize(pickText(row, ['curso'])),
+        getCourse,
+        getCourse,
       ),
       ingressoData: groupByLabel(
         filteredPeriods,
@@ -320,7 +420,14 @@ export function DashboardHistorico() {
         getMatriculadoIngresso,
       ),
     }
-  }, [selectedPeriods, selectedProcesses, semester, state.periods, studentTypeFilter])
+  }, [
+    chartSelections,
+    selectedPeriods,
+    selectedProcesses,
+    semester,
+    state.periods,
+    studentTypeFilter,
+  ])
 
   const handleProcessToggle = (process: string) => {
     setSelectedProcesses((currentProcesses) =>
@@ -333,6 +440,8 @@ export function DashboardHistorico() {
   const handleSemesterChange = (nextSemester: SemesterFilter) => {
     setSemester(nextSemester)
     setSelectedPeriods(getSemesterPeriodLabels(nextSemester))
+    setSelectedProcesses([])
+    setChartSelections(initialChartSelections)
   }
 
   const handlePeriodToggle = (periodLabel: string) => {
@@ -341,6 +450,30 @@ export function DashboardHistorico() {
         ? currentPeriods.filter((currentPeriod) => currentPeriod !== periodLabel)
         : [...currentPeriods, periodLabel],
     )
+  }
+
+  const handleChartSelect = (
+    chartKey: HistoricoChartKey,
+    label: string,
+    event?: unknown,
+  ) => {
+    const nativeEvent = event as { ctrlKey?: boolean; metaKey?: boolean } | undefined
+    const additive = Boolean(nativeEvent?.ctrlKey || nativeEvent?.metaKey)
+
+    setChartSelections((currentSelections) => {
+      const currentValues = currentSelections[chartKey]
+      const alreadySelected = currentValues.includes(label)
+      const nextValues = alreadySelected
+        ? currentValues.filter((currentLabel) => currentLabel !== label)
+        : additive
+          ? [...currentValues, label]
+          : [label]
+
+      return {
+        ...currentSelections,
+        [chartKey]: nextValues,
+      }
+    })
   }
 
   const visiblePeriodOptions = useMemo(
@@ -379,7 +512,8 @@ export function DashboardHistorico() {
               Dashboard - Histórico
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Comparativo de inscritos e matriculados
+              <span className="block">Comparativo de inscritos</span>
+              <span className="block">e matriculados</span>
             </h1>
           </div>
 
@@ -423,6 +557,59 @@ export function DashboardHistorico() {
               }`}
             >
               PS - 2º Semestre
+            </button>
+            <details className="relative">
+              <summary className="list-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 [&::-webkit-details-marker]:hidden">
+                Processo seletivo
+                {selectedProcesses.length ? ` (${selectedProcesses.length})` : ''}
+              </summary>
+              <div className="absolute right-0 z-30 mt-2 w-80 rounded-3xl border border-slate-200 bg-white p-3 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProcesses([])}
+                  className={`mb-2 w-full rounded-2xl border px-3 py-2 text-left text-sm font-semibold transition ${
+                    selectedProcesses.length === 0
+                      ? 'border-slate-950 bg-slate-950 text-white'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  Todos
+                </button>
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {analysis.processOptions.map((option) => {
+                    const selected = selectedProcesses.includes(option.label)
+
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => handleProcessToggle(option.label)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left text-sm transition ${
+                          selected
+                            ? 'border-slate-950 bg-slate-950 text-white'
+                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="font-semibold leading-5">{option.label}</span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            selected ? 'bg-white/15 text-white' : 'bg-white text-slate-500'
+                          }`}
+                        >
+                          {formatNumberBR(option.total)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </details>
+            <button
+              type="button"
+              onClick={() => setChartSelections(initialChartSelections)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            >
+              Limpar gráficos
             </button>
             <button
               type="button"
@@ -480,57 +667,6 @@ export function DashboardHistorico() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">Processo seletivo</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Selecione um ou mais processos para comparar dentro do histórico.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setSelectedProcesses([])}
-            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-              selectedProcesses.length === 0
-                ? 'border-slate-950 bg-slate-950 text-white'
-                : 'border-slate-200 bg-white text-slate-700'
-            }`}
-          >
-            Todos
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {analysis.processOptions.map((option) => {
-            const selected = selectedProcesses.includes(option.label)
-
-            return (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => handleProcessToggle(option.label)}
-                className={`flex min-h-20 items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition ${
-                  selected
-                    ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
-                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <span className="text-sm font-semibold leading-5">{option.label}</span>
-                <span
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                    selected ? 'bg-white/15 text-white' : 'bg-white text-slate-500'
-                  }`}
-                >
-                  {formatNumberBR(option.total)}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
       <section className="grid gap-4 md:grid-cols-3">
         <KpiCard
           title="Períodos no recorte"
@@ -550,7 +686,15 @@ export function DashboardHistorico() {
         <h2 className="text-lg font-semibold text-slate-950">Evolução por período</h2>
         <div className="mt-5 h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={analysis.timeline}>
+            <LineChart
+              data={analysis.timeline}
+              onClick={(payload) => {
+                const label = String(payload?.activeLabel ?? '')
+                if (label) {
+                  handlePeriodToggle(label)
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="periodo" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} />
@@ -594,9 +738,27 @@ export function DashboardHistorico() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <HorizontalGroupedChart title="Campus" data={analysis.campusData} />
-        <HorizontalGroupedChart title="Curso" data={analysis.cursoData} />
-        <HorizontalGroupedChart title="Forma de ingresso" data={analysis.ingressoData} />
+        <HorizontalGroupedChart
+          title="Campus"
+          data={analysis.campusData}
+          chartKey="campus"
+          selectedValues={chartSelections.campus}
+          onSelect={handleChartSelect}
+        />
+        <HorizontalGroupedChart
+          title="Curso"
+          data={analysis.cursoData}
+          chartKey="curso"
+          selectedValues={chartSelections.curso}
+          onSelect={handleChartSelect}
+        />
+        <HorizontalGroupedChart
+          title="Forma de ingresso"
+          data={analysis.ingressoData}
+          chartKey="ingresso"
+          selectedValues={chartSelections.ingresso}
+          onSelect={handleChartSelect}
+        />
       </section>
     </div>
   )

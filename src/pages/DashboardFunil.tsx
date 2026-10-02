@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   ResponsiveContainer,
   Tooltip,
@@ -38,6 +39,8 @@ interface FunilState {
 }
 
 type CombinedOrigin = 'Lead' | 'Inscrito' | 'Matriculado'
+type FunilChartKey = 'origin' | 'curso' | 'campus' | 'processo'
+type FunilChartSelections = Record<FunilChartKey, string[]>
 
 interface CombinedRow {
   origin: CombinedOrigin
@@ -58,6 +61,13 @@ const initialState: FunilState = {
 const activeFunnelTables = {
   inscritos: 'inscritos_20262',
   matriculados: 'matriculados_20262',
+}
+
+const initialChartSelections: FunilChartSelections = {
+  origin: [],
+  curso: [],
+  campus: [],
+  processo: [],
 }
 
 function buildCpfSet(rows: GenericRow[]) {
@@ -114,11 +124,18 @@ function mapMatriculado(row: GenericRow): CombinedRow {
 function ChartCard({
   title,
   data,
+  chartKey,
+  selectedValues,
+  onSelect,
 }: {
   title: string
   data: Array<{ label: string; value: number }>
+  chartKey: FunilChartKey
+  selectedValues: string[]
+  onSelect: (chartKey: FunilChartKey, label: string, event?: unknown) => void
 }) {
   const chartHeight = Math.max(240, data.length * 34)
+  const hasSelection = selectedValues.length > 0
 
   return (
     <section className="flex h-[430px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -141,7 +158,27 @@ function ChartCard({
                 tick={{ fontSize: 11 }}
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
-              <Bar dataKey="value" fill="#0ea5e9" radius={[0, 10, 10, 0]}>
+              <Bar
+                dataKey="value"
+                radius={[0, 10, 10, 0]}
+                cursor="pointer"
+                onClick={(payload, _index, event) => {
+                  const label = String(payload?.payload?.label ?? '')
+                  if (label) {
+                    onSelect(chartKey, label, event)
+                  }
+                }}
+              >
+                {data.map((row) => {
+                  const selected = selectedValues.includes(row.label)
+
+                  return (
+                    <Cell
+                      key={row.label}
+                      fill={!hasSelection || selected ? '#0ea5e9' : '#cbd5e1'}
+                    />
+                  )
+                })}
                 <LabelList
                   dataKey="value"
                   position="right"
@@ -168,6 +205,8 @@ export function DashboardFunil() {
   const [state, setState] = useState<FunilState>(initialState)
   const [onlyTraffic, setOnlyTraffic] = useState(false)
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
+  const [chartSelections, setChartSelections] =
+    useState<FunilChartSelections>(initialChartSelections)
 
   const loadData = async () => {
     if (!isSupabaseConfigured) {
@@ -232,22 +271,70 @@ export function DashboardFunil() {
       ? typeFilteredMatriculados.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
       : typeFilteredMatriculados
 
-    const combinedRows = [
+    const combinedRowsBase = [
       ...typeFilteredLeads.map(mapLead),
       ...filteredInscritos.map(mapInscrito),
       ...filteredMatriculados.map(mapMatriculado),
     ]
+    const combinedRows = combinedRowsBase.filter((row) => {
+      const values: Record<FunilChartKey, string> = {
+        origin: row.origin,
+        curso: row.curso,
+        campus: row.campus,
+        processo: row.processo,
+      }
+
+      return (Object.keys(chartSelections) as FunilChartKey[]).every((key) => {
+        const selectedValues = chartSelections[key]
+        return selectedValues.length === 0 || selectedValues.includes(values[key])
+      })
+    })
 
     return {
-      leadsCount: getUniqueCpfCount(typeFilteredLeads),
-      inscritosCount: getUniqueCpfCount(filteredInscritos),
-      matriculadosCount: getUniqueCpfCount(filteredMatriculados),
+      leadsCount: getUniqueCpfCount(
+        combinedRows.filter((row) => row.origin === 'Lead').map((row) => ({ cpf: row.cpf })),
+      ),
+      inscritosCount: getUniqueCpfCount(
+        combinedRows.filter((row) => row.origin === 'Inscrito').map((row) => ({ cpf: row.cpf })),
+      ),
+      matriculadosCount: getUniqueCpfCount(
+        combinedRows
+          .filter((row) => row.origin === 'Matriculado')
+          .map((row) => ({ cpf: row.cpf })),
+      ),
       courseData: countBy(combinedRows, (row) => row.curso),
       campusData: countBy(combinedRows, (row) => row.campus),
       processoData: countBy(combinedRows, (row) => row.processo),
       sourceData: countBy(combinedRows, (row) => row.origin, { includeEmpty: true }),
     }
-  }, [onlyTraffic, state.inscritos, state.leads, state.matriculados, studentTypeFilter])
+  }, [
+    chartSelections,
+    onlyTraffic,
+    state.inscritos,
+    state.leads,
+    state.matriculados,
+    studentTypeFilter,
+  ])
+
+  const handleChartSelect = (chartKey: FunilChartKey, label: string, event?: unknown) => {
+    const nativeEvent = event as { ctrlKey?: boolean; metaKey?: boolean } | undefined
+    const additive = Boolean(nativeEvent?.ctrlKey || nativeEvent?.metaKey)
+
+    setChartSelections((currentSelections) => {
+      const currentValues = currentSelections[chartKey]
+      const alreadySelected = currentValues.includes(label)
+      const nextValues = alreadySelected
+        ? currentValues.filter((currentLabel) => currentLabel !== label)
+        : additive
+          ? [...currentValues, label]
+          : [label]
+
+      return {
+        ...currentSelections,
+        [chartKey]: nextValues,
+      }
+    })
+  }
 
   if (state.loading) {
     return <Loading message="Carregando Dashboard - Funil..." />
@@ -317,6 +404,13 @@ export function DashboardFunil() {
             </button>
             <button
               type="button"
+              onClick={() => setChartSelections(initialChartSelections)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            >
+              Limpar gráficos
+            </button>
+            <button
+              type="button"
               onClick={() => void loadData()}
               className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
             >
@@ -334,10 +428,34 @@ export function DashboardFunil() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <ChartCard title="Funil por origem" data={analysis.sourceData} />
-        <ChartCard title="Curso" data={analysis.courseData} />
-        <ChartCard title="Campus" data={analysis.campusData} />
-        <ChartCard title="Processo seletivo" data={analysis.processoData} />
+        <ChartCard
+          title="Funil por origem"
+          data={analysis.sourceData}
+          chartKey="origin"
+          selectedValues={chartSelections.origin}
+          onSelect={handleChartSelect}
+        />
+        <ChartCard
+          title="Curso"
+          data={analysis.courseData}
+          chartKey="curso"
+          selectedValues={chartSelections.curso}
+          onSelect={handleChartSelect}
+        />
+        <ChartCard
+          title="Campus"
+          data={analysis.campusData}
+          chartKey="campus"
+          selectedValues={chartSelections.campus}
+          onSelect={handleChartSelect}
+        />
+        <ChartCard
+          title="Processo seletivo"
+          data={analysis.processoData}
+          chartKey="processo"
+          selectedValues={chartSelections.processo}
+          onSelect={handleChartSelect}
+        />
       </section>
     </div>
   )
