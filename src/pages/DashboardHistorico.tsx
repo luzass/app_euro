@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -31,6 +32,12 @@ import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
 
 type SemesterFilter = '1' | '2'
+
+function getSemesterPeriodLabels(semester: SemesterFilter) {
+  return periodTables
+    .filter((period) => period.semester === semester)
+    .map((period) => period.label)
+}
 
 interface PeriodRows {
   period: string
@@ -152,13 +159,31 @@ function HorizontalGroupedChart({ title, data }: { title: string; data: GroupedD
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
               <Legend />
-              <Bar dataKey="inscritos" name="Inscritos" fill="#0ea5e9" radius={[0, 8, 8, 0]} />
+              <Bar dataKey="inscritos" name="Inscritos" fill="#0ea5e9" radius={[0, 8, 8, 0]}>
+                <LabelList
+                  dataKey="inscritos"
+                  position="right"
+                  formatter={(value: number) => formatNumberBR(Number(value))}
+                  fill="#0f172a"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </Bar>
               <Bar
                 dataKey="matriculados"
                 name="Matriculados"
                 fill="#10b981"
                 radius={[0, 8, 8, 0]}
-              />
+              >
+                <LabelList
+                  dataKey="matriculados"
+                  position="right"
+                  formatter={(value: number) => formatNumberBR(Number(value))}
+                  fill="#0f172a"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -177,6 +202,7 @@ export function DashboardHistorico() {
   const [semester, setSemester] = useState<SemesterFilter>('1')
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([])
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>(getSemesterPeriodLabels('1'))
 
   const loadData = async () => {
     if (!isSupabaseConfigured) {
@@ -233,6 +259,7 @@ export function DashboardHistorico() {
   const analysis = useMemo(() => {
     const basePeriods = state.periods
       .filter((period) => period.semester === semester)
+      .filter((period) => selectedPeriods.includes(period.label))
       .map((period) => ({
         ...period,
         inscritos: period.inscritos.filter((row) => matchesStudentType(row, studentTypeFilter)),
@@ -293,7 +320,7 @@ export function DashboardHistorico() {
         getMatriculadoIngresso,
       ),
     }
-  }, [selectedProcesses, semester, state.periods, studentTypeFilter])
+  }, [selectedPeriods, selectedProcesses, semester, state.periods, studentTypeFilter])
 
   const handleProcessToggle = (process: string) => {
     setSelectedProcesses((currentProcesses) =>
@@ -302,6 +329,24 @@ export function DashboardHistorico() {
         : [...currentProcesses, process],
     )
   }
+
+  const handleSemesterChange = (nextSemester: SemesterFilter) => {
+    setSemester(nextSemester)
+    setSelectedPeriods(getSemesterPeriodLabels(nextSemester))
+  }
+
+  const handlePeriodToggle = (periodLabel: string) => {
+    setSelectedPeriods((currentPeriods) =>
+      currentPeriods.includes(periodLabel)
+        ? currentPeriods.filter((currentPeriod) => currentPeriod !== periodLabel)
+        : [...currentPeriods, periodLabel],
+    )
+  }
+
+  const visiblePeriodOptions = useMemo(
+    () => getSemesterPeriodLabels(semester),
+    [semester],
+  )
 
   if (state.loading) {
     return <Loading message="Carregando Dashboard - Histórico..." />
@@ -359,7 +404,7 @@ export function DashboardHistorico() {
             ))}
             <button
               type="button"
-              onClick={() => setSemester('1')}
+              onClick={() => handleSemesterChange('1')}
               className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                 semester === '1'
                   ? 'border-slate-950 bg-slate-950 text-white'
@@ -370,7 +415,7 @@ export function DashboardHistorico() {
             </button>
             <button
               type="button"
-              onClick={() => setSemester('2')}
+              onClick={() => handleSemesterChange('2')}
               className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                 semester === '2'
                   ? 'border-slate-950 bg-slate-950 text-white'
@@ -388,6 +433,50 @@ export function DashboardHistorico() {
               Atualizar
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">Períodos</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Os períodos do semestre escolhido começam selecionados. Clique para remover ou incluir na comparação.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedPeriods(visiblePeriodOptions)}
+            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+              selectedPeriods.length === visiblePeriodOptions.length
+                ? 'border-slate-950 bg-slate-950 text-white'
+                : 'border-slate-200 bg-white text-slate-700'
+            }`}
+          >
+            Selecionar todos
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {visiblePeriodOptions.map((periodLabel) => {
+            const selected = selectedPeriods.includes(periodLabel)
+
+            return (
+              <button
+                key={periodLabel}
+                type="button"
+                onClick={() => handlePeriodToggle(periodLabel)}
+                className={`rounded-2xl border px-4 py-4 text-center text-sm font-semibold transition ${
+                  selected
+                    ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                {periodLabel}
+              </button>
+            )
+          })}
         </div>
       </section>
 
@@ -473,14 +562,32 @@ export function DashboardHistorico() {
                 name="Inscritos"
                 stroke="#0ea5e9"
                 strokeWidth={3}
-              />
+              >
+                <LabelList
+                  dataKey="inscritos"
+                  position="top"
+                  formatter={(value: number) => formatNumberBR(Number(value))}
+                  fill="#0f172a"
+                  fontSize={12}
+                  fontWeight={700}
+                />
+              </Line>
               <Line
                 type="monotone"
                 dataKey="matriculados"
                 name="Matriculados"
                 stroke="#10b981"
                 strokeWidth={3}
-              />
+              >
+                <LabelList
+                  dataKey="matriculados"
+                  position="bottom"
+                  formatter={(value: number) => formatNumberBR(Number(value))}
+                  fill="#0f172a"
+                  fontSize={12}
+                  fontWeight={700}
+                />
+              </Line>
             </LineChart>
           </ResponsiveContainer>
         </div>

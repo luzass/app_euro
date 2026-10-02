@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -140,7 +141,16 @@ function ChartCard({
                 tick={{ fontSize: 11 }}
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
-              <Bar dataKey="value" fill="#0ea5e9" radius={[0, 10, 10, 0]} />
+              <Bar dataKey="value" fill="#0ea5e9" radius={[0, 10, 10, 0]}>
+                <LabelList
+                  dataKey="value"
+                  position="right"
+                  formatter={(value: number) => formatNumberBR(Number(value))}
+                  fill="#0f172a"
+                  fontSize={12}
+                  fontWeight={700}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           </div>
