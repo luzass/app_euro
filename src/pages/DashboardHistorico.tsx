@@ -33,7 +33,7 @@ import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
 
 type SemesterFilter = '1' | '2'
-type HistoricoChartKey = 'campus' | 'curso' | 'ingresso'
+type HistoricoChartKey = 'campus' | 'curso' | 'ingresso' | 'turno'
 type HistoricoChartSelections = Record<HistoricoChartKey, string[]>
 
 function getSemesterPeriodLabels(semester: SemesterFilter) {
@@ -72,6 +72,7 @@ const initialChartSelections: HistoricoChartSelections = {
   campus: [],
   curso: [],
   ingresso: [],
+  turno: [],
 }
 
 function groupByPeriodLabel(
@@ -137,6 +138,10 @@ function getMatriculadoCampus(row: GenericRow) {
 
 function getCourse(row: GenericRow) {
   return titleize(pickText(row, ['curso']))
+}
+
+function getTurno(row: GenericRow) {
+  return titleize(pickText(row, ['turno', 'TURNO']))
 }
 
 function buildProcessOptions(periods: PeriodRows[]) {
@@ -355,6 +360,7 @@ export function DashboardHistorico() {
           campus: getInscritoCampus(row),
           curso: getCourse(row),
           ingresso: getInscritoIngresso(row),
+          turno: getTurno(row),
         }
 
         return (Object.keys(chartSelections) as HistoricoChartKey[]).every((key) => {
@@ -367,6 +373,7 @@ export function DashboardHistorico() {
           campus: getMatriculadoCampus(row),
           curso: getCourse(row),
           ingresso: getMatriculadoIngresso(row),
+          turno: getTurno(row),
         }
 
         return (Object.keys(chartSelections) as HistoricoChartKey[]).every((key) => {
@@ -415,6 +422,8 @@ export function DashboardHistorico() {
         'matriculados',
         getMatriculadoIngresso,
       ),
+      turnoInscritosData: groupByPeriodLabel(filteredPeriods, 'inscritos', getTurno),
+      turnoMatriculadosData: groupByPeriodLabel(filteredPeriods, 'matriculados', getTurno),
     }
   }, [
     chartSelections,
@@ -780,6 +789,22 @@ export function DashboardHistorico() {
           periods={selectedPeriods}
           chartKey="ingresso"
           selectedValues={chartSelections.ingresso}
+          onSelect={handleChartSelect}
+        />
+        <PeriodComparisonChart
+          title="Inscritos por turno"
+          data={analysis.turnoInscritosData}
+          periods={selectedPeriods}
+          chartKey="turno"
+          selectedValues={chartSelections.turno}
+          onSelect={handleChartSelect}
+        />
+        <PeriodComparisonChart
+          title="Matriculados por turno"
+          data={analysis.turnoMatriculadosData}
+          periods={selectedPeriods}
+          chartKey="turno"
+          selectedValues={chartSelections.turno}
           onSelect={handleChartSelect}
         />
       </section>

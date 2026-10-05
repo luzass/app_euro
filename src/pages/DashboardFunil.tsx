@@ -39,7 +39,7 @@ interface FunilState {
 }
 
 type CombinedOrigin = 'Lead' | 'Inscrito' | 'Matriculado'
-type FunilChartKey = 'origin' | 'curso' | 'campus' | 'processo'
+type FunilChartKey = 'origin' | 'curso' | 'campus' | 'processo' | 'turno'
 type FunilChartSelections = Record<FunilChartKey, string[]>
 
 interface CombinedRow {
@@ -48,6 +48,7 @@ interface CombinedRow {
   curso: string
   campus: string
   processo: string
+  turno: string
 }
 
 const initialState: FunilState = {
@@ -69,6 +70,7 @@ const initialChartSelections: FunilChartSelections = {
   curso: [],
   campus: [],
   processo: [],
+  turno: [],
 }
 
 function buildCpfSet(rows: GenericRow[]) {
@@ -147,6 +149,7 @@ function mapLead(row: GenericRow): CombinedRow {
     cpf: normalizeCpf(row.cpf),
     curso: titleize(pickText(row, ['curso', 'Curso'])),
     campus: normalizeCampus(pickText(row, ['campus', 'Campus'])),
+    turno: titleize(pickText(row, ['turno', 'Turno', 'TURNO'])),
     processo: normalizeIngresso(
       pickText(row, [
         'forma_de_ingresso',
@@ -164,6 +167,7 @@ function mapInscrito(row: GenericRow): CombinedRow {
     cpf: normalizeCpf(row.cpf),
     curso: titleize(pickText(row, ['curso'])),
     campus: normalizeCampus(pickText(row, ['campus'])),
+    turno: titleize(pickText(row, ['turno'])),
     processo: normalizeIngresso(pickText(row, ['forma_de_ingresso'])),
   }
 }
@@ -174,6 +178,7 @@ function mapMatriculado(row: GenericRow): CombinedRow {
     cpf: normalizeCpf(row.cpf),
     curso: titleize(pickText(row, ['curso'])),
     campus: normalizeCampus(pickText(row, ['filial', 'campus'])),
+    turno: titleize(pickText(row, ['turno'])),
     processo: normalizeIngresso(pickText(row, ['tipo_de_ingresso'])),
   }
 }
@@ -347,6 +352,7 @@ export function DashboardFunil() {
         curso: row.curso,
         campus: row.campus,
         processo: row.processo,
+        turno: row.turno,
       }
 
       return (Object.keys(chartSelections) as FunilChartKey[]).every((key) => {
@@ -370,6 +376,7 @@ export function DashboardFunil() {
       courseData: countUniqueCpfBy(combinedRows, (row) => row.curso),
       campusData: countUniqueCpfBy(combinedRows, (row) => row.campus),
       processoData: countUniqueCpfBy(combinedRows, (row) => row.processo),
+      turnoData: countUniqueCpfBy(combinedRows, (row) => row.turno),
       sourceData: countUniqueCpfBy(combinedRows, (row) => row.origin, { includeEmpty: true }),
     }
   }, [
@@ -519,6 +526,13 @@ export function DashboardFunil() {
           data={analysis.processoData}
           chartKey="processo"
           selectedValues={chartSelections.processo}
+          onSelect={handleChartSelect}
+        />
+        <ChartCard
+          title="Turno"
+          data={analysis.turnoData}
+          chartKey="turno"
+          selectedValues={chartSelections.turno}
           onSelect={handleChartSelect}
         />
       </section>
