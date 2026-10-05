@@ -212,6 +212,7 @@ function PeriodComparisonChart({
                   key={periodLabel}
                   dataKey={periodLabel}
                   name={periodLabel}
+                  fill={periodColors[index % periodColors.length]}
                   radius={[0, 8, 8, 0]}
                   cursor="pointer"
                   onClick={(payload, _index, event) => {
