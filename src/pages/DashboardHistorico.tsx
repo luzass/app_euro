@@ -56,10 +56,10 @@ interface HistoricoState {
   periods: PeriodRows[]
 }
 
-interface GroupedDatum {
+interface PeriodComparisonDatum {
   label: string
-  inscritos: number
-  matriculados: number
+  total: number
+  [period: string]: string | number
 }
 
 const initialState: HistoricoState = {
@@ -74,39 +74,49 @@ const initialChartSelections: HistoricoChartSelections = {
   ingresso: [],
 }
 
-function incrementGrouped(map: Map<string, GroupedDatum>, label: string, key: 'inscritos' | 'matriculados') {
-  const cleanedLabel = label.trim() || 'Não informado'
-
-  if (cleanedLabel === 'Não informado') {
-    return
-  }
-
-  const current = map.get(cleanedLabel) ?? {
-    label: cleanedLabel,
-    inscritos: 0,
-    matriculados: 0,
-  }
-
-  current[key] += 1
-  map.set(cleanedLabel, current)
-}
-
-function groupByLabel(
+function groupByPeriodLabel(
   periods: PeriodRows[],
-  getInscritoLabel: (row: GenericRow) => string,
-  getMatriculadoLabel: (row: GenericRow) => string,
+  source: 'inscritos' | 'matriculados',
+  getLabel: (row: GenericRow) => string,
 ) {
-  const totals = new Map<string, GroupedDatum>()
+  const totals = new Map<string, Map<string, Set<string>>>()
 
   periods.forEach((period) => {
-    period.inscritos.forEach((row) => incrementGrouped(totals, getInscritoLabel(row), 'inscritos'))
-    period.matriculados.forEach((row) =>
-      incrementGrouped(totals, getMatriculadoLabel(row), 'matriculados'),
-    )
+    period[source].forEach((row, index) => {
+      const label = getLabel(row).trim() || 'Não informado'
+
+      if (label === 'Não informado') {
+        return
+      }
+
+      if (!totals.has(label)) {
+        totals.set(label, new Map<string, Set<string>>())
+      }
+
+      const periodTotals = totals.get(label)
+
+      if (!periodTotals?.has(period.label)) {
+        periodTotals?.set(period.label, new Set<string>())
+      }
+
+      const cpf = String(row.cpf ?? '').replace(/\D/g, '')
+      periodTotals?.get(period.label)?.add(cpf || `${period.label}-${label}-${index}`)
+    })
   })
 
-  return Array.from(totals.values())
-    .sort((a, b) => b.inscritos + b.matriculados - (a.inscritos + a.matriculados))
+  return Array.from(totals, ([label, periodTotals]) => {
+    const item: PeriodComparisonDatum = {
+      label,
+      total: 0,
+    }
+
+    periodTotals.forEach((cpfs, periodLabel) => {
+      item[periodLabel] = cpfs.size
+      item.total += cpfs.size
+    })
+
+    return item
+  }).sort((a, b) => b.total - a.total)
 }
 
 function getInscritoIngresso(row: GenericRow) {
@@ -155,20 +165,24 @@ function buildProcessOptions(periods: PeriodRows[]) {
   )
 }
 
-function HorizontalGroupedChart({
+const periodColors = ['#0ea5e9', '#10b981', '#6366f1', '#f97316', '#14b8a6']
+
+function PeriodComparisonChart({
   title,
   data,
+  periods,
   chartKey,
   selectedValues,
   onSelect,
 }: {
   title: string
-  data: GroupedDatum[]
+  data: PeriodComparisonDatum[]
+  periods: string[]
   chartKey: HistoricoChartKey
   selectedValues: string[]
   onSelect: (chartKey: HistoricoChartKey, label: string, event?: unknown) => void
 }) {
-  const chartHeight = Math.max(250, data.length * 36)
+  const chartHeight = Math.max(250, data.length * Math.max(44, periods.length * 18))
   const hasSelection = selectedValues.length > 0
 
   return (
@@ -193,68 +207,46 @@ function HorizontalGroupedChart({
               />
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
               <Legend />
-              <Bar
-                dataKey="inscritos"
-                name="Inscritos"
-                radius={[0, 8, 8, 0]}
-                cursor="pointer"
-                onClick={(payload, _index, event) => {
-                  const label = String(payload?.payload?.label ?? '')
-                  if (label) {
-                    onSelect(chartKey, label, event)
-                  }
-                }}
-              >
-                {data.map((row) => {
-                  const selected = selectedValues.includes(row.label)
+              {periods.map((periodLabel, index) => (
+                <Bar
+                  key={periodLabel}
+                  dataKey={periodLabel}
+                  name={periodLabel}
+                  radius={[0, 8, 8, 0]}
+                  cursor="pointer"
+                  onClick={(payload, _index, event) => {
+                    const label = String(payload?.payload?.label ?? '')
+                    if (label) {
+                      onSelect(chartKey, label, event)
+                    }
+                  }}
+                >
+                  {data.map((row) => {
+                    const selected = selectedValues.includes(row.label)
 
-                  return (
-                    <Cell
-                      key={`inscritos-${row.label}`}
-                      fill={!hasSelection || selected ? '#0ea5e9' : '#cbd5e1'}
-                    />
-                  )
-                })}
-                <LabelList
-                  dataKey="inscritos"
-                  position="right"
-                  formatter={(value: number) => formatNumberBR(Number(value))}
-                  fill="#0f172a"
-                  fontSize={11}
-                  fontWeight={700}
-                />
-              </Bar>
-              <Bar
-                dataKey="matriculados"
-                name="Matriculados"
-                radius={[0, 8, 8, 0]}
-                cursor="pointer"
-                onClick={(payload, _index, event) => {
-                  const label = String(payload?.payload?.label ?? '')
-                  if (label) {
-                    onSelect(chartKey, label, event)
-                  }
-                }}
-              >
-                {data.map((row) => {
-                  const selected = selectedValues.includes(row.label)
-
-                  return (
-                    <Cell
-                      key={`matriculados-${row.label}`}
-                      fill={!hasSelection || selected ? '#10b981' : '#cbd5e1'}
-                    />
-                  )
-                })}
-                <LabelList
-                  dataKey="matriculados"
-                  position="right"
-                  formatter={(value: number) => formatNumberBR(Number(value))}
-                  fill="#0f172a"
-                  fontSize={11}
-                  fontWeight={700}
-                />
-              </Bar>
+                    return (
+                      <Cell
+                        key={`${periodLabel}-${row.label}`}
+                        fill={
+                          !hasSelection || selected
+                            ? periodColors[index % periodColors.length]
+                            : '#cbd5e1'
+                        }
+                      />
+                    )
+                  })}
+                  <LabelList
+                    dataKey={periodLabel}
+                    position="right"
+                    formatter={(value: number) =>
+                      Number(value) > 0 ? formatNumberBR(Number(value)) : ''
+                    }
+                    fill="#0f172a"
+                    fontSize={11}
+                    fontWeight={700}
+                  />
+                </Bar>
+              ))}
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -404,19 +396,22 @@ export function DashboardHistorico() {
       totalInscritos,
       totalMatriculados,
       processOptions,
-      campusData: groupByLabel(
+      campusInscritosData: groupByPeriodLabel(filteredPeriods, 'inscritos', getInscritoCampus),
+      campusMatriculadosData: groupByPeriodLabel(
         filteredPeriods,
-        getInscritoCampus,
+        'matriculados',
         getMatriculadoCampus,
       ),
-      cursoData: groupByLabel(
+      cursoInscritosData: groupByPeriodLabel(filteredPeriods, 'inscritos', getCourse),
+      cursoMatriculadosData: groupByPeriodLabel(filteredPeriods, 'matriculados', getCourse),
+      ingressoInscritosData: groupByPeriodLabel(
         filteredPeriods,
-        getCourse,
-        getCourse,
-      ),
-      ingressoData: groupByLabel(
-        filteredPeriods,
+        'inscritos',
         getInscritoIngresso,
+      ),
+      ingressoMatriculadosData: groupByPeriodLabel(
+        filteredPeriods,
+        'matriculados',
         getMatriculadoIngresso,
       ),
     }
@@ -738,23 +733,50 @@ export function DashboardHistorico() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <HorizontalGroupedChart
-          title="Campus"
-          data={analysis.campusData}
+        <PeriodComparisonChart
+          title="Inscritos por campus"
+          data={analysis.campusInscritosData}
+          periods={selectedPeriods}
           chartKey="campus"
           selectedValues={chartSelections.campus}
           onSelect={handleChartSelect}
         />
-        <HorizontalGroupedChart
-          title="Curso"
-          data={analysis.cursoData}
+        <PeriodComparisonChart
+          title="Matriculados por campus"
+          data={analysis.campusMatriculadosData}
+          periods={selectedPeriods}
+          chartKey="campus"
+          selectedValues={chartSelections.campus}
+          onSelect={handleChartSelect}
+        />
+        <PeriodComparisonChart
+          title="Inscritos por curso"
+          data={analysis.cursoInscritosData}
+          periods={selectedPeriods}
           chartKey="curso"
           selectedValues={chartSelections.curso}
           onSelect={handleChartSelect}
         />
-        <HorizontalGroupedChart
-          title="Forma de ingresso"
-          data={analysis.ingressoData}
+        <PeriodComparisonChart
+          title="Matriculados por curso"
+          data={analysis.cursoMatriculadosData}
+          periods={selectedPeriods}
+          chartKey="curso"
+          selectedValues={chartSelections.curso}
+          onSelect={handleChartSelect}
+        />
+        <PeriodComparisonChart
+          title="Inscritos por processo seletivo"
+          data={analysis.ingressoInscritosData}
+          periods={selectedPeriods}
+          chartKey="ingresso"
+          selectedValues={chartSelections.ingresso}
+          onSelect={handleChartSelect}
+        />
+        <PeriodComparisonChart
+          title="Matriculados por processo seletivo"
+          data={analysis.ingressoMatriculadosData}
+          periods={selectedPeriods}
           chartKey="ingresso"
           selectedValues={chartSelections.ingresso}
           onSelect={handleChartSelect}
