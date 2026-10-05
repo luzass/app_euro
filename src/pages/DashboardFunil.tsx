@@ -15,13 +15,13 @@ import { EmptyState } from '../components/UI/EmptyState'
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
 import {
-  countBy,
   fetchAllRows,
   getUniqueCpfCount,
   matchesStudentType,
   normalizeCampus,
   normalizeCpf,
   normalizeIngresso,
+  normalizeText,
   pickText,
   titleize,
   type GenericRow,
@@ -59,9 +59,10 @@ const initialState: FunilState = {
 }
 
 const activeFunnelTables = {
-  inscritos: 'inscritos_20262',
-  matriculados: 'matriculados_20262',
+  inscritos: 'inscritos_20271',
+  matriculados: 'matriculados_20271',
 }
+const activeFunnelPeriod = '2027.1'
 
 const initialChartSelections: FunilChartSelections = {
   origin: [],
@@ -82,6 +83,62 @@ function buildCpfSet(rows: GenericRow[]) {
   })
 
   return cpfs
+}
+
+function buildMergedCpfSet(...sets: Set<string>[]) {
+  const merged = new Set<string>()
+
+  sets.forEach((set) => {
+    set.forEach((cpf) => merged.add(cpf))
+  })
+
+  return merged
+}
+
+function matchesActiveFunnelPeriod(row: GenericRow) {
+  const periodText = normalizeText(
+    pickText(row, [
+      'ano_semestre',
+      'anoSemestre',
+      'periodo_letivo',
+      'periodoLetivo',
+      'semestre',
+      'ANO/SEMESTRE',
+      'PERIODO LETIVO',
+      'SEMESTRE',
+    ]),
+  )
+  const compactPeriod = periodText.replace(/\D/g, '')
+  const activeCompactPeriod = activeFunnelPeriod.replace(/\D/g, '')
+
+  return periodText.includes(activeFunnelPeriod) || compactPeriod === activeCompactPeriod
+}
+
+function countUniqueCpfBy(
+  rows: CombinedRow[],
+  getLabel: (row: CombinedRow) => string,
+  options: { includeEmpty?: boolean } = {},
+) {
+  const includeEmpty = options.includeEmpty ?? false
+  const totals = new Map<string, Set<string>>()
+
+  rows.forEach((row, index) => {
+    const label = getLabel(row).trim() || 'Não informado'
+
+    if (!includeEmpty && label === 'Não informado') {
+      return
+    }
+
+    if (!totals.has(label)) {
+      totals.set(label, new Set<string>())
+    }
+
+    totals.get(label)?.add(row.cpf || `${label}-${index}`)
+  })
+
+  return Array.from(totals, ([label, cpfs]) => ({ label, value: cpfs.size })).sort(
+    (a, b) => b.value - a.value,
+  )
 }
 
 function mapLead(row: GenericRow): CombinedRow {
@@ -254,8 +311,16 @@ export function DashboardFunil() {
   }, [])
 
   const analysis = useMemo(() => {
-    const leadCpfSet = buildCpfSet(state.leads)
-    const typeFilteredLeads = state.leads.filter((row) =>
+    const inscritosCpfSet = buildCpfSet(state.inscritos)
+    const matriculadosCpfSet = buildCpfSet(state.matriculados)
+    const activePeriodCpfSet = buildMergedCpfSet(inscritosCpfSet, matriculadosCpfSet)
+    const periodFilteredLeads = state.leads.filter((row) => {
+      const cpf = normalizeCpf(row.cpf)
+
+      return matchesActiveFunnelPeriod(row) || Boolean(cpf && activePeriodCpfSet.has(cpf))
+    })
+    const leadCpfSet = buildCpfSet(periodFilteredLeads)
+    const typeFilteredLeads = periodFilteredLeads.filter((row) =>
       matchesStudentType(row, studentTypeFilter),
     )
     const typeFilteredInscritos = state.inscritos.filter((row) =>
@@ -302,10 +367,10 @@ export function DashboardFunil() {
           .filter((row) => row.origin === 'Matriculado')
           .map((row) => ({ cpf: row.cpf })),
       ),
-      courseData: countBy(combinedRows, (row) => row.curso),
-      campusData: countBy(combinedRows, (row) => row.campus),
-      processoData: countBy(combinedRows, (row) => row.processo),
-      sourceData: countBy(combinedRows, (row) => row.origin, { includeEmpty: true }),
+      courseData: countUniqueCpfBy(combinedRows, (row) => row.curso),
+      campusData: countUniqueCpfBy(combinedRows, (row) => row.campus),
+      processoData: countUniqueCpfBy(combinedRows, (row) => row.processo),
+      sourceData: countUniqueCpfBy(combinedRows, (row) => row.origin, { includeEmpty: true }),
     }
   }, [
     chartSelections,
@@ -367,7 +432,7 @@ export function DashboardFunil() {
               Dashboard - Funil
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Leitura geral do processo seletivo
+              Leitura geral do processo seletivo {activeFunnelPeriod}
             </h1>
           </div>
 
