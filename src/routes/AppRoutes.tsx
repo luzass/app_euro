@@ -13,6 +13,7 @@ import { Login } from '../pages/Login'
 import { NotFound } from '../pages/NotFound'
 import { PainelCaptacao } from '../pages/PainelCaptacao'
 import { PerfilMatriculado } from '../pages/PerfilMatriculado'
+import { RenovacaoMatriculas } from '../pages/RenovacaoMatriculas'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
 
 function RootRedirect() {
@@ -113,6 +114,14 @@ export function AppRoutes() {
             element={
               <RequireRole allowedRoles={['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario']}>
                 <PerfilMatriculado />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="renovacao-matriculas"
+            element={
+              <RequireRole allowedRoles={['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario']}>
+                <RenovacaoMatriculas />
               </RequireRole>
             }
           />

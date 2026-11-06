@@ -6,6 +6,7 @@ import {
   Target,
   UserRoundPlus,
   UsersRound,
+  Repeat2,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
 
@@ -53,6 +54,12 @@ export const navItems: NavItem[] = [
     title: 'Perfil do Matriculado',
     path: '/app/perfil-matriculado',
     icon: UsersRound,
+    allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
+  },
+  {
+    title: 'Renovação de Matrículas',
+    path: '/app/renovacao-matriculas',
+    icon: Repeat2,
     allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
