@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { Eraser, RefreshCw } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { KpiCard } from '../components/UI/KpiCard'
@@ -7,6 +7,7 @@ import { EmptyState } from '../components/UI/EmptyState'
 import { CheckboxFilter } from '../components/UI/CheckboxFilter'
 import { fetchAllRows, normalizeCampus, normalizeIngresso, periodTables, resolveStudentType, titleize, type GenericRow } from '../lib/dashboardHelpers'
 import { matchesFilter, type FilterSelection } from '../lib/profileFilters'
+import { ExecutiveDataContext } from '../lib/ExecutiveDataContext'
 import { ageBand, buildCepCache, enrollmentAge, genderLabel, medianAge, normalizedText, profileAddress, profileField, schoolType, uniqueProfileRows, type ProfileSource } from '../lib/studentProfile'
 import { formatNumberBR } from '../lib/formatters'
 import { normalizeSupabaseError } from '../lib/supabase'
@@ -117,16 +118,21 @@ function ProfileChart({ dimension, rows, selections, onSelect }: {
   )
 }
 
-export function PerfilMatriculado() {
+export function PerfilMatriculado({ embedded = false }: { embedded?: boolean } = {}) {
+  const shared = useContext(ExecutiveDataContext)
+  const Heading = embedded ? 'h2' : 'h1'
   const [periods, setPeriods] = useState<FilterSelection>(null)
   const [studentTypes, setStudentTypes] = useState<FilterSelection>(null)
   const [contracts, setContracts] = useState<FilterSelection>(null)
   const [filters, setFilters] = useState<Record<AcademicFilter, FilterSelection>>({ curso: null, campus: null, turno: null, ingresso: null })
   const [selections, setSelections] = useState<Selections>(emptySelections)
   const [refresh, setRefresh] = useState(0)
-  const [state, setState] = useState({ loading: true, error: '', warning: '', sources: [] as ProfileSource[], cacheRows: [] as GenericRow[] })
+  const [localState, setState] = useState({ loading: true, error: '', warning: '', sources: [] as ProfileSource[], cacheRows: [] as GenericRow[] })
+  const state = shared ? { loading: shared.loading, error: shared.matriculadosError, warning: shared.cacheWarning, sources: shared.sources, cacheRows: shared.cacheRows } : localState
+  const reload = () => shared ? shared.reload() : setRefresh((value) => value + 1)
 
   useEffect(() => {
+    if (shared) return
     let cancelled = false
     async function load() {
       setState((current) => ({ ...current, loading: true, error: '', warning: '' }))
@@ -146,7 +152,7 @@ export function PerfilMatriculado() {
     }
     void load()
     return () => { cancelled = true }
-  }, [refresh])
+  }, [refresh, shared])
 
   const analysis = useMemo(() => {
     const allRows = state.sources.flatMap((source) => source.rows)
@@ -183,18 +189,18 @@ export function PerfilMatriculado() {
   }
 
   if (state.loading) return <Loading message="Carregando perfil dos matriculados..." />
-  if (state.error) return <EmptyState title="Não foi possível carregar o perfil" description={state.error} action={<button className={controlClass} onClick={() => setRefresh((value) => value + 1)}>Tentar novamente</button>} />
+  if (state.error) return <EmptyState title="Não foi possível carregar o perfil" description={state.error} action={<button className={controlClass} onClick={reload}>Tentar novamente</button>} />
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-950">Perfil do matriculado</h1>
+          <Heading className="text-2xl font-semibold text-slate-950">Perfil do matriculado</Heading>
           <p className="mt-1 text-sm text-slate-500">{periods === null ? '2024.1 a 2027.1' : periods.length ? periods.slice().sort().join(', ') : 'Nenhum processo seletivo selecionado'} · registro mais recente de cada CPF no recorte</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={clearFilters} className={controlClass + ' inline-flex items-center gap-2'}><Eraser size={16} />Limpar filtros</button>
-          <button type="button" onClick={() => setRefresh((value) => value + 1)} className={controlClass + ' inline-flex items-center gap-2'}><RefreshCw size={16} />Atualizar</button>
+          <button type="button" onClick={reload} className={controlClass + ' inline-flex items-center gap-2'}><RefreshCw size={16} />Atualizar</button>
         </div>
       </header>
       <section aria-label="Filtros do perfil" className="grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-4">

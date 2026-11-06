@@ -1,0 +1,114 @@
+import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { spawn } from 'node:child_process'
+import { executiveFixture } from './test-executive-forecast.mjs'
+
+const { chromium } = await import(process.argv[2] ? pathToFileURL(resolve(process.argv[2], 'playwright/index.mjs')).href : 'playwright')
+const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5186', '--strictPort'], { windowsHide: true, stdio: 'pipe' })
+let browser
+try {
+  await new Promise((ready, reject) => {
+    const timer = setTimeout(() => reject(new Error('Test server timeout')), 15000)
+    server.stdout.on('data', (data) => { if (String(data).includes('Local:')) { clearTimeout(timer); ready() } })
+    server.on('error', (error) => { clearTimeout(timer); reject(error) })
+    server.on('exit', (code) => { clearTimeout(timer); reject(new Error('Server exited: ' + code)) })
+  })
+  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  const output = resolve('outputs/executive-check')
+  await mkdir(output, { recursive: true })
+  await page.addInitScript(() => {
+    const NativeDate = Date
+    class TestDate extends NativeDate {
+      constructor(...args) { if (args.length) super(...args); else super('2026-11-06T15:00:00Z') }
+      static now() { return new NativeDate('2026-11-06T15:00:00Z').valueOf() }
+    }
+    window.Date = TestDate
+  })
+  const data = executiveFixture()
+  let failInscritos = false
+  let requests = 0
+  const errors = []
+  page.on('pageerror', (error) => { errors.push(error.message); console.error(error.message) })
+  await page.route('**/rest/v1/**', (route) => {
+    requests += 1
+    const table = new URL(route.request().url()).pathname.split('/').at(-1)
+    if (table === 'ceps_enriquecidos') return route.fulfill({ contentType: 'application/json', body: '[]' })
+    const match = /^(inscritos|matriculados)_(\d{4})([12])$/.exec(table)
+    if (!match) throw new Error('Unexpected table: ' + table)
+    if (failInscritos && table === 'inscritos_20271') return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ message: 'permission denied', code: '42501' }) })
+    const source = data.find((item) => item.period === `${match[2]}.${match[3]}`)
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(source?.[match[1]] ?? []) })
+  })
+  await page.route('**/auth/v1/**', (route) => route.fulfill({ contentType: 'application/json', body: '{}' }))
+  await page.route('**/src/main.tsx', (route) => route.fulfill({ contentType: 'application/javascript', body: "import '/tools/executive-preview-entry.tsx';" }))
+  await page.goto('http://127.0.0.1:5186')
+  await page.getByRole('heading', { name: 'Painel executivo', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Prioridades de acompanhamento por curso', exact: true }).waitFor()
+  assert.equal(requests, 15)
+  await page.getByLabel('Indicadores executivos', { exact: true }).getByText('66', { exact: true }).waitFor()
+  await page.screenshot({ path: resolve(output, 'overview-desktop.png'), fullPage: true })
+  const navigation = await page.evaluate(async () => {
+    const nav = await import('/src/lib/navigation.ts')
+    return { reitoria: nav.getAllowedNavItems('reitoria').map((item) => item.path), spike: nav.getAllowedNavItems('spike').map((item) => item.path), home: nav.getDefaultRoute('reitoria') }
+  })
+  assert.equal(navigation.reitoria.filter((path) => path === '/app/painel-executivo').length, 1)
+  assert.ok(!navigation.reitoria.includes('/app/perfil-matriculado'))
+  assert.ok(!navigation.reitoria.includes('/app/renovacao-matriculas'))
+  assert.ok(!navigation.spike.includes('/app/painel-executivo'))
+  assert.equal(navigation.home, '/app/painel-executivo')
+
+  await page.getByRole('tab', { name: 'Projeção 2027.1', exact: true }).click()
+  const projections = page.getByLabel('Projeções por indicador', { exact: true })
+  const card = (title) => projections.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+  await card('Inscritos').getByText('200', { exact: true }).waitFor()
+  await card('Calouros').getByText('20', { exact: true }).waitFor()
+  await card('Veteranos, incluindo renovações').getByText('220', { exact: true }).waitFor()
+  await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
+  assert.equal(await page.getByLabel('Início da campanha', { exact: true }).inputValue(), '2026-09-29')
+  assert.equal(await page.getByLabel('Data-alvo da projeção', { exact: true }).inputValue(), '2027-03-31')
+  assert.equal(requests, 15)
+  await page.getByRole('button', { name: 'Referências históricas', exact: true }).click()
+  const historical = page.getByRole('group', { name: 'Opções de Referências históricas', exact: true })
+  await historical.getByRole('button', { name: 'Limpar seleção', exact: true }).click()
+  await card('Total de matriculados').getByText('—', { exact: true }).waitFor()
+  await historical.getByRole('button', { name: 'Selecionar todos', exact: true }).click()
+  await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
+  await page.keyboard.press('Escape')
+  await page.getByLabel('Data-alvo da projeção', { exact: true }).fill('2026-09-01')
+  await card('Total de matriculados').getByText('—', { exact: true }).waitFor()
+  await page.getByLabel('Data-alvo da projeção', { exact: true }).fill('2027-03-15')
+  await page.reload()
+  await page.getByRole('heading', { name: 'Projeção do processo seletivo 2027.1', exact: true }).waitFor()
+  assert.equal(await page.getByLabel('Data-alvo da projeção', { exact: true }).inputValue(), '2027-03-15')
+  await page.getByLabel('Data-alvo da projeção', { exact: true }).fill('2027-03-31')
+  await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
+  await page.screenshot({ path: resolve(output, 'forecast-desktop.png'), fullPage: true })
+  const beforeSubpages = requests
+  await page.getByRole('tab', { name: 'Perfil do matriculado', exact: true }).click()
+  await page.getByRole('heading', { name: 'Perfil do matriculado', exact: true }).waitFor()
+  assert.equal(requests, beforeSubpages)
+  await page.getByRole('tab', { name: 'Renovação', exact: true }).click()
+  await page.getByRole('heading', { name: 'Renovação de matrículas', exact: true }).waitFor()
+  assert.equal(requests, beforeSubpages)
+  await page.getByRole('tab', { name: 'Projeção 2027.1', exact: true }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))
+  await page.screenshot({ path: resolve(output, 'forecast-mobile.png'), fullPage: true })
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow')
+  await page.getByRole('tab', { name: 'Visão geral', exact: true }).click()
+  await page.screenshot({ path: resolve(output, 'overview-mobile.png'), fullPage: true })
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Overview mobile horizontal overflow')
+  await page.getByRole('tab', { name: 'Projeção 2027.1', exact: true }).click()
+  failInscritos = true
+  await page.getByRole('button', { name: 'Atualizar', exact: true }).click()
+  await card('Inscritos').getByText('—', { exact: true }).waitFor()
+  await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
+  assert.deepEqual(errors, [])
+  console.log('Executivo: navegação consolidada, fontes compartilhadas, quatro projeções, calendário, bloqueios, permissões e desktop/mobile verificados com dados fictícios.')
+} finally {
+  if (browser) await browser.close()
+  server.kill()
+}
