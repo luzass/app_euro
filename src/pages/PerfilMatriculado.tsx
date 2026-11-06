@@ -4,13 +4,16 @@ import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Too
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
 import { EmptyState } from '../components/UI/EmptyState'
-import { fetchAllRows, matchesStudentType, normalizeCampus, normalizeIngresso, periodTables, titleize, type GenericRow, type StudentTypeFilter } from '../lib/dashboardHelpers'
+import { CheckboxFilter } from '../components/UI/CheckboxFilter'
+import { fetchAllRows, normalizeCampus, normalizeIngresso, periodTables, resolveStudentType, titleize, type GenericRow } from '../lib/dashboardHelpers'
+import { matchesFilter, type FilterSelection } from '../lib/profileFilters'
 import { ageBand, buildCepCache, enrollmentAge, genderLabel, medianAge, normalizedText, profileAddress, profileField, schoolType, uniqueProfileRows, type ProfileSource } from '../lib/studentProfile'
 import { formatNumberBR } from '../lib/formatters'
 import { normalizeSupabaseError } from '../lib/supabase'
 
 type Dimension = 'idade' | 'bairro' | 'cidade' | 'estado' | 'escola' | 'sexo' | 'nomeEscola' | 'ingresso'
 type Selections = Record<Dimension, string[]>
+type AcademicFilter = 'curso' | 'campus' | 'turno' | 'ingresso'
 type ProfileRow = Record<Dimension, string> & { age: number | null; curso: string; campus: string; turno: string }
 const profilePeriods = periodTables.filter((item) => item.period <= '2027.1')
 const emptySelections: Selections = { idade: [], bairro: [], cidade: [], estado: [], escola: [], sexo: [], nomeEscola: [], ingresso: [] }
@@ -115,10 +118,10 @@ function ProfileChart({ dimension, rows, selections, onSelect }: {
 }
 
 export function PerfilMatriculado() {
-  const [period, setPeriod] = useState('all')
-  const [studentType, setStudentType] = useState<StudentTypeFilter>('all')
-  const [contract, setContract] = useState('all')
-  const [filters, setFilters] = useState({ curso: '', campus: '', turno: '', ingresso: '' })
+  const [periods, setPeriods] = useState<FilterSelection>(null)
+  const [studentTypes, setStudentTypes] = useState<FilterSelection>(null)
+  const [contracts, setContracts] = useState<FilterSelection>(null)
+  const [filters, setFilters] = useState<Record<AcademicFilter, FilterSelection>>({ curso: null, campus: null, turno: null, ingresso: null })
   const [selections, setSelections] = useState<Selections>(emptySelections)
   const [refresh, setRefresh] = useState(0)
   const [state, setState] = useState({ loading: true, error: '', warning: '', sources: [] as ProfileSource[], cacheRows: [] as GenericRow[] })
@@ -128,9 +131,8 @@ export function PerfilMatriculado() {
     async function load() {
       setState((current) => ({ ...current, loading: true, error: '', warning: '' }))
       try {
-        const tables = profilePeriods.filter((item) => period === 'all' || item.period === period)
         const [sources, cacheResult] = await Promise.all([
-          Promise.all(tables.map(async (table) => {
+          Promise.all(profilePeriods.map(async (table) => {
             const result = await fetchAllRows(table.matriculadosTable)
             if (result.error) throw result.error
             return { period: table.period, rows: result.rows }
@@ -144,35 +146,40 @@ export function PerfilMatriculado() {
     }
     void load()
     return () => { cancelled = true }
-  }, [period, refresh])
+  }, [refresh])
 
   const analysis = useMemo(() => {
-    const sources = state.sources.map((source) => ({ ...source, rows: source.rows.filter((row) => matchesStudentType(row, studentType) && (contract === 'all' || normalizedText(profileField(row, 'contrato')) === contract)) }))
-    const base = sources.flatMap((source) => source.rows.map(academicFields))
-    const options = Object.fromEntries((Object.keys(filters) as Array<keyof typeof filters>).map((key) => [key, [...new Set(base.map((row) => row[key]))].filter((value) => value && value !== 'Não informado').sort((a, b) => a.localeCompare(b, 'pt-BR'))])) as Record<keyof typeof filters, string[]>
+    const allRows = state.sources.flatMap((source) => source.rows)
+    const base = allRows.map(academicFields)
+    const options = Object.fromEntries((Object.keys(filters) as AcademicFilter[]).map((key) => [key, [...new Set(base.map((row) => row[key] || 'Não informado'))].sort((a, b) => a.localeCompare(b, 'pt-BR'))])) as Record<AcademicFilter, string[]>
+    const contractOptions = [...new Set(allRows.map((row) => normalizedText(profileField(row, 'contrato')) || 'Não informado'))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    const sources = state.sources
+      .filter((source) => matchesFilter(periods, source.period))
+      .map((source) => ({ ...source, rows: source.rows.filter((row) => matchesFilter(studentTypes, resolveStudentType(row)) && matchesFilter(contracts, normalizedText(profileField(row, 'contrato')) || 'Não informado')) }))
     const filteredSources = sources.map((source) => ({ ...source, rows: source.rows.filter((row) => {
       const fields = academicFields(row)
-      return (Object.keys(filters) as Array<keyof typeof filters>).every((key) => !filters[key] || filters[key] === fields[key])
+      return (Object.keys(filters) as AcademicFilter[]).every((key) => matchesFilter(filters[key], fields[key] || 'Não informado'))
     }) }))
     const cache = buildCepCache(state.cacheRows)
     const rows = uniqueProfileRows(filteredSources).map((row) => mapProfile(row, cache))
     const visible = rows.filter((row) => dimensions.every(({ key }) => !selections[key].length || selections[key].includes(row[key])))
     const ages = visible.flatMap((row) => row.age === null ? [] : [row.age])
     return {
-      rows, visible, options,
+      rows, visible, options, contractOptions,
       averageAge: ages.length ? number.format(ages.reduce((a, b) => a + b, 0) / ages.length) + ' anos' : '—',
       medianAge: medianAge(ages),
       ages: ages.length,
       addresses: visible.filter((row) => row.bairro).length,
       schools: visible.filter((row) => row.escola).length,
     }
-  }, [state.sources, state.cacheRows, studentType, contract, filters, selections])
+  }, [state.sources, state.cacheRows, periods, studentTypes, contracts, filters, selections])
 
   function clearFilters() {
-    setFilters({ curso: '', campus: '', turno: '', ingresso: '' })
+    setFilters({ curso: null, campus: null, turno: null, ingresso: null })
     setSelections(emptySelections)
-    setStudentType('all')
-    setContract('all')
+    setPeriods(null)
+    setStudentTypes(null)
+    setContracts(null)
   }
 
   if (state.loading) return <Loading message="Carregando perfil dos matriculados..." />
@@ -183,7 +190,7 @@ export function PerfilMatriculado() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Perfil do matriculado</h1>
-          <p className="mt-1 text-sm text-slate-500">{period === 'all' ? '2024.1 a 2027.1 · registro mais recente de cada CPF no recorte' : 'Processo seletivo ' + period} · CPF único</p>
+          <p className="mt-1 text-sm text-slate-500">{periods === null ? '2024.1 a 2027.1' : periods.length ? periods.slice().sort().join(', ') : 'Nenhum processo seletivo selecionado'} · registro mais recente de cada CPF no recorte</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={clearFilters} className={controlClass + ' inline-flex items-center gap-2'}><Eraser size={16} />Limpar filtros</button>
@@ -191,25 +198,11 @@ export function PerfilMatriculado() {
         </div>
       </header>
       <section aria-label="Filtros do perfil" className="grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-4">
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Processo seletivo
-          <select aria-label="Processo seletivo" className={controlClass} value={period} onChange={(event) => { setPeriod(event.target.value); clearFilters() }}>
-            <option value="all">Geral · 2024.1 a 2027.1</option>
-            {profilePeriods.map((item) => <option key={item.period} value={item.period}>{item.label}</option>)}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Tipo de aluno
-          <select aria-label="Tipo de aluno" className={controlClass} value={studentType} onChange={(event) => setStudentType(event.target.value as StudentTypeFilter)}><option value="all">Todos</option><option value="calouro">Calouros</option><option value="veterano">Veteranos</option></select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Contrato
-          <select aria-label="Contrato" className={controlClass} value={contract} onChange={(event) => setContract(event.target.value)}><option value="all">Todos</option><option value="ATIVO">Ativo</option><option value="CANCELADO">Cancelado</option></select>
-        </label>
+        <CheckboxFilter label="Processo seletivo" options={profilePeriods.map((item) => ({ value: item.period, label: item.label }))} selected={periods} onChange={setPeriods} />
+        <CheckboxFilter label="Tipo de aluno" options={[{ value: 'calouro', label: 'Calouros' }, { value: 'veterano', label: 'Veteranos' }]} selected={studentTypes} onChange={setStudentTypes} />
+        <CheckboxFilter label="Contrato" options={analysis.contractOptions.map((value) => ({ value, label: titleize(value) }))} selected={contracts} onChange={setContracts} />
         {([{ key: 'curso', label: 'Curso' }, { key: 'campus', label: 'Campus' }, { key: 'turno', label: 'Turno' }, { key: 'ingresso', label: 'Forma de ingresso' }] as const).map(({ key, label }) => (
-          <label key={key} className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">{label}
-            <select aria-label={label} className={controlClass} value={filters[key]} onChange={(event) => setFilters((current) => ({ ...current, [key]: event.target.value }))}>
-              <option value="">Todos</option>
-              {Array.from(new Set([...analysis.options[key], ...(filters[key] ? [filters[key]] : [])])).map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
-          </label>
+          <CheckboxFilter key={key} label={label} options={analysis.options[key].map((value) => ({ value, label: value }))} selected={filters[key]} onChange={(selected) => setFilters((current) => ({ ...current, [key]: selected }))} />
         ))}
       </section>
       {state.warning && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{state.warning}</p>}
