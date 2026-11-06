@@ -5,8 +5,7 @@ import {
   LayoutDashboard,
   Target,
   UserRoundPlus,
-  UsersRound,
-  Repeat2,
+  Gauge,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
 
@@ -51,15 +50,9 @@ export const navItems: NavItem[] = [
     ],
   },
   {
-    title: 'Perfil do Matriculado',
-    path: '/app/perfil-matriculado',
-    icon: UsersRound,
-    allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
-  },
-  {
-    title: 'Renovação de Matrículas',
-    path: '/app/renovacao-matriculas',
-    icon: Repeat2,
+    title: 'Painel Executivo',
+    path: '/app/painel-executivo',
+    icon: Gauge,
     allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
@@ -77,6 +70,7 @@ export const navItems: NavItem[] = [
 ]
 
 export function getDefaultRoute(role?: Role | null) {
+  if (role === 'reitoria') return '/app/painel-executivo'
   if (role === 'spike') {
     return '/app/spike'
   }

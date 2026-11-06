@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ArrowRight, Eraser, RefreshCw, Search } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CheckboxFilter } from '../components/UI/CheckboxFilter'
@@ -11,6 +11,7 @@ import { matchesFilter, type FilterSelection } from '../lib/profileFilters'
 import { normalizedText, type ProfileSource } from '../lib/studentProfile'
 import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
+import { ExecutiveDataContext } from '../lib/ExecutiveDataContext'
 
 type CohortKey = 'curso' | 'campus' | 'turno' | 'ingresso'
 const renewalTables = periodTables.filter((table) => table.period <= '2027.1')
@@ -86,16 +87,21 @@ function RenewalChart({ title, data, selected, onSelect }: {
   </article>
 }
 
-export function RenovacaoMatriculas() {
+export function RenovacaoMatriculas({ embedded = false }: { embedded?: boolean } = {}) {
+  const shared = useContext(ExecutiveDataContext)
+  const Heading = embedded ? 'h2' : 'h1'
   const [origin, setOrigin] = useState(defaultOrigin)
   const [filters, setFilters] = useState(emptyFilters)
   const [listStatuses, setListStatuses] = useState<FilterSelection>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [refresh, setRefresh] = useState(0)
-  const [state, setState] = useState({ loading: true, error: '', sources: [] as ProfileSource[] })
+  const [localState, setState] = useState({ loading: true, error: '', sources: [] as ProfileSource[] })
+  const state = shared ? { loading: shared.loading, error: shared.matriculadosError, sources: shared.sources } : localState
+  const reload = () => shared ? shared.reload() : setRefresh((value) => value + 1)
 
   useEffect(() => {
+    if (shared) return
     let cancelled = false
     async function load() {
       setState((current) => ({ ...current, loading: true, error: '' }))
@@ -113,7 +119,7 @@ export function RenovacaoMatriculas() {
     }
     void load()
     return () => { cancelled = true }
-  }, [refresh])
+  }, [refresh, shared])
 
   const index = useMemo(() => indexRenewalRows(state.sources), [state.sources])
   const analysis = useMemo(() => {
@@ -148,17 +154,17 @@ export function RenovacaoMatriculas() {
   }
 
   if (state.loading) return <Loading message="Comparando as matrículas entre períodos letivos..." />
-  if (state.error) return <EmptyState title="Não foi possível carregar a renovação" description={state.error} action={<button className={controlClass} onClick={() => setRefresh((value) => value + 1)}>Tentar novamente</button>} />
+  if (state.error) return <EmptyState title="Não foi possível carregar a renovação" description={state.error} action={<button className={controlClass} onClick={reload}>Tentar novamente</button>} />
 
   return <div className="space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-950">Renovação de matrículas</h1>
+        <Heading className="text-2xl font-semibold text-slate-950">Renovação de matrículas</Heading>
         <p className="mt-1 text-sm text-slate-500">Período letivo {origin} → {analysis.destination} · calouros e veteranos · CPF único</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={controlClass + ' inline-flex items-center gap-2'} onClick={clearFilters}><Eraser size={16} />Limpar filtros</button>
-        <button type="button" className={controlClass + ' inline-flex items-center gap-2'} onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={16} />Atualizar</button>
+        <button type="button" className={controlClass + ' inline-flex items-center gap-2'} onClick={reload}><RefreshCw size={16} />Atualizar</button>
       </div>
     </header>
     <section aria-label="Filtros de renovação" className="grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-5">

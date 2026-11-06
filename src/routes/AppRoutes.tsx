@@ -12,8 +12,7 @@ import { DashboardHistorico } from '../pages/DashboardHistorico'
 import { Login } from '../pages/Login'
 import { NotFound } from '../pages/NotFound'
 import { PainelCaptacao } from '../pages/PainelCaptacao'
-import { PerfilMatriculado } from '../pages/PerfilMatriculado'
-import { RenovacaoMatriculas } from '../pages/RenovacaoMatriculas'
+import { PainelExecutivo } from '../pages/PainelExecutivo'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
 
 function RootRedirect() {
@@ -110,21 +109,15 @@ export function AppRoutes() {
             }
           />
           <Route
-            path="perfil-matriculado"
+            path="painel-executivo"
             element={
               <RequireRole allowedRoles={['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario']}>
-                <PerfilMatriculado />
+                <PainelExecutivo />
               </RequireRole>
             }
           />
-          <Route
-            path="renovacao-matriculas"
-            element={
-              <RequireRole allowedRoles={['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario']}>
-                <RenovacaoMatriculas />
-              </RequireRole>
-            }
-          />
+          <Route path="perfil-matriculado" element={<Navigate to="/app/painel-executivo?visao=perfil" replace />} />
+          <Route path="renovacao-matriculas" element={<Navigate to="/app/painel-executivo?visao=renovacao" replace />} />
           <Route
             path="painel-captacao"
             element={
