@@ -12,6 +12,7 @@ import { DashboardHistorico } from '../pages/DashboardHistorico'
 import { Login } from '../pages/Login'
 import { NotFound } from '../pages/NotFound'
 import { PainelCaptacao } from '../pages/PainelCaptacao'
+import { PerfilMatriculado } from '../pages/PerfilMatriculado'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
 
 function RootRedirect() {
@@ -104,6 +105,14 @@ export function AppRoutes() {
                 ]}
               >
                 <DashboardHistorico />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="perfil-matriculado"
+            element={
+              <RequireRole allowedRoles={['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario']}>
+                <PerfilMatriculado />
               </RequireRole>
             }
           />

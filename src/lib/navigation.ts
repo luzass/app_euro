@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Target,
   UserRoundPlus,
+  UsersRound,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
 
@@ -47,6 +48,12 @@ export const navItems: NavItem[] = [
       'captacao_gerente',
       'funcionario',
     ],
+  },
+  {
+    title: 'Perfil do Matriculado',
+    path: '/app/perfil-matriculado',
+    icon: UsersRound,
+    allowedRoles: ['admin', 'reitoria', 'coordenador', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
     title: 'Painel de Captação',
