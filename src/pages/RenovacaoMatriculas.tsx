@@ -12,6 +12,7 @@ import { normalizedText, type ProfileSource } from '../lib/studentProfile'
 import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
 import { ExecutiveDataContext } from '../lib/ExecutiveDataContext'
+import { EnrollmentGoalsPanel } from '../components/Executive/EnrollmentGoalsPanel'
 
 type CohortKey = 'curso' | 'campus' | 'turno' | 'ingresso'
 const renewalTables = periodTables.filter((table) => table.period <= '2027.1')
@@ -167,6 +168,7 @@ export function RenovacaoMatriculas({ embedded = false }: { embedded?: boolean }
         <button type="button" className={controlClass + ' inline-flex items-center gap-2'} onClick={reload}><RefreshCw size={16} />Atualizar</button>
       </div>
     </header>
+    <EnrollmentGoalsPanel sources={state.sources} origin={origin} />
     <section aria-label="Filtros de renovação" className="grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-5">
       <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Comparação entre períodos letivos
         <select aria-label="Comparação entre períodos letivos" className={controlClass + ' h-10'} value={origin} onChange={(event) => { setOrigin(event.target.value); clearFilters() }}>

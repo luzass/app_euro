@@ -15,22 +15,30 @@ const button = 'inline-flex items-center justify-center gap-2 rounded-lg border 
 
 export function PersonaPanel({ data, currentPeriod, asOf }: { data: CampaignData[]; currentPeriod: string; asOf: string }) {
   const [courses, setCourses] = useState<FilterSelection>(null)
+  const [ingressos, setIngressos] = useState<FilterSelection>(null)
+  const [situations, setSituations] = useState<FilterSelection>(null)
   const [bands, setBands] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const model = useMemo(() => buildCoursePersona(data, currentPeriod, asOf), [data, currentPeriod, asOf])
   const options = [...new Set(model.records.map((row) => row.course))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  const scoped = model.records.filter((row) => matchesFilter(courses, row.course) && normalizedText(row.name).includes(normalizedText(search)))
+  const ingressoFor = (row: typeof model.records[number]) => row.evidence.find((item) => item.dimension === 'ingresso')?.value || 'Não informado'
+  const ingressoOptions = [...new Set(model.records.map(ingressoFor))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  const scoped = model.records.filter((row) => matchesFilter(courses, row.course)
+    && matchesFilter(ingressos, ingressoFor(row)) && matchesFilter(situations, row.enrolled ? 'matriculado' : 'sem_matricula')
+    && normalizedText(row.name).includes(normalizedText(search)))
   const counts = personaLabels.map((label) => ({ label, value: scoped.filter((row) => row.label === label).length }))
   const filtered = scoped.filter((row) => !bands.length || bands.includes(row.label))
   const pages = Math.max(1, Math.ceil(filtered.length / 20)), actualPage = Math.min(page, pages - 1)
   return <section aria-label="Aderência ao perfil do curso" className="space-y-4 border-b border-slate-200 pb-6">
     <header><h2 className="text-xl font-semibold text-slate-950">Inscritos e perfil histórico do curso</h2><p className="mt-1 text-sm text-slate-500">Inscritos de {currentPeriod} comparados com calouros ativos de períodos anteriores. Semelhança de perfil não é probabilidade de matrícula.</p></header>
-    <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
+    <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <CheckboxFilter label="Curso da persona" options={options.map((course) => ({ value: course, label: titleize(course) }))} selected={courses} onChange={(value) => { setCourses(value); setPage(0) }} />
+      <CheckboxFilter label="Ingresso do inscrito" options={ingressoOptions.map((value) => ({ value, label: titleize(value) }))} selected={ingressos} onChange={(value) => { setIngressos(value); setPage(0) }} />
+      <CheckboxFilter label="Matrícula do inscrito" options={[{ value: 'matriculado', label: 'Matriculado no curso' }, { value: 'sem_matricula', label: 'Sem matrícula ativa no curso' }]} selected={situations} onChange={(value) => { setSituations(value); setPage(0) }} />
       <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Buscar inscrito<div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3"><Search size={16} /><input aria-label="Buscar inscrito" className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></div></label>
-      <button className={button} onClick={() => { setBands([]); setCourses(null); setSearch(''); setPage(0) }}><Eraser size={16} />Limpar</button>
     </div>
+    <div className="flex justify-end"><button className={button} onClick={() => { setBands([]); setCourses(null); setIngressos(null); setSituations(null); setSearch(''); setPage(0) }}><Eraser size={16} />Limpar</button></div>
     {(model.historyUnavailable || model.currentUnavailable) && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">Há bases indisponíveis. A comparação está suspensa para não avaliar pessoas com uma referência incompleta.</p>}
     {!model.historyUnavailable && !model.currentUnavailable && <>
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-y border-slate-200 py-3 text-sm"><span>Inscrições por CPF e curso: <strong>{formatNumberBR(scoped.length)}</strong></span><span>Com dados para comparação: <strong>{formatNumberBR(scoped.filter((row) => row.score !== null).length)}</strong></span><span>Matrícula ativa no mesmo curso: <strong>{formatNumberBR(scoped.filter((row) => row.enrolled).length)}</strong></span></div>

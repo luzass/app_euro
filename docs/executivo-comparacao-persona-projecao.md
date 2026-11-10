@@ -101,3 +101,61 @@ atualizacao de volume, CPF duplicado, semestre misto, exclusoes, referencia
 temporal da persona e dados faltantes. Verificacao visual e funcional com
 Playwright em desktop/mobile e dados ficticios, incluindo busca, paginacao,
 falha de leitura e atualizacao de somente duas fontes no ciclo automatico.
+
+## Metas, recomposicao e ritmo diario
+
+Atualizacao apos definicao do usuario: primeira meta de 2027.1 e 307
+calouros nao PROUNI e 204 PROUNI, ambos SEM Medicina. Essas metas estao
+em `initialEnrollmentGoals`, separadas do piso institucional de recomposicao.
+Este piso inclui Medicina e corresponde aos CPFs ativos do periodo anterior,
+nao ao tamanho da base elegivel depois de retirar os provaveis concluintes.
+
+O painel calcula o saldo ate esse piso, quantos CPFs da origem continuam
+ativos e quantos entraram em relacao a origem. A reposicao dos provaveis
+concluintes e um cenario condicional: se todos os elegiveis renovarem e os
+concluintes sairem, precisamos de tantas entradas quanto concluintes.
+Nao e uma previsao de formatura. Um ponto percentual de renovacao equivale
+a elegiveis / 100 pessoas, aproximadamente.
+
+Metas usam CPF unico, calouro explicitamente identificado e contrato ativo.
+Um CPF com ingressos PROUNI e nao PROUNI simultaneos, ou ingresso ausente,
+nao e alocado automaticamente a nenhum grupo. Nao somamos as 511 matriculas
+novamente ao piso total: elas sao um componente da base, nao outro estoque.
+Metas institucionais nao mudam com filtros analiticos de curso/campus.
+
+Dois benchmarks complementam a projecao sazonal ja existente:
+
+- Ritmo atual: realizado no corte + media diaria dos ultimos 14 dias
+  corridos (incluindo dias com zero) x dias restantes. Exige pelo menos
+  sete dias da campanha. Nao trata datas antigas de veteranos como renovacoes.
+- Historico restante: realizado atual + media das taxas diarias historicas
+  entre o corte equivalente e a data-alvo x dias restantes atuais.
+  Exige duas referencias utilizaveis; nao extrapola a media da campanha
+  inteira como se todas as etapas fossem iguais.
+
+As faixas nao PROUNI/PROUNI desses benchmarks tambem excluem Medicina.
+O total de calouros continua incluindo todos os cursos. Nao se somam os
+benchmarks segmentados a projecao principal. Divergencias entre metodos
+geram um alerta, nao uma media arbitraria nem um compromisso comercial.
+
+Os tres metodos sao avaliados nos mesmos exercicios historicos: so entram
+testes com duas referencias ANTERIORES ao PS testado. O ritmo do PS testado
+usa apenas eventos ate o corte. Mostramos erro absoluto medio em pessoas
+e quantidade de exercicios; poucos testes nao autorizam escolher um vencedor.
+Referencia metodologica de benchmarks e validacao temporal:
+https://otexts.com/fpp3/toolbox.html#time-series-cross-validation
+Os benchmarks especificos deste painel sao aproximacoes operacionais,
+nao um modelo estatistico calibrado da probabilidade individual.
+
+A fila por curso cruza CPF + curso com vinculo ativo na carga atual, dentro
+da janela de inscricao. Mostra pendentes, correspondencias e espera mediana
+desde a inscricao, nao tempo sem contato. A prioridade por volume de fila
+nao implica que aqueles candidatos estejam mais propensos a matricular.
+
+Filtros da aderencia agora combinam nome, curso, forma de ingresso e
+presenca de matricula ativa no curso. A fila nao muda a nota de aderencia.
+
+Proximas analises de maior valor, sem prometer resultados antes da validacao:
+conversao em 7/14/30 dias com coortes de mesma maturidade; tempo ate pagamento;
+saldo liquido de crescimento por curso/campus; diferenca entre demanda e
+conversao; e custo por matricula atribuida quando os gastos forem integrados.

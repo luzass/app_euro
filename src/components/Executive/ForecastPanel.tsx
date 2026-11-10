@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CheckboxFilter } from '../UI/CheckboxFilter'
-import { buildCampaignForecast, type CampaignData, type ForecastScenario } from '../../lib/campaignForecast'
+import { buildCampaignForecast, previousPeriod, type CampaignData, type ForecastScenario } from '../../lib/campaignForecast'
 import type { FilterSelection } from '../../lib/profileFilters'
 import { formatNumberBR } from '../../lib/formatters'
 import { CampaignComparison } from './CampaignComparison'
+import { EnrollmentGoalsPanel } from './EnrollmentGoalsPanel'
+import { PaceForecastPanel } from './PaceForecastPanel'
 
 const calendarKey = 'unieuro.executivo.calendario.20271.v1'
 const defaultCalendar = { start: '2026-09-29', end: '2027-03-31' }
@@ -28,12 +30,14 @@ function ProjectionCard({ title, scenario }: { title: string; scenario: Forecast
   </article>
 }
 
-export function ForecastPanel({ data, currentPeriod, asOf }: { data: CampaignData[]; currentPeriod: string; asOf: string }) {
+export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSelectCourse }: { data: CampaignData[]; goalData?: CampaignData[]; currentPeriod: string; asOf: string; onSelectCourse?: (course: string, additive: boolean) => void }) {
   const [calendar, setCalendar] = useState(loadCalendar)
   const [references, setReferences] = useState<FilterSelection>(null)
-  const history = data.filter((item) => item.period < currentPeriod && item.period.endsWith('.1')).map((item) => item.period)
+  const history = useMemo(() => data.filter((item) => item.period < currentPeriod && item.period.endsWith(currentPeriod.slice(-2))).map((item) => item.period), [data, currentPeriod])
   const referencePeriods = references ?? history
-  const model = useMemo(() => buildCampaignForecast(data, { currentPeriod, ...calendar, asOf, references: referencePeriods }), [data, currentPeriod, calendar, asOf, referencePeriods])
+  const config = useMemo(() => ({ currentPeriod, ...calendar, asOf, references: referencePeriods }), [currentPeriod, calendar, asOf, referencePeriods])
+  const model = useMemo(() => buildCampaignForecast(data, config), [data, config])
+  const sources = useMemo(() => goalData.map((item) => ({ period: item.period, rows: item.matriculados })), [goalData])
   useEffect(() => {
     try { localStorage.setItem(calendarKey, JSON.stringify(calendar)) } catch { /* Storage is optional. */ }
   }, [calendar])
@@ -57,7 +61,9 @@ export function ForecastPanel({ data, currentPeriod, asOf }: { data: CampaignDat
     </section>
     {model.unknownTypes > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{model.unknownTypes} CPF sem classificação única entre calouro e veterano. A soma projetada fica pendente até a conferência desses vínculos.</p>}
     <section aria-label="Projeções por indicador" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{projections.map((item) => <ProjectionCard key={item.title} {...item} />)}</section>
-    <CampaignComparison data={data} config={{ currentPeriod, ...calendar, asOf, references: referencePeriods }} periods={history} onSelectPeriod={(period, additive) => {
+    {goalData.some((item) => item.matriculadosError) ? <p role="status" className="text-sm text-amber-800">Metas institucionais aguardando todas as bases de matrículas.</p> : <EnrollmentGoalsPanel sources={sources} origin={previousPeriod(currentPeriod)} dates={{ asOf, end: calendar.end }} />}
+    <PaceForecastPanel data={data} config={config} seasonal={{ inscritos: model.inscritos.scenario.reference, calouros: model.calouros.scenario.reference }} onSelectCourse={onSelectCourse} />
+    <CampaignComparison data={data} config={config} periods={history} onSelectPeriod={(period, additive) => {
       if (period === currentPeriod) { setReferences(null); return }
       setReferences((current) => {
         const selected = current ?? history
