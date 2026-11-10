@@ -40,6 +40,6 @@ export function CampaignComparison({ data, config, periods, onSelectPeriod }: { 
         {model.series.some((item) => item.missing || item.invalidCpf || !item.available) && <p role="status" className="mt-2 text-xs text-amber-800">Há bases indisponíveis ou registros sem CPF/data válidos. Esses registros não entram nas curvas; confira a tabela de referências abaixo.</p>}
       </> : <p className="py-12 text-sm text-slate-500">Confira as datas da campanha para exibir a comparação.</p>}
     </article>)}</div>
-    <p className="text-xs leading-5 text-slate-500">CPF único por PS. Calouros usam a data de matrícula e o contrato ativo da carga disponível, não um retrato histórico do contrato naquela data. Veteranos não entram nestas curvas porque a data original da matrícula não representa a renovação.</p>
+    <p className="text-xs leading-5 text-slate-500">CPF único por PS. Calouros usam {config.matriculaDate === 'payment' ? 'a baixa do pagamento' : 'a data de matrícula'} e o contrato ativo da carga disponível, não um retrato histórico do contrato naquela data. Veteranos não entram nestas curvas porque a data original da matrícula não representa a renovação.</p>
   </section>
 }

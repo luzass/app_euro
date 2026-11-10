@@ -1,5 +1,5 @@
 import type { GenericRow } from './dashboardHelpers'
-import { activePeople, dateDay, matriculasForPeriod, personEvents, registrationsForPeriod, shiftedDay, type CampaignData, type ForecastConfig } from './campaignForecast.ts'
+import { activePeople, dateDay, matriculasForPeriod, matriculaDateFields, personEvents, registrationsForPeriod, shiftedDay, type CampaignData, type ForecastConfig } from './campaignForecast.ts'
 
 export function comparisonRows(data: CampaignData[], period: string, kind: 'inscritos' | 'calouros'): GenericRow[] {
   if (kind === 'inscritos') return registrationsForPeriod(data, period)
@@ -15,7 +15,7 @@ export function buildCampaignComparison(data: CampaignData[], config: ForecastCo
   const periods = [...new Set([...config.references.filter((period) => period < config.currentPeriod && period.endsWith(config.currentPeriod.slice(-2))), config.currentPeriod])].sort()
   const series = periods.map((period) => {
     const delta = Number(period.slice(0, 4)) - Number(config.currentPeriod.slice(0, 4))
-    const fields = kind === 'inscritos' ? ['data_inscricao'] : ['data_de_matricula', 'data_baixa_do_pagamento']
+    const fields = kind === 'inscritos' ? ['data_inscricao'] : matriculaDateFields(config)
     const events = personEvents(comparisonRows(data, period, kind), fields)
     const first = shiftedDay(start, delta), target = shiftedDay(end, delta), cutoff = shiftedDay(last, delta)
     const dates = [...events.people.values()].filter((day): day is number => day !== null && day >= first && day <= target).sort((a, b) => a - b)

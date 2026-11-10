@@ -1,5 +1,5 @@
 import type { GenericRow } from './dashboardHelpers'
-import { activePeople, cpfKey, dateDay, matriculasForPeriod, personEvents, registrationsForPeriod, shiftedDay, type CampaignData, type ForecastConfig } from './campaignForecast.ts'
+import { activePeople, cpfKey, dateDay, matriculasForPeriod, matriculaDateFields, personEvents, registrationsForPeriod, shiftedDay, type CampaignData, type ForecastConfig } from './campaignForecast.ts'
 import { calouroAdmissionSegment, initialEnrollmentGoals } from './enrollmentGoals.ts'
 import { academicPeriod } from './enrollmentRenewal.ts'
 import { medianAge, normalizedText, profileField } from './studentProfile.ts'
@@ -31,7 +31,7 @@ function sample(data: CampaignData[], period: string, config: ForecastConfig, ki
       rows = segmentedRows.filter((entries) => calouroAdmissionSegment(entries) === kind).flat()
     }
   }
-  const events = personEvents(rows, kind === 'inscritos' ? ['data_inscricao'] : ['data_de_matricula', 'data_baixa_do_pagamento'])
+  const events = personEvents(rows, kind === 'inscritos' ? ['data_inscricao'] : matriculaDateFields(config))
   const dates = [...events.people.values()].filter((day): day is number => day !== null && day >= start && day <= end).sort((a, b) => a - b)
   const atCut = dates.filter((day) => day <= cutoff).length
   const recentStart = Math.max(start, cutoff - 13), previousStart = Math.max(start, cutoff - 27)

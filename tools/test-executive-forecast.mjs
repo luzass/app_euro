@@ -5,7 +5,7 @@ import { executiveOverview } from '../src/lib/executiveAnalytics.ts'
 const periods = ['2024.1', '2024.2', '2025.1', '2025.2', '2026.1', '2026.2', '2027.1']
 const cpf = (number) => String(number).padStart(11, '0')
 const registration = (number, period, date) => ({ cpf: cpf(number), candidato: `Candidato ${number}`, data_inscricao: date, curso: 'DIREITO', campus: 'ASA SUL', turno: 'NOTURNO', forma_de_ingresso: 'VESTIBULAR' })
-const enrollment = (number, period, type, date = '01/01/2019') => ({ cpf: cpf(number), periodo_letivo: period, contrato: 'ATIVO', tipo_aluno: type, data_de_matricula: date, curso: 'DIREITO', filial: 'ASA SUL', turno: 'NOTURNO', periodo: '4', tipo_de_ingresso: 'VESTIBULAR' })
+const enrollment = (number, period, type, date = '01/01/2019') => ({ cpf: cpf(number), periodo_letivo: period, contrato: 'ATIVO', tipo_aluno: type, data_de_matricula: date, data_baixa_do_pagamento: date, curso: 'DIREITO', filial: 'ASA SUL', turno: 'NOTURNO', periodo: '4', tipo_de_ingresso: 'VESTIBULAR' })
 export function executiveFixture() {
   const data = periods.map((period) => ({ period, inscritos: [], matriculados: [] }))
   const get = (period) => data.find((item) => item.period === period)
@@ -59,6 +59,7 @@ if (process.argv[1] && new URL(import.meta.url).pathname.replace(/\\/g, '/').end
 
   const missing = structuredClone(data)
   missing.at(-1).matriculados[0].data_de_matricula = ''
+  missing.at(-1).matriculados[0].data_baixa_do_pagamento = ''
   const missingResult = buildCampaignForecast(missing, config)
   assert.equal(missingResult.calouros.scenario.observed, 6)
   assert.equal(missingResult.calouros.scenario.reference, null)

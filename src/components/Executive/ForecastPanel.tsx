@@ -7,9 +7,10 @@ import { formatNumberBR } from '../../lib/formatters'
 import { CampaignComparison } from './CampaignComparison'
 import { EnrollmentGoalsPanel } from './EnrollmentGoalsPanel'
 import { PaceForecastPanel } from './PaceForecastPanel'
+import { CampaignPlanningPanel } from './CampaignPlanningPanel'
 
 const calendarKey = 'unieuro.executivo.calendario.20271.v1'
-const defaultCalendar = { start: '2026-09-29', end: '2027-03-31' }
+const defaultCalendar = { start: '2026-09-29', end: '2027-03-31', matriculaDate: 'payment' as 'payment' | 'enrollment' }
 const fieldClass = 'h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800'
 const show = (value: number | null | undefined) => value === null || value === undefined ? '—' : formatNumberBR(value)
 const dateLabel = (value: number | null) => value === null ? '—' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(value * 86400000))
@@ -17,7 +18,7 @@ const dateLabel = (value: number | null) => value === null ? '—' : new Intl.Da
 function loadCalendar() {
   try {
     const saved = JSON.parse(localStorage.getItem(calendarKey) ?? 'null')
-    if (typeof saved?.start === 'string' && typeof saved?.end === 'string') return { start: saved.start as string, end: saved.end as string }
+    if (typeof saved?.start === 'string' && typeof saved?.end === 'string') return { start: saved.start as string, end: saved.end as string, matriculaDate: saved.matriculaDate === 'enrollment' ? 'enrollment' as const : 'payment' as const }
   } catch { /* The default calendar also works without browser storage. */ }
   return defaultCalendar
 }
@@ -35,6 +36,14 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
   const [references, setReferences] = useState<FilterSelection>(null)
   const history = useMemo(() => data.filter((item) => item.period < currentPeriod && item.period.endsWith(currentPeriod.slice(-2))).map((item) => item.period), [data, currentPeriod])
   const referencePeriods = references ?? history
+  const selectReference = (period: string, additive: boolean) => {
+    if (period === currentPeriod) { setReferences(null); return }
+    setReferences((current) => {
+      const selected = current ?? history
+      return additive ? selected.includes(period) ? selected.filter((item) => item !== period) : [...selected, period]
+        : selected.length === 1 && selected[0] === period ? null : [period]
+    })
+  }
   const config = useMemo(() => ({ currentPeriod, ...calendar, asOf, references: referencePeriods }), [currentPeriod, calendar, asOf, referencePeriods])
   const model = useMemo(() => buildCampaignForecast(data, config), [data, config])
   const sources = useMemo(() => goalData.map((item) => ({ period: item.period, rows: item.matriculados })), [goalData])
@@ -56,21 +65,17 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
         <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Data-alvo da projeção<input type="date" aria-label="Data-alvo da projeção" value={calendar.end} className={fieldClass} onChange={(event) => setCalendar((current) => ({ ...current, end: event.target.value }))} /></label>
         <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Data de corte<input type="date" aria-label="Data de corte" value={asOf} readOnly className={fieldClass + ' bg-slate-50'} /></label>
         <CheckboxFilter label="Referências históricas" options={history.map((period) => ({ value: period, label: period }))} selected={references} onChange={setReferences} />
+        <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Data das matrículas<select aria-label="Data das matrículas" className={fieldClass} value={calendar.matriculaDate} onChange={(event) => setCalendar((current) => ({ ...current, matriculaDate: event.target.value as 'payment' | 'enrollment' }))}><option value="payment">Baixa do pagamento</option><option value="enrollment">Data de matrícula</option></select></label>
       </div>
       <p className="text-xs leading-5 text-slate-500">Início informado: 29/09/2026. A data-alvo inicial de 31/03/2027 representa o encerramento previsto em março e pode ser ajustada. O calendário é salvo neste navegador.</p>
     </section>
     {model.unknownTypes > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{model.unknownTypes} CPF sem classificação única entre calouro e veterano. A soma projetada fica pendente até a conferência desses vínculos.</p>}
     <section aria-label="Projeções por indicador" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{projections.map((item) => <ProjectionCard key={item.title} {...item} />)}</section>
     {goalData.some((item) => item.matriculadosError) ? <p role="status" className="text-sm text-amber-800">Metas institucionais aguardando todas as bases de matrículas.</p> : <EnrollmentGoalsPanel sources={sources} origin={previousPeriod(currentPeriod)} dates={{ asOf, end: calendar.end }} />}
+    <CampaignPlanningPanel data={data} goalData={goalData} config={config} onSelectPeriod={selectReference} />
+    <details className="border-y border-slate-200 py-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">Comparações e auditoria dos cenários</summary><div className="mt-5 space-y-6">
     <PaceForecastPanel data={data} config={config} seasonal={{ inscritos: model.inscritos.scenario.reference, calouros: model.calouros.scenario.reference }} onSelectCourse={onSelectCourse} />
-    <CampaignComparison data={data} config={config} periods={history} onSelectPeriod={(period, additive) => {
-      if (period === currentPeriod) { setReferences(null); return }
-      setReferences((current) => {
-        const selected = current ?? history
-        if (additive) return selected.includes(period) ? selected.filter((item) => item !== period) : [...selected, period]
-        return selected.length === 1 && selected[0] === period ? null : [period]
-      })
-    }} />
+    <CampaignComparison data={data} config={config} periods={history} onSelectPeriod={selectReference} />
     <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5">
       <h3 className="text-base font-semibold text-slate-950">Realizado e projeção de referência</h3>
       <div className="mt-4 h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 45, top: 8, bottom: 8 }}>
@@ -104,6 +109,7 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
         return <p key={String(label)}>{String(label)}: {test ? `teste retrospectivo em ${test.period}, usando apenas referências anteriores. Estimado ${show(test.predicted)}, observado ${show(test.actual)}; erro absoluto percentual de ${new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 }).format(Math.abs(test.predicted - test.actual) / test.actual)}. Um exercício não valida a precisão futura.` : 'ainda sem três referências utilizáveis para executar o teste retrospectivo.'}</p>
       })}
       <p>Referência metodológica: <a href="https://otexts.com/fpp3/" target="_blank" rel="noreferrer" className="text-sky-700 underline">Forecasting: Principles and Practice</a>. O método de cenários desta página é uma aproximação operacional, não um modelo oficial do Inep.</p>
+    </div></details>
     </div></details>
   </div>
 }

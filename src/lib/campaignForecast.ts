@@ -15,6 +15,7 @@ export interface ForecastConfig {
   end: string
   asOf: string
   references: string[]
+  matriculaDate?: 'payment' | 'enrollment'
 }
 export interface ForecastScenario {
   observed: number
@@ -29,6 +30,11 @@ interface ActivePerson {
   rows: GenericRow[]
 }
 const DAY = 86400000
+
+export function matriculaDateFields(config: Pick<ForecastConfig, 'matriculaDate'>) {
+  return config.matriculaDate === 'payment' ? ['data_baixa_do_pagamento']
+    : config.matriculaDate === 'enrollment' ? ['data_de_matricula'] : ['data_de_matricula', 'data_baixa_do_pagamento']
+}
 
 export function dateDay(value: unknown): number | null {
   const text = String(value ?? '').trim()
@@ -132,7 +138,7 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
   const references = data.filter((item) => config.references.includes(item.period) && item.period < config.currentPeriod && item.period.endsWith(config.currentPeriod.slice(-2)))
 
   function paceForecast(kind: 'inscritos' | 'calouros') {
-    const fields = kind === 'inscritos' ? ['data_inscricao'] : ['data_de_matricula', 'data_baixa_do_pagamento']
+    const fields = kind === 'inscritos' ? ['data_inscricao'] : matriculaDateFields(config)
     const currentRows = kind === 'inscritos' ? registrationsForPeriod(data, config.currentPeriod) : currentCalouros.flatMap((person) => person.rows)
     const events = personEvents(currentRows, fields)
     const observed = events.people.size
