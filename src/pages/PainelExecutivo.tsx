@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Eraser, RefreshCw } from 'lucide-react'
 import { ExecutiveSummary } from '../components/Executive/ExecutiveSummary'
 import { ForecastPanel } from '../components/Executive/ForecastPanel'
+import { PersonaPanel } from '../components/Executive/PersonaPanel'
 import { CheckboxFilter } from '../components/UI/CheckboxFilter'
 import { EmptyState } from '../components/UI/EmptyState'
 import { Loading } from '../components/UI/Loading'
@@ -57,24 +58,50 @@ export function PainelExecutivo() {
   const view = sections.find((section) => section.key === requestedView)?.key ?? 'resumo'
   const [filters, setFilters] = useState(emptyFilters)
   const [refresh, setRefresh] = useState(0)
-  const [state, setState] = useState({ loading: true, error: '', data: [] as CampaignData[], cacheRows: [] as GenericRow[], cacheWarning: '', readAt: '', asOf: dateInBrazil() })
+  const historyCache = useRef(new Map<string, CampaignData>())
+  const cepCache = useRef<Awaited<ReturnType<typeof readTable>> | null>(null)
+  const lastRead = useRef(0)
+  const inFlight = useRef(false)
+  const [state, setState] = useState({ loading: true, refreshing: true, error: '', data: [] as CampaignData[], cacheRows: [] as GenericRow[], cacheWarning: '', readAt: '', asOf: dateInBrazil() })
+  const reload = () => { historyCache.current.clear(); cepCache.current = null; setRefresh((value) => value + 1) }
+
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === 'visible' && !inFlight.current && Date.now() - lastRead.current >= 60000) setRefresh((value) => value + 1)
+    }
+    const timer = window.setInterval(check, 300000)
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      setState((current) => ({ ...current, loading: true, error: '' }))
+      inFlight.current = true
+      setState((current) => ({ ...current, loading: current.data.length === 0, refreshing: true, error: '' }))
       if (!isSupabaseConfigured) {
-        setState((current) => ({ ...current, loading: false, error: 'Configure o Supabase antes de carregar o painel executivo.' }))
+        inFlight.current = false
+        setState((current) => ({ ...current, loading: false, refreshing: false, error: 'Configure o Supabase antes de carregar o painel executivo.' }))
         return
       }
       const [data, cache] = await Promise.all([
         Promise.all(tables.map(async (table): Promise<CampaignData> => {
+          const cached = historyCache.current.get(table.period)
+          if (table.period !== currentPeriod && cached) return cached
           const [inscritos, matriculados] = await Promise.all([readTable(table.inscritosTable), readTable(table.matriculadosTable)])
-          return { period: table.period, inscritos: inscritos.rows, matriculados: matriculados.rows, inscritosError: inscritos.error, matriculadosError: matriculados.error }
+          const result = { period: table.period, inscritos: inscritos.rows, matriculados: matriculados.rows, inscritosError: inscritos.error, matriculadosError: matriculados.error }
+          if (!cancelled && table.period !== currentPeriod && !inscritos.error && !matriculados.error) historyCache.current.set(table.period, result)
+          return result
         })),
-        readTable('ceps_enriquecidos'),
+        cepCache.current ? Promise.resolve(cepCache.current) : readTable('ceps_enriquecidos'),
       ])
-      if (!cancelled) setState({ loading: false, error: '', data, cacheRows: cache.rows, cacheWarning: cache.error ? 'Cache de CEP indisponível. Endereços exibidos apenas quando já preenchidos nas matrículas.' : '', readAt: new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date()), asOf: dateInBrazil() })
+      if (!cancelled) {
+        if (!cache.error) cepCache.current = cache
+        lastRead.current = Date.now()
+        inFlight.current = false
+        setState({ loading: false, refreshing: false, error: '', data, cacheRows: cache.rows, cacheWarning: cache.error ? 'Cache de CEP indisponível. Endereços exibidos apenas quando já preenchidos nas matrículas.' : '', readAt: new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date()), asOf: dateInBrazil() })
+      }
     }
     void load()
     return () => { cancelled = true }
@@ -86,7 +113,7 @@ export function PainelExecutivo() {
     sources: state.data.map((item) => ({ period: item.period, rows: item.matriculados })),
     cacheRows: state.cacheRows,
     cacheWarning: state.cacheWarning,
-    reload: () => setRefresh((value) => value + 1),
+    reload,
   }), [state])
 
   const analysis = useMemo(() => {
@@ -106,8 +133,8 @@ export function PainelExecutivo() {
   const unavailableInscritos = state.data.filter((item) => item.inscritosError).map((item) => item.period)
   return <ExecutiveDataContext.Provider value={shared}><div className="space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-2xl font-semibold text-slate-950">Painel executivo</h1><p className="mt-1 text-sm text-slate-500">Processo seletivo atual: {currentPeriod} · consulta em {state.readAt}</p></div>
-      {showFilters && <div className="flex gap-2"><button type="button" className={controlClass} onClick={() => setFilters(emptyFilters)}><Eraser size={16} />Limpar filtros</button><button type="button" className={controlClass} onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={16} />Atualizar</button></div>}
+      <div><h1 className="text-2xl font-semibold text-slate-950">Painel executivo</h1><p className="mt-1 text-sm text-slate-500">Processo seletivo atual: {currentPeriod} · consulta em {state.readAt}</p><p role="status" className="mt-1 text-xs text-slate-500">{state.refreshing ? 'Consultando novas cargas...' : 'Dados atuais consultados a cada 5 minutos enquanto o painel estiver aberto.'}</p></div>
+      <div className="flex gap-2">{showFilters && <button type="button" className={controlClass} onClick={() => setFilters(emptyFilters)}><Eraser size={16} />Limpar filtros</button>}<button type="button" className={controlClass} disabled={state.refreshing} onClick={reload}><RefreshCw size={16} className={state.refreshing ? 'animate-spin' : ''} />Atualizar</button></div>
     </header>
     <div role="tablist" aria-label="Seções do painel executivo" className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2">
       {sections.map((section, index) => <button key={section.key} id={'exec-tab-' + section.key} type="button" role="tab" aria-selected={view === section.key} aria-controls={'exec-panel-' + section.key} tabIndex={view === section.key ? 0 : -1} className={'shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium ' + (view === section.key ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100')} onClick={() => setParams({ visao: section.key })} onKeyDown={(event) => {
@@ -121,7 +148,7 @@ export function PainelExecutivo() {
       {view === 'resumo' && <ExecutiveSummary data={analysis.data} currentPeriod={currentPeriod} />}
       {view === 'projecao' && <ForecastPanel data={analysis.data} currentPeriod={currentPeriod} asOf={state.asOf} />}
       {view === 'renovacao' && <RenovacaoMatriculas embedded />}
-      {view === 'perfil' && <PerfilMatriculado embedded />}
+      {view === 'perfil' && <div className="space-y-6"><PersonaPanel data={state.data} currentPeriod={currentPeriod} asOf={state.asOf} /><PerfilMatriculado embedded /></div>}
     </div>
   </div></ExecutiveDataContext.Provider>
 }

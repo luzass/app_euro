@@ -1,5 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { isDashboardEnrollment } from './academicScope'
 
 export const SUPABASE_PAGE_SIZE = 1000
 
@@ -101,7 +102,7 @@ export async function fetchAllRows(tableName: string) {
     from += SUPABASE_PAGE_SIZE
   }
 
-  return { rows, error: null as PostgrestError | null }
+  return { rows: rows.filter((row) => isDashboardEnrollment(row, tableName)), error: null as PostgrestError | null }
 }
 
 export function normalizeCpf(value: unknown) {
@@ -192,7 +193,11 @@ export function normalizeIngresso(value?: string | null) {
     return 'ENEM'
   }
 
-  if (normalized.includes('GRADUADO')) {
+  if (
+    ['GRADUADO', '2ª GRADUACAO', '2A GRADUACAO', '2 GRADUACAO', 'SEGUNDA GRADUACAO'].some(
+      (label) => normalized.includes(label),
+    )
+  ) {
     return 'Graduado'
   }
 
@@ -204,11 +209,27 @@ export function normalizeIngresso(value?: string | null) {
     return 'Readmissão'
   }
 
-  if (normalized.includes('TRANSFERENCIA') || normalized.includes('TRANSFERÊNCIA')) {
+  if (
+    ['TRANSFERENCIA INTERNA', 'TRANSF. INTERNA', 'TRANS. INTERNA'].some((label) =>
+      normalized.includes(label),
+    )
+  ) {
+    return 'Transferência Interna'
+  }
+
+  if (
+    ['TRANSFERENCIA', 'TRANSF. EXTERNA', 'TRANS. EXTERNA'].some((label) =>
+      normalized.includes(label),
+    )
+  ) {
     return 'Transferência Externa'
   }
 
-  if (normalized.includes('SEMIPRESENCIAL')) {
+  if (normalized.includes('MEDICINA PRESENCIAL')) {
+    return 'Vestibular'
+  }
+
+  if (normalized.includes('SEMIPRESENCIA')) {
     return 'Semipresencial'
   }
 

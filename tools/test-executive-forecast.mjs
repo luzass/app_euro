@@ -4,7 +4,7 @@ import { executiveOverview } from '../src/lib/executiveAnalytics.ts'
 
 const periods = ['2024.1', '2024.2', '2025.1', '2025.2', '2026.1', '2026.2', '2027.1']
 const cpf = (number) => String(number).padStart(11, '0')
-const registration = (number, period, date) => ({ cpf: cpf(number), data_inscricao: date, curso: 'DIREITO', campus: 'ASA SUL', turno: 'NOTURNO', forma_de_ingresso: 'VESTIBULAR' })
+const registration = (number, period, date) => ({ cpf: cpf(number), candidato: `Candidato ${number}`, data_inscricao: date, curso: 'DIREITO', campus: 'ASA SUL', turno: 'NOTURNO', forma_de_ingresso: 'VESTIBULAR' })
 const enrollment = (number, period, type, date = '01/01/2019') => ({ cpf: cpf(number), periodo_letivo: period, contrato: 'ATIVO', tipo_aluno: type, data_de_matricula: date, curso: 'DIREITO', filial: 'ASA SUL', turno: 'NOTURNO', periodo: '4', tipo_de_ingresso: 'VESTIBULAR' })
 export function executiveFixture() {
   const data = periods.map((period) => ({ period, inscritos: [], matriculados: [] }))
@@ -12,7 +12,7 @@ export function executiveFixture() {
   for (const [year, size] of [[2024, 100], [2025, 200], [2026, 300], [2027, 60]]) {
     const period = year + '.1'
     const current = year === 2027
-    for (let i = 0; i < size; i++) get(period).inscritos.push(registration(year * 10000 + i, period, i < 60 ? `01/10/${year - 1}` : `01/02/${year}`))
+    for (let i = 0; i < size; i++) get(period).inscritos.push(registration(year * 10000 + i, period, i < 60 ? `${String(1 + i % (current ? 20 : (year - 2023) * 5)).padStart(2, '0')}/10/${year - 1}` : `01/02/${year}`))
     for (let i = 0; i < size / 10; i++) get(period).matriculados.push(enrollment(year * 10000 + i, period, 'CALOURO', i < 6 || current ? `01/10/${year - 1}` : `01/02/${year}`))
   }
   for (const [prior, target, baseSize, renewed, others, offset] of [

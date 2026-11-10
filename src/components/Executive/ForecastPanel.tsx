@@ -4,6 +4,7 @@ import { CheckboxFilter } from '../UI/CheckboxFilter'
 import { buildCampaignForecast, type CampaignData, type ForecastScenario } from '../../lib/campaignForecast'
 import type { FilterSelection } from '../../lib/profileFilters'
 import { formatNumberBR } from '../../lib/formatters'
+import { CampaignComparison } from './CampaignComparison'
 
 const calendarKey = 'unieuro.executivo.calendario.20271.v1'
 const defaultCalendar = { start: '2026-09-29', end: '2027-03-31' }
@@ -56,6 +57,14 @@ export function ForecastPanel({ data, currentPeriod, asOf }: { data: CampaignDat
     </section>
     {model.unknownTypes > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{model.unknownTypes} CPF sem classificação única entre calouro e veterano. A soma projetada fica pendente até a conferência desses vínculos.</p>}
     <section aria-label="Projeções por indicador" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{projections.map((item) => <ProjectionCard key={item.title} {...item} />)}</section>
+    <CampaignComparison data={data} config={{ currentPeriod, ...calendar, asOf, references: referencePeriods }} periods={history} onSelectPeriod={(period, additive) => {
+      if (period === currentPeriod) { setReferences(null); return }
+      setReferences((current) => {
+        const selected = current ?? history
+        if (additive) return selected.includes(period) ? selected.filter((item) => item !== period) : [...selected, period]
+        return selected.length === 1 && selected[0] === period ? null : [period]
+      })
+    }} />
     <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5">
       <h3 className="text-base font-semibold text-slate-950">Realizado e projeção de referência</h3>
       <div className="mt-4 h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 45, top: 8, bottom: 8 }}>
@@ -80,7 +89,7 @@ export function ForecastPanel({ data, currentPeriod, asOf }: { data: CampaignDat
       </tbody></table></div>
     </section>
     <details className="border-y border-slate-200 py-4 text-sm text-slate-600"><summary className="cursor-pointer font-medium text-slate-900">Método, limites e teste retrospectivo</summary><div className="mt-3 space-y-3 leading-6">
-      <p>Inscritos e calouros usam o ritmo acumulado das bases de primeiro semestre em janelas equivalentes ao calendário escolhido, deslocadas por ano. O corte histórico preserva a fração de tempo transcorrida. A projeção divide o realizado atual pela fração histórica concluída no corte. Os totais históricos se referem à janela comparável, não necessariamente ao PS inteiro.</p>
+      <p>Inscritos e calouros usam o ritmo acumulado das bases de primeiro semestre em janelas equivalentes ao calendário escolhido, deslocadas por ano. O corte histórico usa o mesmo dia e mês; 29 de fevereiro corresponde ao último dia de fevereiro em anos não bissextos. A projeção divide o realizado atual pela fração histórica concluída no corte. Os totais históricos se referem à janela comparável, não necessariamente ao PS inteiro.</p>
       <p>Veteranos usam duas ou mais transições históricas de segundo para primeiro semestre: elegíveis anteriores multiplicados pela taxa histórica de renovação como veterano, mais os demais veteranos observados nessas transições. Esses demais vínculos incluem retornos e vínculos fora da base elegível. A estimativa nunca fica abaixo do realizado de cada componente.</p>
       <p>Conservador, referência e expansivo representam os extremos e a mediana dos cenários históricos. Não são intervalos de confiança. O total soma os cenários de calouros e veteranos. As matrículas já observadas são o piso dos cenários; cancelamentos futuros não são estimados. Matrículas usam contrato ativo, classificação explícita de tipo de aluno e período letivo; datas de matrícula antigas dos veteranos não são tratadas como datas de renovação.</p>
       <p>Registros atuais sem datas ou classificação válidas deixam a projeção pendente. Alterações de preço, bolsas, investimento e critérios de coleta não são modeladas. Sem retratos históricos da mesma data de carga, a leitura é indicativa e pode refletir somente os vínculos preservados na base histórica.</p>

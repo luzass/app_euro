@@ -66,12 +66,19 @@ export function matriculasForPeriod(data: CampaignData[], period: string) {
   return data.flatMap((item) => item.matriculados).filter((row) => academicPeriod(profileField(row, 'periodo_letivo', 'PERIODO LETIVO')) === period)
 }
 
+export function registrationsForPeriod(data: CampaignData[], period: string) {
+  return data.flatMap((source) => source.inscritos.filter((row) => {
+    const received = academicPeriod(profileField(row, 'ano_semestre', 'ANO/SEMESTRE'))
+    return (received || source.period) === period
+  }))
+}
+
 export function previousPeriod(period: string) {
   const [year, semester] = period.split('.')
   return semester === '1' ? `${Number(year) - 1}.2` : `${year}.1`
 }
 
-function shiftedDay(day: number, years: number) {
+export function shiftedDay(day: number, years: number) {
   const date = new Date(day * DAY)
   const year = date.getUTCFullYear() + years
   const month = date.getUTCMonth()
@@ -79,7 +86,7 @@ function shiftedDay(day: number, years: number) {
   return Date.UTC(year, month, Math.min(date.getUTCDate(), last)) / DAY
 }
 
-function personEvents(rows: GenericRow[], fields: string[]) {
+export function personEvents(rows: GenericRow[], fields: string[]) {
   const people = new Map<string, number | null>()
   let invalidCpf = 0
   for (const row of rows) {
@@ -122,12 +129,11 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
   const unknownTypes = [...currentPeople.values()].filter((person) => person.type === null).length
   const allMatriculasError = data.some((item) => item.matriculadosError)
   const invalidHistoricalMatriculas = data.some((item) => item.matriculados.some((row) => !academicPeriod(profileField(row, 'periodo_letivo', 'PERIODO LETIVO')) || !cpfKey(row) || !profileField(row, 'contrato')))
-  const progress = validCalendar ? (asOf! - start!) / (end! - start!) : 0
   const references = data.filter((item) => config.references.includes(item.period) && item.period < config.currentPeriod && item.period.endsWith(config.currentPeriod.slice(-2)))
 
   function paceForecast(kind: 'inscritos' | 'calouros') {
     const fields = kind === 'inscritos' ? ['data_inscricao'] : ['data_de_matricula', 'data_baixa_do_pagamento']
-    const currentRows = kind === 'inscritos' ? current?.inscritos ?? [] : currentCalouros.flatMap((person) => person.rows)
+    const currentRows = kind === 'inscritos' ? registrationsForPeriod(data, config.currentPeriod) : currentCalouros.flatMap((person) => person.rows)
     const events = personEvents(currentRows, fields)
     const observed = events.people.size
     const datedAtCut = [...events.people.values()].filter((day) => day !== null && start !== null && asOf !== null && day >= start && day <= asOf).length
@@ -135,12 +141,12 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
     const values: number[] = []
     for (const historical of references) {
       const people = activePeople(matriculasForPeriod(data, historical.period))
-      const rows = kind === 'inscritos' ? historical.inscritos : [...people.values()].filter((person) => person.type === 'calouro').flatMap((person) => person.rows)
+      const rows = kind === 'inscritos' ? registrationsForPeriod(data, historical.period) : [...people.values()].filter((person) => person.type === 'calouro').flatMap((person) => person.rows)
       const historicalEvents = personEvents(rows, fields)
       const delta = Number(historical.period.slice(0, 4)) - Number(config.currentPeriod.slice(0, 4))
       const historicalStart = start === null ? null : shiftedDay(start, delta)
       const historicalEnd = end === null ? null : shiftedDay(end, delta)
-      const cutoff = validCalendar ? historicalStart! + Math.floor(progress * (historicalEnd! - historicalStart!)) : null
+      const cutoff = validCalendar ? shiftedDay(asOf!, delta) : null
       const dates = [...historicalEvents.people.values()].filter((day): day is number => day !== null && historicalStart !== null && historicalEnd !== null && day >= historicalStart && day <= historicalEnd)
       const atCut = cutoff === null ? 0 : dates.filter((day) => day <= cutoff).length
       const fraction = dates.length && atCut > 0 ? atCut / dates.length : null
