@@ -23,6 +23,8 @@ export interface ForecastScenario {
   reference: number | null
   high: number | null
   reason: string
+  method?: 'historical' | 'linear' | 'mixed'
+  note?: string
 }
 interface ActivePerson {
   cpf: string
@@ -143,6 +145,8 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
     const events = personEvents(currentRows, fields)
     const observed = events.people.size
     const datedAtCut = [...events.people.values()].filter((day) => day !== null && start !== null && asOf !== null && day >= start && day <= asOf).length
+    const beforeStart = [...events.people.values()].filter((day) => day !== null && start !== null && day < start).length
+    const afterCut = [...events.people.values()].filter((day) => day !== null && asOf !== null && day > asOf).length
     const audit: Array<{ period: string; total: number; atCut: number; fraction: number | null; cutoff: number | null; missingDates: number; reason: string }> = []
     const values: number[] = []
     for (const historical of references) {
@@ -157,24 +161,23 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
       const atCut = cutoff === null ? 0 : dates.filter((day) => day <= cutoff).length
       const fraction = dates.length && atCut > 0 ? atCut / dates.length : null
       const typeProblem = kind === 'calouros' && [...people.values()].some((person) => person.type === null)
-      const reason = (kind === 'inscritos' ? historical.inscritosError : allMatriculasError) ? 'Base indisponível'
-        : kind === 'calouros' && invalidHistoricalMatriculas ? 'Há matrículas sem CPF, contrato ou período letivo válido'
+      const historicalRows = matriculasForPeriod(data, historical.period)
+      const invalidPeriodRows = kind === 'calouros' && (historicalRows.some((row) => !cpfKey(row) || !profileField(row, 'contrato')) || historical.matriculados.some((row) => !academicPeriod(profileField(row, 'periodo_letivo', 'PERIODO LETIVO'))))
+      const reason = (kind === 'inscritos' ? historical.inscritosError : historical.matriculadosError) ? 'Base indisponível'
+        : invalidPeriodRows ? 'Há matrículas sem CPF, contrato ou período letivo válido'
         : typeProblem ? 'Tipo de aluno não identificado'
           : historicalEvents.invalidCpf ? 'CPF ausente ou inválido'
-            : historicalEvents.missingDates ? 'Datas ausentes ou inválidas'
+            : historicalEvents.missingDates ? `${historicalEvents.missingDates} ${historicalEvents.missingDates === 1 ? 'CPF' : 'CPFs'} sem ${kind === 'inscritos' ? 'data de inscrição' : config.matriculaDate === 'payment' ? 'baixa do pagamento' : 'data de matrícula'} válida`
               : fraction === null ? 'Sem base na janela ou até o corte' : ''
       audit.push({ period: historical.period, total: dates.length, atCut, fraction, cutoff, missingDates: historicalEvents.missingDates, reason })
       if (!reason && fraction !== null) values.push(datedAtCut / fraction)
     }
-    const reason = calendarReason || ((kind === 'inscritos' ? current?.inscritosError : allMatriculasError) ? 'Base atual indisponível.' : '')
+    const reason = calendarReason || ((kind === 'inscritos' ? current?.inscritosError : current?.matriculadosError) ? 'Base atual indisponível.' : '')
       || (kind === 'calouros' && unknownTypes ? 'Há alunos sem classificação única entre calouro e veterano.' : '')
       || (kind === 'calouros' && (invalidMatriculaCpf || missingCurrentPeriod) ? 'Há matrículas atuais sem CPF ou período letivo válido.' : '')
-      || (kind === 'calouros' && invalidHistoricalMatriculas ? 'Há matrículas sem CPF, contrato ou período letivo válido no histórico.' : '')
       || (events.invalidCpf ? 'Há registros atuais sem CPF válido.' : '')
       || (events.missingDates ? `${events.missingDates} CPF sem data válida na base atual.` : '')
-      || (observed !== datedAtCut ? 'Há registros atuais fora da janela de início e corte. Confira o calendário e as datas.' : '')
-      || (!observed ? 'Ainda não há registros datados na janela atual.' : '')
-      || (values.length < 2 ? 'São necessárias pelo menos duas referências históricas utilizáveis.' : '')
+      || (!datedAtCut ? 'Ainda não há registros datados na janela atual.' : '')
     const usable = audit.filter((item) => !item.reason && item.fraction !== null).sort((a, b) => a.period.localeCompare(b.period))
     const last = usable.at(-1)
     const backtest = usable.length >= 3 && last && last.total > 0 ? {
@@ -182,7 +185,11 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
       predicted: Math.round(medianAge(usable.slice(0, -1).map((item) => last.atCut / item.fraction!))!),
       actual: last.total,
     } : null
-    return { scenario: reason ? blocked(observed, reason) : fromScenarios(observed, values), audit, missingDates: events.missingDates, backtest }
+    const scenario: ForecastScenario = reason ? blocked(observed, reason) : values.length >= 2
+      ? { ...fromScenarios(datedAtCut, values), observed, method: 'historical' }
+      : { observed, low: null, high: null, reference: Math.round(datedAtCut + datedAtCut / (asOf! - start! + 1) * (end! - asOf!)), reason: '', method: 'linear',
+        note: `Cenário linear pelo ritmo atual. ${values.length} de ${references.length} PS históricos utilizáveis; a comparação histórica exige 2. Confira os motivos na comparação abaixo.` }
+    return { scenario, audit, missingDates: events.missingDates, backtest, window: { atCut: datedAtCut, beforeStart, afterCut } }
   }
 
   const inscritos = paceForecast('inscritos')
@@ -223,6 +230,8 @@ export function buildCampaignForecast(data: CampaignData[], config: ForecastConf
     reference: calouros.scenario.reference === null || veteranos.reference === null ? null : calouros.scenario.reference + veteranos.reference,
     high: calouros.scenario.high === null || veteranos.high === null ? null : calouros.scenario.high + veteranos.high,
     reason: calouros.scenario.reason || veteranos.reason ? 'Aguardando projeções utilizáveis de calouros e veteranos.' : '',
+    method: calouros.scenario.method === 'linear' && veteranos.reference !== null ? 'mixed' : 'historical',
+    note: calouros.scenario.method === 'linear' && veteranos.reference !== null ? 'Combina o cenário linear de calouros com a projeção de veteranos por renovação histórica.' : undefined,
   }
   return { inscritos, calouros, veteranos, total, vetAudit, unknownTypes, activeCurrent: currentPeople.size, eligiblePrevious: eligible.size, observedRenewals, observedOthers }
 }

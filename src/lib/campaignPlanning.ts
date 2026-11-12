@@ -123,7 +123,7 @@ export function planningTimeline(model: NonNullable<ReturnType<typeof buildCampa
     const volume = bucket.start > model.cutoff || group.count === null ? null : group.selected.observed.filter((day) => day >= bucket.start && day <= observedEnd).length
     const expectedFuture = group.usable.length ? group.usable.reduce((sum, reference) => sum + reference.dates.filter((day) => day > shiftedDay(model.cutoff, reference.delta) && day <= shiftedDay(bucket.end, reference.delta)).length, 0) / group.usable.length : null
     return { label: bucket.label, start: bucket.start, end: bucket.end, actual, volume, partial: bucket.partial,
-      ...Object.fromEntries(group.references.map((reference) => [`history_${reference.period.replace('.', '_')}`, reference.available && !reference.invalid ? reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length : null])),
+      ...Object.fromEntries(group.references.map((reference) => [`history_${reference.period.replace('.', '_')}`, reference.available && (reference.dates.length > 0 || !reference.invalid) ? reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length : null])),
       linear: bucket.end >= model.cutoff && group.linear !== null ? Math.round(group.count! + group.rate! * Math.max(0, bucket.end - model.cutoff)) : null,
       adjusted: bucket.end >= model.cutoff && group.adjusted !== null && expectedFuture !== null ? Math.round(group.count! + group.index! * expectedFuture) : null,
       historical: group.usable.length ? group.usable.reduce((sum, reference) => sum + reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length, 0) / group.usable.length : null }

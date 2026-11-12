@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CheckboxFilter } from '../UI/CheckboxFilter'
-import { buildCampaignForecast, previousPeriod, type CampaignData, type ForecastScenario } from '../../lib/campaignForecast'
+import { buildCampaignForecast, type CampaignData, type ForecastScenario } from '../../lib/campaignForecast'
 import type { FilterSelection } from '../../lib/profileFilters'
 import { formatNumberBR } from '../../lib/formatters'
 import { CampaignComparison } from './CampaignComparison'
-import { EnrollmentGoalsPanel } from './EnrollmentGoalsPanel'
 import { PaceForecastPanel } from './PaceForecastPanel'
 import { CampaignPlanningPanel } from './CampaignPlanningPanel'
 
@@ -23,11 +22,12 @@ function loadCalendar() {
   return defaultCalendar
 }
 
-function ProjectionCard({ title, scenario }: { title: string; scenario: ForecastScenario }) {
+function ProjectionCard({ title, scenario, window }: { title: string; scenario: ForecastScenario; window?: { atCut: number; beforeStart: number; afterCut: number } }) {
   return <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4">
     <h3 className="text-sm font-medium text-slate-600">{title}</h3>
-    <div className="mt-3 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs text-slate-500">Realizado na carga</p><p className="mt-1 text-xl font-semibold text-slate-900">{show(scenario.observed)}</p></div><div className="text-right"><p className="text-xs text-slate-500">Projeção de referência</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{show(scenario.reference)}</p></div></div>
-    <p className="mt-3 text-xs leading-5 text-slate-500">{scenario.reason || 'Conservador: ' + show(scenario.low) + ' · Expansivo: ' + show(scenario.high)}</p>
+    <div className="mt-3 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs text-slate-500">Realizado na carga</p><p className="mt-1 text-xl font-semibold text-slate-900">{show(scenario.observed)}</p></div><div className="text-right"><p className="text-xs text-slate-500">{scenario.method === 'linear' ? 'Projeção linear' : scenario.method === 'mixed' ? 'Projeção combinada' : 'Projeção de referência'}</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{show(scenario.reference)}</p></div></div>
+    <p className="mt-3 text-xs leading-5 text-slate-500">{scenario.reason || scenario.note || 'Conservador: ' + show(scenario.low) + ' · Expansivo: ' + show(scenario.high)}</p>
+    {window && Boolean(window.beforeStart || window.afterCut) && <p className="mt-2 text-xs leading-5 text-slate-500">Base do ritmo: {show(window.atCut)} no recorte. Fora do cálculo: {window.beforeStart} antes do início e {window.afterCut} após o corte. O realizado na carga inclui esses registros.</p>}
   </article>
 }
 
@@ -36,23 +36,14 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
   const [references, setReferences] = useState<FilterSelection>(null)
   const history = useMemo(() => data.filter((item) => item.period < currentPeriod && item.period.endsWith(currentPeriod.slice(-2))).map((item) => item.period), [data, currentPeriod])
   const referencePeriods = references ?? history
-  const selectReference = (period: string, additive: boolean) => {
-    if (period === currentPeriod) { setReferences(null); return }
-    setReferences((current) => {
-      const selected = current ?? history
-      return additive ? selected.includes(period) ? selected.filter((item) => item !== period) : [...selected, period]
-        : selected.length === 1 && selected[0] === period ? null : [period]
-    })
-  }
   const config = useMemo(() => ({ currentPeriod, ...calendar, asOf, references: referencePeriods }), [currentPeriod, calendar, asOf, referencePeriods])
   const model = useMemo(() => buildCampaignForecast(data, config), [data, config])
-  const sources = useMemo(() => goalData.map((item) => ({ period: item.period, rows: item.matriculados })), [goalData])
   useEffect(() => {
     try { localStorage.setItem(calendarKey, JSON.stringify(calendar)) } catch { /* Storage is optional. */ }
   }, [calendar])
   const projections = [
-    { title: 'Inscritos', scenario: model.inscritos.scenario },
-    { title: 'Calouros', scenario: model.calouros.scenario },
+    { title: 'Inscritos', scenario: model.inscritos.scenario, window: model.inscritos.window },
+    { title: 'Calouros', scenario: model.calouros.scenario, window: model.calouros.window },
     { title: 'Veteranos, incluindo renovações', scenario: model.veteranos },
     { title: 'Total de matriculados', scenario: model.total },
   ]
@@ -71,17 +62,16 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
     </section>
     {model.unknownTypes > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{model.unknownTypes} CPF sem classificação única entre calouro e veterano. A soma projetada fica pendente até a conferência desses vínculos.</p>}
     <section aria-label="Projeções por indicador" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{projections.map((item) => <ProjectionCard key={item.title} {...item} />)}</section>
-    {goalData.some((item) => item.matriculadosError) ? <p role="status" className="text-sm text-amber-800">Metas institucionais aguardando todas as bases de matrículas.</p> : <EnrollmentGoalsPanel sources={sources} origin={previousPeriod(currentPeriod)} dates={{ asOf, end: calendar.end }} />}
-    <CampaignPlanningPanel data={data} goalData={goalData} config={config} onSelectPeriod={selectReference} />
+    <CampaignComparison data={data} config={config} periods={history} audit={{ inscritos: model.inscritos.audit, calouros: model.calouros.audit }} />
+    <CampaignPlanningPanel data={data} goalData={goalData} config={config} />
     <details className="border-y border-slate-200 py-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">Comparações e auditoria dos cenários</summary><div className="mt-5 space-y-6">
-    <PaceForecastPanel data={data} config={config} seasonal={{ inscritos: model.inscritos.scenario.reference, calouros: model.calouros.scenario.reference }} onSelectCourse={onSelectCourse} />
-    <CampaignComparison data={data} config={config} periods={history} onSelectPeriod={selectReference} />
+    <PaceForecastPanel data={data} config={config} seasonal={{ inscritos: model.inscritos.scenario.method === 'linear' ? null : model.inscritos.scenario.reference, calouros: model.calouros.scenario.method === 'linear' ? null : model.calouros.scenario.reference }} onSelectCourse={onSelectCourse} />
     <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5">
-      <h3 className="text-base font-semibold text-slate-950">Realizado e projeção de referência</h3>
+      <h3 className="text-base font-semibold text-slate-950">Realizado e projeção do cenário</h3>
       <div className="mt-4 h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 45, top: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" /><XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} /><YAxis type="category" dataKey="label" interval={0} width={75} tick={{ fontSize: 11 }} /><Tooltip formatter={(value) => formatNumberBR(Number(value))} /><Legend />
         <Bar dataKey="realizado" name="Realizado na carga" fill="#0284c7" maxBarSize={24} radius={[0, 4, 4, 0]} isAnimationActive={false}><LabelList dataKey="realizado" position="right" fill="#0f172a" fontSize={11} fontWeight={700} formatter={show} /></Bar>
-        <Bar dataKey="referencia" name="Projeção de referência" fill="#059669" maxBarSize={24} radius={[0, 4, 4, 0]} isAnimationActive={false}><LabelList dataKey="referencia" position="right" fill="#0f172a" fontSize={11} fontWeight={700} formatter={show} /></Bar>
+        <Bar dataKey="referencia" name="Projeção do cenário" fill="#059669" maxBarSize={24} radius={[0, 4, 4, 0]} isAnimationActive={false}><LabelList dataKey="referencia" position="right" fill="#0f172a" fontSize={11} fontWeight={700} formatter={show} /></Bar>
       </BarChart></ResponsiveContainer></div>
     </article>
     <section className="space-y-3 border-t border-slate-200 pt-5">
@@ -102,8 +92,9 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
     <details className="border-y border-slate-200 py-4 text-sm text-slate-600"><summary className="cursor-pointer font-medium text-slate-900">Método, limites e teste retrospectivo</summary><div className="mt-3 space-y-3 leading-6">
       <p>Inscritos e calouros usam o ritmo acumulado das bases de primeiro semestre em janelas equivalentes ao calendário escolhido, deslocadas por ano. O corte histórico usa o mesmo dia e mês; 29 de fevereiro corresponde ao último dia de fevereiro em anos não bissextos. A projeção divide o realizado atual pela fração histórica concluída no corte. Os totais históricos se referem à janela comparável, não necessariamente ao PS inteiro.</p>
       <p>Veteranos usam duas ou mais transições históricas de segundo para primeiro semestre: elegíveis anteriores multiplicados pela taxa histórica de renovação como veterano, mais os demais veteranos observados nessas transições. Esses demais vínculos incluem retornos e vínculos fora da base elegível. A estimativa nunca fica abaixo do realizado de cada componente.</p>
-      <p>Conservador, referência e expansivo representam os extremos e a mediana dos cenários históricos. Não são intervalos de confiança. O total soma os cenários de calouros e veteranos. As matrículas já observadas são o piso dos cenários; cancelamentos futuros não são estimados. Matrículas usam contrato ativo, classificação explícita de tipo de aluno e período letivo; datas de matrícula antigas dos veteranos não são tratadas como datas de renovação.</p>
+      <p>Conservador, referência e expansivo representam os extremos e a mediana dos cenários históricos. Não são intervalos de confiança. O total soma os cenários de calouros e veteranos. Os CPFs datados dentro da janela são o piso dos cenários de inscritos e calouros; registros futuros não elevam esse piso. Cancelamentos futuros não são estimados. Matrículas usam contrato ativo, classificação explícita de tipo de aluno e período letivo; datas de matrícula antigas dos veteranos não são tratadas como datas de renovação.</p>
       <p>Registros atuais sem datas ou classificação válidas deixam a projeção pendente. Alterações de preço, bolsas, investimento e critérios de coleta não são modeladas. Sem retratos históricos da mesma data de carga, a leitura é indicativa e pode refletir somente os vínculos preservados na base histórica.</p>
+      <p>O realizado na carga inclui todos os CPFs do processo. O ritmo e a projeção de referência usam apenas os CPFs datados entre início e corte; datas anteriores e posteriores são quantificadas separadamente e não bloqueiam os demais registros. Os cartões usam a mediana dos cenários históricos; o fechamento ajustado abaixo usa o índice sobre a média histórica.</p>
       {[['Inscritos', model.inscritos.backtest], ['Calouros', model.calouros.backtest]].map(([label, value]) => {
         const test = value as typeof model.inscritos.backtest
         return <p key={String(label)}>{String(label)}: {test ? `teste retrospectivo em ${test.period}, usando apenas referências anteriores. Estimado ${show(test.predicted)}, observado ${show(test.actual)}; erro absoluto percentual de ${new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 }).format(Math.abs(test.predicted - test.actual) / test.actual)}. Um exercício não valida a precisão futura.` : 'ainda sem três referências utilizáveis para executar o teste retrospectivo.'}</p>

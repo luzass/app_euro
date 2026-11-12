@@ -19,10 +19,12 @@ export function buildCampaignComparison(data: CampaignData[], config: ForecastCo
     const events = personEvents(comparisonRows(data, period, kind), fields)
     const first = shiftedDay(start, delta), target = shiftedDay(end, delta), cutoff = shiftedDay(last, delta)
     const dates = [...events.people.values()].filter((day): day is number => day !== null && day >= first && day <= target).sort((a, b) => a - b)
-    const error = data.some((source) => source.period === period && (kind === 'inscritos' ? source.inscritosError : source.matriculadosError))
+    const source = data.find((item) => item.period === period)
+    const error = !source || (kind === 'inscritos' ? source.inscritosError : source.matriculadosError)
+    const hasDates = events.people.size === 0 || events.missingDates < events.people.size
     return { period, delta, dates, cutoff, missing: events.missingDates, invalidCpf: events.invalidCpf,
-      available: !error, atCut: error ? null : dates.filter((day) => day <= cutoff).length,
-      total: error ? null : dates.length }
+      available: !error && hasDates, atCut: error || !hasDates ? null : dates.filter((day) => day <= cutoff).length,
+      total: error || !hasDates ? null : dates.length }
   })
   const points: Array<Record<string, number | string | null>> = []
   for (let day = start; day <= last; day++) {
