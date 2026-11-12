@@ -145,7 +145,7 @@ export function PainelExecutivo() {
     {showFilters && <section aria-label="Recorte executivo" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{filterLabels.map(({ key, label }) => <CheckboxFilter key={key} label={label} options={analysis.options[key].map((value) => ({ value, label: value }))} selected={filters[key]} onChange={(selected) => setFilters((current) => ({ ...current, [key]: selected }))} />)}</section>}
     {showFilters && unavailableInscritos.length > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">Bases de inscritos indisponíveis em {unavailableInscritos.join(', ')}. Os indicadores de matrículas continuam disponíveis quando suas bases estiverem acessíveis.</p>}
     <div id={'exec-panel-' + view} role="tabpanel" aria-labelledby={'exec-tab-' + view}>
-      {view === 'resumo' && <ExecutiveSummary data={analysis.data} currentPeriod={currentPeriod} />}
+      {view === 'resumo' && <ExecutiveSummary data={analysis.data} institutionData={state.data} currentPeriod={currentPeriod} />}
       {view === 'projecao' && <ForecastPanel data={analysis.data} goalData={state.data} currentPeriod={currentPeriod} asOf={state.asOf} onSelectCourse={(course, additive) => {
         const value = titleize(course)
         setFilters((current) => ({ ...current, curso: additive ? [...new Set([...(current.curso ?? []), value])] : current.curso?.length === 1 && current.curso[0] === value ? null : [value] }))

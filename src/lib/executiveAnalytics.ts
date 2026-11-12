@@ -1,6 +1,6 @@
 import type { GenericRow } from './dashboardHelpers'
 import { activePeople, matriculasForPeriod, previousPeriod, type CampaignData } from './campaignForecast.ts'
-import { compareRenewal, indexRenewalRows, nextAcademicPeriod } from './enrollmentRenewal.ts'
+import { academicPeriod, compareRenewal, indexRenewalRows, nextAcademicPeriod, probableGraduate } from './enrollmentRenewal.ts'
 import { normalizedText, profileField } from './studentProfile.ts'
 
 export function executiveOverview(data: CampaignData[], currentPeriod: string) {
@@ -58,4 +58,44 @@ export function countUniqueRows(rows: GenericRow[]) {
     if (/^\d{1,11}$/.test(cpf) && !/^0+$/.test(cpf)) people.add(cpf.padStart(11, '0'))
   }
   return people.size
+}
+
+export function cohortOutcomes(data: CampaignData[], institutionData: CampaignData[], entry: string, target: string, currentPeriod: string) {
+  const entrants = [...activePeople(matriculasForPeriod(data, entry)).values()].filter((person) => person.type === 'calouro')
+  const index = indexRenewalRows(institutionData.map((source) => ({ period: source.period, rows: source.matriculados })))
+  const inScope = activePeople(matriculasForPeriod(data, target))
+  const available = (period: string) => institutionData.some((source) => source.period === period && !source.matriculadosError) && Boolean([...index.periods.get(period)?.values() ?? []].some((enrollments) => enrollments.some((enrollment) => enrollment.hasContract)))
+  const validRange = Boolean(academicPeriod(entry) && academicPeriod(target) && entry <= target && target <= currentPeriod)
+  const sourceAvailable = available(entry)
+  const destinationAvailable = available(target)
+  const gaps: string[] = []
+  if (validRange) for (let period = entry; period <= target; period = nextAcademicPeriod(period)) if (!available(period)) gaps.push(period)
+  let activeInScope = 0, activeElsewhere = 0, likelyGraduates = 0, notLocated = 0, pending = 0, unknownGraduation = 0
+  for (const person of entrants) {
+    if (!validRange || !sourceAvailable || !destinationAvailable) { pending++; continue }
+    const destination = index.periods.get(target)?.get(person.cpf) ?? []
+    if (destination.some((enrollment) => enrollment.active)) {
+      if (inScope.has(person.cpf)) activeInScope++
+      else activeElsewhere++
+      continue
+    }
+    let missingContract = destination.some((enrollment) => !enrollment.hasContract)
+    for (let period = entry; period < target; period = nextAcademicPeriod(period)) {
+      if (index.periods.get(period)?.get(person.cpf)?.some((enrollment) => !enrollment.hasContract)) missingContract = true
+    }
+    if (gaps.length || missingContract) { pending++; continue }
+    // A return in the destination takes precedence; otherwise inspect the last active link before it.
+    let lastActive = index.periods.get(entry)?.get(person.cpf)?.filter((enrollment) => enrollment.active) ?? []
+    for (let period = nextAcademicPeriod(entry); period < target; period = nextAcademicPeriod(period)) {
+      const active = index.periods.get(period)?.get(person.cpf)?.filter((enrollment) => enrollment.active) ?? []
+      if (active.length) lastActive = active
+    }
+    if (lastActive.length && lastActive.every(probableGraduate)) likelyGraduates++
+    else {
+      notLocated++
+      if (!lastActive.length || lastActive.some((enrollment) => !enrollment.course || enrollment.level === null)) unknownGraduation++
+    }
+  }
+  const reason = !validRange ? 'Escolha um período igual ou posterior à entrada da turma.' : !sourceAvailable || !destinationAvailable ? 'Base de entrada ou acompanhamento indisponível ou vazia.' : gaps.length ? `Há bases intermediárias indisponíveis ou vazias: ${gaps.join(', ')}.` : ''
+  return { total: entrants.length, activeInScope, activeElsewhere, likelyGraduates, notLocated, pending, unknownGraduation, reason, partial: target === currentPeriod }
 }

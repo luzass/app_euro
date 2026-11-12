@@ -5,10 +5,11 @@ import { executiveOverview, countUniqueRows } from '../../lib/executiveAnalytics
 import type { CampaignData } from '../../lib/campaignForecast'
 import { formatNumberBR } from '../../lib/formatters'
 import { titleize } from '../../lib/dashboardHelpers'
+import { CohortOutcomesPanel } from './CohortOutcomesPanel'
 
 const percent = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 }).format(value)
 
-export function ExecutiveSummary({ data, currentPeriod }: { data: CampaignData[]; currentPeriod: string }) {
+export function ExecutiveSummary({ data, institutionData = data, currentPeriod }: { data: CampaignData[]; institutionData?: CampaignData[]; currentPeriod: string }) {
   const analysis = useMemo(() => executiveOverview(data, currentPeriod), [data, currentPeriod])
   const failures = data.filter((item) => item.matriculadosError)
   const current = data.find((item) => item.period === currentPeriod)
@@ -69,6 +70,7 @@ export function ExecutiveSummary({ data, currentPeriod }: { data: CampaignData[]
           return <td key={item.period} className="p-3 text-center" title={cell?.count === null || cell?.count === undefined ? 'Sem base disponível' : `${cell.count} de ${cohort.entrants} CPF localizados`} style={rate === null ? undefined : { backgroundColor: `rgba(5,150,105,${0.04 + rate * 0.16})` }}>{percent(rate)}</td>
         })}</tr>)}
       </tbody></table></div>
+      <CohortOutcomesPanel data={data} institutionData={institutionData} currentPeriod={currentPeriod} />
     </section>
     <p className="text-xs leading-5 text-slate-500">Entradas sem vínculo anterior significam primeira aparição na janela de dados, não necessariamente primeiro ingresso na instituição. Crescimento e permanência se referem ao recorte selecionado. A regra de conclusão é uma aproximação de 10º período ou 12º em Medicina.</p>
   </div>
