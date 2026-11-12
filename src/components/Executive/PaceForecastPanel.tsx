@@ -5,13 +5,14 @@ import type { CampaignData, ForecastConfig } from '../../lib/campaignForecast'
 import { formatNumberBR } from '../../lib/formatters'
 import { coursePipelineGaps } from '../../lib/coursePipeline'
 import { titleize } from '../../lib/dashboardHelpers'
+import { isMedicine } from '../../lib/campaignData'
 
 const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
 const show = (value: number | null) => value === null ? '-' : formatNumberBR(value)
-const metricRows: Array<{ key: PaceKind; label: string }> = [{ key: 'inscritos', label: 'Inscritos' }, { key: 'calouros', label: 'Calouros · todos os cursos' }, { key: 'regular', label: 'Não PROUNI · sem Medicina' }, { key: 'prouni', label: 'PROUNI · sem Medicina' }]
+const metricRows: Array<{ key: PaceKind; label: string }> = [{ key: 'inscritos', label: 'Inscritos' }, { key: 'calouros', label: 'Calouros · sem Medicina' }, { key: 'regular', label: 'Não PROUNI · sem Medicina' }, { key: 'prouni', label: 'PROUNI · sem Medicina' }]
 
 export function PaceForecastPanel({ data, config, seasonal, onSelectCourse }: { data: CampaignData[]; config: ForecastConfig; seasonal: { inscritos: number | null; calouros: number | null }; onSelectCourse?: (course: string, additive: boolean) => void }) {
-  const rows = useMemo(() => metricRows.map((row) => ({ ...row, model: buildForecastBenchmarks(data, config, row.key) })), [data, config])
+  const rows = useMemo(() => { const diagnosticData = data.map((source) => ({ ...source, matriculados: source.matriculados.filter((row) => !isMedicine(row)) })); return metricRows.map((row) => ({ ...row, model: buildForecastBenchmarks(diagnosticData, config, row.key) })) }, [data, config])
   const pipeline = useMemo(() => coursePipelineGaps(data, config), [data, config])
   const globalCalouros = rows.find((row) => row.key === 'calouros')!
   const paces = [seasonal.calouros, globalCalouros.model.recentProjection, globalCalouros.model.historicalProjection].filter((value): value is number => value !== null)

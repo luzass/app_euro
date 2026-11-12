@@ -51,6 +51,6 @@ export function CampaignComparison({ data, config, periods, audit }: { data: Cam
         {model.series.some((item) => item.missing || item.invalidCpf) && <p role="status" className="mt-2 text-xs text-amber-800">A curva mostra somente registros datados com CPF válido. Datas pendentes impedem que esse PS sustente a calibração, mas não escondem os registros conhecidos do comparativo.</p>}
       </> : <p className="py-12 text-sm text-slate-500">Confira as datas da campanha para exibir a comparação.</p>}
     </article>)}</div>
-    <p className="text-xs leading-5 text-slate-500">CPF único por PS. Calouros usam {config.matriculaDate === 'payment' ? 'a baixa do pagamento' : 'a data de matrícula'} e contrato ativo. O destaque das curvas não altera a calibração da previsão. Os históricos refletem a carga preservada, não uma fotografia dos contratos naquela data.</p>
+    <p className="text-xs leading-5 text-slate-500">CPF único por PS. O acumulado preserva os registros anteriores ao início da campanha, sem extrapolar seu ritmo. Calouros usam {config.matriculaDate === 'payment' ? 'a baixa do pagamento' : 'a data de matrícula'} e contrato ativo. O destaque das curvas não altera a calibração da previsão. Os históricos refletem a carga preservada, não uma fotografia dos contratos naquela data.</p>
   </section>
 }

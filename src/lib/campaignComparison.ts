@@ -17,8 +17,8 @@ export function buildCampaignComparison(data: CampaignData[], config: ForecastCo
     const delta = Number(period.slice(0, 4)) - Number(config.currentPeriod.slice(0, 4))
     const fields = kind === 'inscritos' ? ['data_inscricao'] : matriculaDateFields(config)
     const events = personEvents(comparisonRows(data, period, kind), fields)
-    const first = shiftedDay(start, delta), target = shiftedDay(end, delta), cutoff = shiftedDay(last, delta)
-    const dates = [...events.people.values()].filter((day): day is number => day !== null && day >= first && day <= target).sort((a, b) => a - b)
+    const target = shiftedDay(end, delta), cutoff = shiftedDay(last, delta)
+    const dates = [...events.people.values()].filter((day): day is number => day !== null && day <= target).sort((a, b) => a - b)
     const source = data.find((item) => item.period === period)
     const error = !source || (kind === 'inscritos' ? source.inscritosError : source.matriculadosError)
     const hasDates = events.people.size === 0 || events.missingDates < events.people.size

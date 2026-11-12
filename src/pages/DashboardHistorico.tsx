@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { CalendarDays, Layers, RefreshCw } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -31,6 +31,8 @@ import {
 } from '../lib/dashboardHelpers'
 import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
+import { scopeHistoryByDate, todayInBrazil, type HistoryDateMode } from '../lib/historyDateScope'
+import { normalizedText, profileField } from '../lib/studentProfile'
 
 type SemesterFilter = '1' | '2'
 type HistoricoChartKey = 'campus' | 'curso' | 'ingresso' | 'turno'
@@ -269,6 +271,9 @@ function PeriodComparisonChart({
 export function DashboardHistorico() {
   const [state, setState] = useState<HistoricoState>(initialState)
   const [semester, setSemester] = useState<SemesterFilter>('1')
+  const [dateMode, setDateMode] = useState<HistoryDateMode>('full')
+  const [onlyActiveContracts, setOnlyActiveContracts] = useState(true)
+  const [asOf, setAsOf] = useState(todayInBrazil)
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([])
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(getSemesterPeriodLabels('1'))
@@ -276,6 +281,7 @@ export function DashboardHistorico() {
     useState<HistoricoChartSelections>(initialChartSelections)
 
   const loadData = async () => {
+    setAsOf(todayInBrazil())
     if (!isSupabaseConfigured) {
       setState({
         loading: false,
@@ -327,15 +333,17 @@ export function DashboardHistorico() {
     void loadData()
   }, [])
 
+  const dateScope = useMemo(() => scopeHistoryByDate(state.periods, dateMode, asOf), [state.periods, dateMode, asOf])
+
   const analysis = useMemo(() => {
-    const basePeriods = state.periods
+    const basePeriods = dateScope.periods
       .filter((period) => period.semester === semester)
       .filter((period) => selectedPeriods.includes(period.label))
       .map((period) => ({
         ...period,
         inscritos: period.inscritos.filter((row) => matchesStudentType(row, studentTypeFilter)),
         matriculados: period.matriculados.filter((row) =>
-          matchesStudentType(row, studentTypeFilter),
+          matchesStudentType(row, studentTypeFilter) && (!onlyActiveContracts || ['ATIVO', 'CONTRATO ATIVO'].includes(normalizedText(profileField(row, 'contrato')))),
         ),
       }))
 
@@ -430,7 +438,8 @@ export function DashboardHistorico() {
     selectedPeriods,
     selectedProcesses,
     semester,
-    state.periods,
+    dateScope,
+    onlyActiveContracts,
     studentTypeFilter,
   ])
 
@@ -626,6 +635,12 @@ export function DashboardHistorico() {
             </button>
           </div>
         </div>
+      </section>
+
+      <section aria-label="Recorte temporal do histórico" className="space-y-3 border-y border-slate-200 py-4">
+        <label className="inline-flex flex-wrap items-center gap-2 text-sm text-slate-600">Contratos das matrículas<select aria-label="Contratos das matrículas no histórico" value={onlyActiveContracts ? 'active' : 'all'} onChange={(event) => setOnlyActiveContracts(event.target.value === 'active')} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value="active">Somente ativos</option><option value="all">Todos os contratos</option></select></label>
+        <div className="flex flex-wrap items-center gap-2"><button type="button" aria-pressed={dateMode === 'full'} onClick={() => setDateMode('full')} className={'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ' + (dateMode === 'full' ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-700')}><Layers size={16} />Visão geral</button><button type="button" aria-pressed={dateMode === 'sameDate'} onClick={() => setDateMode('sameDate')} className={'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ' + (dateMode === 'sameDate' ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-700')}><CalendarDays size={16} />Até a data atual</button><span className="text-xs text-slate-500">Referência: {new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(asOf + 'T00:00:00Z'))}</span></div>
+        {dateMode === 'full' ? <p className="text-sm text-slate-500">Todos os dados carregados dos processos selecionados, sem corte por data.</p> : <><p className="text-sm text-slate-600">Mesmo dia e mês no ano equivalente de cada campanha. Inscritos pela data de inscrição; matrículas pela baixa do pagamento.</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">{dateScope.cutoffs.filter((item) => selectedPeriods.includes(item.period)).map((item) => <span key={item.period}>{item.period}: {item.day === null ? 'sem corte válido' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(item.day * 86400000))}</span>)}</div><p className="text-xs text-slate-500">Veteranos só entram com baixa na janela do respectivo PS; a matrícula original não comprova a data de renovação. Este recorte não representa uma fotografia histórica dos contratos. Sem data válida: {dateScope.invalidRegistrationDates} inscrições e {dateScope.invalidEnrollmentDates} matrículas; {dateScope.unplacedVeterans} veteranos com baixa antiga não foram posicionados no tempo.</p></>}
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

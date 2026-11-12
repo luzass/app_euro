@@ -16,7 +16,7 @@ assert.equal(buildCampaignComparison(data, { ...config, end: '2040-03-31' }, 'in
 const added = structuredClone(data)
 added.at(-1).inscritos.push({ ...added.at(-1).inscritos[0], cpf: '99999999999', data_inscricao: '06/11/2026' })
 assert.equal(buildCampaignComparison(added, config, 'inscritos').points.at(-1)['2027.1'], 61)
-assert.equal(buildCampaignForecast(added, config).inscritos.scenario.reference, 203)
+assert.equal(buildCampaignForecast(added, config).inscritos.scenario.reference, 201)
 added.at(-1).inscritos.push({ ...added.at(-1).inscritos[0] })
 assert.equal(buildCampaignComparison(added, config, 'inscritos').points.at(-1)['2027.1'], 61)
 const unavailable = structuredClone(data)

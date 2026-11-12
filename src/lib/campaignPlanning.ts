@@ -3,6 +3,7 @@ import { activePeople, cpfKey, dateDay, matriculasForPeriod, matriculaDateFields
 import { normalizedText, profileField } from './studentProfile.ts'
 import { campaignPolicy20271 } from './campaignPolicy20271.ts'
 import { calouroAdmissionSegment } from './enrollmentGoals.ts'
+import { buildCaptureForecast } from './campaignCapture.ts'
 
 export type PlanningDimension = 'geral' | 'curso' | 'campus' | 'ingresso' | 'curso_campus'
 export type PlanningMetric = 'inscritos' | 'matriculas'
@@ -48,11 +49,12 @@ function groupEvents(rows: GenericRow[], metric: PlanningMetric, dimension: Plan
 }
 
 function observation(group: GroupEvents | undefined, start: number, end: number, cutoff: number, available: boolean) {
+  const beforeStart = [...(group?.dates.values() ?? [])].filter((day) => day !== null && day < start).length
   const dates = [...(group?.dates.values() ?? [])].filter((day): day is number => day !== null && day >= start && day <= end).sort((a, b) => a - b)
   const observed = dates.filter((day) => day <= cutoff)
   const last = observed.at(-1) ?? null
   const invalid = (group?.missingDates ?? 0) + (group?.missingCpf ?? 0)
-  return { dates, observed, count: available ? observed.length : null, last, daysSince: last === null ? null : cutoff - last,
+  return { dates, observed, beforeStart, count: available ? observed.length : null, last, daysSince: last === null ? null : cutoff - last,
     invalid, future: dates.length - observed.length, available,
     status: !available ? 'unavailable' : !observed.length && invalid ? 'unknown' : !observed.length ? 'none' : 'dated' }
 }
@@ -70,7 +72,7 @@ export function planningBuckets(start: number, end: number, grain: PlanningGrain
   return result
 }
 
-export function buildCampaignPlanning(data: CampaignData[], config: ForecastConfig, dimension: PlanningDimension, metric: PlanningMetric, resolver: GroupResolver = planningGroupLabel) {
+export function buildCampaignPlanning(data: CampaignData[], config: ForecastConfig, dimension: PlanningDimension, metric: PlanningMetric, resolver: GroupResolver = planningGroupLabel, withProjection = true) {
   const start = dateDay(config.start), end = dateDay(config.end), cut = dateDay(config.asOf)
   if (start === null || end === null || cut === null || end <= start || cut < start || end - start > 730) return null
   const cutoff = Math.min(cut, end), elapsed = cutoff - start + 1, remaining = end - cutoff
@@ -92,22 +94,22 @@ export function buildCampaignPlanning(data: CampaignData[], config: ForecastConf
     const references = periods.filter((period) => period !== config.currentPeriod).map((period) => {
       const snapshot = snapshots.get(period)!
       const record = observation(snapshot[metric].get(label), shiftedDay(start, snapshot.delta), shiftedDay(end, snapshot.delta), shiftedDay(cutoff, snapshot.delta), snapshot[`${metric}Available`])
-      return { period, delta: snapshot.delta, ...record, total: record.dates.length }
+      return { period, delta: snapshot.delta, ...record, total: record.dates.length + record.beforeStart }
     })
     const usable = references.filter((reference) => reference.available && !reference.invalid && reference.total > 0)
     const mean = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
-    const historicalAtCut = mean(usable.map((reference) => reference.observed.length))
-    const historicalRemaining = mean(usable.map((reference) => reference.total - reference.observed.length))
-    const count = selected.count, rate = count === null ? null : count / elapsed
+    const historicalAtCut = mean(usable.map((reference) => reference.observed.length + reference.beforeStart))
+    const historicalRemaining = mean(usable.map((reference) => reference.dates.length - reference.observed.length))
+    const count = selected.count === null ? null : selected.count + selected.beforeStart, rate = selected.count === null ? null : selected.count / elapsed
     const index = historicalAtCut && count !== null ? count / historicalAtCut : null
-    const reason = !selected.available ? 'Base atual indisponível' : selected.invalid ? 'Há CPFs ou datas pendentes neste grupo'
-      : count === null || count < 3 ? 'Menos de 3 eventos observados no grupo' : usable.length < 2 ? 'Menos de 2 PS históricos utilizáveis'
-        : usable.reduce((sum, reference) => sum + reference.observed.length, 0) < 10 ? 'Histórico no corte menor que 10 CPFs' : index === null ? 'Sem histórico positivo no corte' : ''
-    const linear = count !== null && !selected.invalid ? Math.round(count + rate! * remaining) : null
-    const adjusted = !reason && count !== null && historicalRemaining !== null && index !== null ? Math.round(count + historicalRemaining * index) : null
-    const scenarios = adjusted === null ? [] : usable.filter((reference) => reference.observed.length > 0).map((reference) => count! * reference.total / reference.observed.length)
+    const scoped = dimension === 'geral' ? data : data.map((source) => ({ ...source, inscritos: source.inscritos.filter((row) => resolver(row, false, dimension) === label), matriculados: source.matriculados.filter((row) => resolver(row, true, dimension) === label) }))
+    const capture = withProjection ? buildCaptureForecast(scoped, config, false) : null
+    const projection = metric === 'inscritos' ? capture?.inscritos : capture?.calouros
+    const reason = !selected.available ? 'Base atual indisponível' : selected.invalid ? 'Há CPFs ou datas pendentes neste grupo' : projection?.scenario.reason || ''
+    const linear = projection?.linearReference ?? null
+    const adjusted = !reason && projection?.scenario.method !== 'linear' ? projection?.scenario.reference ?? null : null
     return { label, registrations, enrollments, selected, references, usable, count, rate, index, historicalAtCut, historicalRemaining,
-      linear, adjusted, reason, low: scenarios.length ? Math.floor(Math.min(...scenarios, adjusted!)) : null, high: scenarios.length ? Math.ceil(Math.max(...scenarios, adjusted!)) : null }
+      linear, adjusted, reason, linearRate: projection?.linearRate ?? rate, forecastNote: projection?.scenario.note ?? '', forecastComplete: projection?.scenario.complete !== false, low: projection?.scenario.low ?? null, high: projection?.scenario.high ?? null }
   })
   return { start, end, cutoff, elapsed, remaining, metric, groups }
 }
@@ -119,14 +121,14 @@ export function planningTimeline(model: NonNullable<ReturnType<typeof buildCampa
   ] : [{ ...bucket, partial: false }])
   return buckets.map((bucket) => {
     const observedEnd = Math.min(bucket.end, model.cutoff)
-    const actual = bucket.start > model.cutoff || group.count === null ? null : group.selected.observed.filter((day) => day <= observedEnd).length
+    const actual = bucket.start > model.cutoff || group.count === null ? null : group.selected.beforeStart + group.selected.observed.filter((day) => day <= observedEnd).length
     const volume = bucket.start > model.cutoff || group.count === null ? null : group.selected.observed.filter((day) => day >= bucket.start && day <= observedEnd).length
     const expectedFuture = group.usable.length ? group.usable.reduce((sum, reference) => sum + reference.dates.filter((day) => day > shiftedDay(model.cutoff, reference.delta) && day <= shiftedDay(bucket.end, reference.delta)).length, 0) / group.usable.length : null
     return { label: bucket.label, start: bucket.start, end: bucket.end, actual, volume, partial: bucket.partial,
-      ...Object.fromEntries(group.references.map((reference) => [`history_${reference.period.replace('.', '_')}`, reference.available && (reference.dates.length > 0 || !reference.invalid) ? reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length : null])),
-      linear: bucket.end >= model.cutoff && group.linear !== null ? Math.round(group.count! + group.rate! * Math.max(0, bucket.end - model.cutoff)) : null,
-      adjusted: bucket.end >= model.cutoff && group.adjusted !== null && expectedFuture !== null ? Math.round(group.count! + group.index! * expectedFuture) : null,
-      historical: group.usable.length ? group.usable.reduce((sum, reference) => sum + reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length, 0) / group.usable.length : null }
+      ...Object.fromEntries(group.references.map((reference) => [`history_${reference.period.replace('.', '_')}`, reference.available && (reference.dates.length > 0 || !reference.invalid) ? reference.beforeStart + reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length : null])),
+      linear: bucket.end >= model.cutoff && group.linear !== null ? Math.round(group.count! + group.linearRate! * Math.max(0, bucket.end - model.cutoff)) : null,
+      adjusted: bucket.end >= model.cutoff && group.adjusted !== null ? Math.round(group.count! + Math.max(0, group.adjusted - group.count!) * (group.historicalRemaining && expectedFuture !== null ? expectedFuture / group.historicalRemaining : model.remaining ? Math.max(0, bucket.end - model.cutoff) / model.remaining : 0)) : null,
+      historical: group.usable.length ? group.usable.reduce((sum, reference) => sum + reference.beforeStart + reference.dates.filter((day) => day <= shiftedDay(bucket.end, reference.delta)).length, 0) / group.usable.length : null }
   })
 }
 

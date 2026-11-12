@@ -21,7 +21,7 @@ export function CampaignInactivityPanel({ data, config, resolveLabel, onFocusGro
   const [query, setQuery] = useState('')
   const [threshold, setThreshold] = useState(7)
   const [pages, setPages] = useState({ registrations: 0, enrollments: 0 })
-  const model = useMemo(() => buildCampaignPlanning(data, config, dimension, 'matriculas', resolveLabel), [data, config, dimension, resolveLabel])
+  const model = useMemo(() => buildCampaignPlanning(data, config, dimension, 'matriculas', resolveLabel, false), [data, config, dimension, resolveLabel])
   if (!model) return null
   const groups = model.groups.filter((group) => normalizedText(group.label).includes(normalizedText(query)))
   const blocks = [

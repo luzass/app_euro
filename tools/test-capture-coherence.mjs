@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict'
+import { buildCaptureForecast } from '../src/lib/campaignCapture.ts'
+import { buildCampaignPlanning } from '../src/lib/campaignPlanning.ts'
+import { historyCutoff, scopeHistoryByDate } from '../src/lib/historyDateScope.ts'
+import { dateDay } from '../src/lib/campaignData.ts'
+
+const config = { currentPeriod: '2027.1', references: ['2024.1', '2025.1', '2026.1'], start: '2026-09-29', end: '2027-03-31', asOf: '2026-11-12', matriculaDate: 'payment' }
+const cpf = (year, number) => String(year * 100000 + number).padStart(11, '0')
+const entry = (year, number, course, date) => ({ cpf: cpf(year, number), curso: course, candidato: `Pessoa ${number}`, aluno: `Pessoa ${number}`, campus: 'ASA SUL', filial: 'ASA SUL', ano_semestre: `${year}.1`, periodo_letivo: `${year}.1`, contrato: 'ATIVO', tipo_aluno: 'CALOURO', periodo: '1', forma_de_ingresso: 'VESTIBULAR', tipo_de_ingresso: 'VESTIBULAR', data_inscricao: date, data_de_matricula: date, data_baixa_do_pagamento: date })
+const data = [2024, 2025, 2026, 2027].map((year) => {
+  const current = year === 2027, source = { period: `${year}.1`, inscritos: [], matriculados: [] }
+  const normalRegistrations = current ? 259 : year === 2026 ? 1600 : 1500
+  const normalEnrollments = current ? 5 : year === 2026 ? 350 : 600
+  const medicineRegistrations = current ? 116 : 500, medicineEnrollments = current ? 65 : year === 2026 ? 77 : 89
+  for (let n = 0; n < normalRegistrations; n++) source.inscritos.push(entry(year, n + 1, 'DIREITO', current || n < 100 ? `${year - 1}-10-01` : `${year}-02-01`))
+  for (let n = 0; n < medicineRegistrations; n++) source.inscritos.push(entry(year, n + 20000, 'MEDICINA', current ? `${year - 1}-09-01` : n < 100 ? `${year - 1}-10-01` : `${year}-02-01`))
+  for (let n = 0; n < normalEnrollments; n++) source.matriculados.push(entry(year, n + 1, 'DIREITO', current ? n ? `${year - 1}-10-01` : `${year - 1}-09-28` : n < 1 ? `${year - 1}-10-01` : `${year}-02-01`))
+  for (let n = 0; n < medicineEnrollments; n++) source.matriculados.push(entry(year, n + 20000, 'MEDICINA', current || n < 2 ? `${year - 1}-10-01` : `${year}-02-01`))
+  return source
+})
+export const coherentFixture = () => structuredClone(data)
+const before = JSON.stringify(data)
+const model = buildCaptureForecast(data, config)
+assert.equal(model.inscritos.scenario.observed, 375)
+assert.equal(model.inscritos.window.beforeStart, 116)
+assert.equal(model.calouros.scenario.observed, 70)
+assert.equal(model.medicine.observed, 65)
+assert.equal(model.medicine.reference, 65, 'Unknown capacity is not invented or extrapolated')
+assert.equal(model.calouros.scenario.complete, false)
+assert.equal(model.conversion, 0.4)
+assert.equal(model.calouros.scenario.reference, 729)
+assert.ok(model.calouros.scenario.reference < model.inscritos.scenario.reference)
+assert.ok(model.calouros.scenario.reference < 1000, 'Tiny historic enrollment fraction must not create thousands of calouros')
+assert.deepEqual(model.historicalTotals.map((row) => row.calouros), [689, 689, 427])
+const planning = buildCampaignPlanning(data, config, 'geral', 'matriculas').groups[0]
+assert.equal(planning.adjusted, model.calouros.scenario.reference, 'Cards and planning share the same coherent model')
+assert.equal(planning.count, 70)
+assert.equal(planning.forecastComplete, false)
+const medicalOnly = data.map((source) => ({ ...source, inscritos: source.inscritos.filter((row) => row.curso === 'MEDICINA'), matriculados: source.matriculados.filter((row) => row.curso === 'MEDICINA') }))
+assert.equal(buildCaptureForecast(medicalOnly, config).calouros.scenario.reference, 65)
+assert.equal(buildCampaignPlanning(medicalOnly, config, 'geral', 'matriculas').groups[0].linear, 65)
+const capacity = buildCaptureForecast(data, { ...config, medicineCapacity: 100 })
+assert.ok(capacity.medicine.reference <= 100)
+assert.ok(capacity.medicine.reference >= 65)
+assert.equal(capacity.calouros.scenario.complete, true)
+const wrongCapacity = buildCaptureForecast(data, { ...config, medicineCapacity: 20 })
+assert.equal(wrongCapacity.medicine.reference, 65, 'Observed data is never reduced to fit a quota')
+assert.equal(wrongCapacity.medicine.complete, false)
+const duplicate = structuredClone(data)
+duplicate.at(-1).inscritos.push({ ...duplicate.at(-1).inscritos[0] })
+duplicate.at(-1).matriculados.push({ ...duplicate.at(-1).matriculados[0] })
+assert.equal(buildCaptureForecast(duplicate, config).calouros.scenario.reference, 729)
+const future = structuredClone(data)
+for (let n = 0; n < 100; n++) future.at(-1).matriculados.push(entry(2027, 90000 + n, 'MEDICINA', '2027-02-01'))
+assert.equal(buildCaptureForecast(future, config).calouros.scenario.reference, 729)
+assert.equal(buildCaptureForecast(future, config).medicine.observed, 65)
+const addedDemand = structuredClone(data)
+for (let n = 0; n < 100; n++) addedDemand.at(-1).inscritos.push(entry(2027, 90000 + n, 'DIREITO', '2026-11-12'))
+assert.equal(buildCaptureForecast(addedDemand, config).calouros.scenario.reference, 769, 'Demand, not raw enrollment acceleration, changes the conversion projection')
+const unmatched = structuredClone(data)
+unmatched.at(-1).matriculados.push(entry(2027, 99990, 'DIREITO', '2026-11-12'))
+assert.equal(buildCaptureForecast(unmatched, config).unmatchedCurrent, 1)
+assert.equal(buildCaptureForecast(unmatched, config).calouros.scenario.reference, 730)
+assert.equal(JSON.stringify(data), before)
+
+assert.equal(historyCutoff('2024.1', '2026-11-12'), dateDay('2023-11-12'))
+assert.equal(historyCutoff('2025.1', '2026-11-12'), dateDay('2024-11-12'))
+assert.equal(historyCutoff('2026.2', '2026-11-12'), dateDay('2026-11-12'))
+assert.equal(historyCutoff('2024.1', '2024-02-29'), dateDay('2024-02-29'))
+assert.equal(historyCutoff('2023.1', '2024-02-29'), dateDay('2023-02-28'))
+const periods = data.map((source) => ({ ...source, label: source.period, semester: '1' }))
+const all = scopeHistoryByDate(periods, 'full', config.asOf)
+const cut = scopeHistoryByDate(periods, 'sameDate', config.asOf)
+assert.equal(all.periods[0].matriculados.length, 689)
+assert.equal(cut.periods[0].matriculados.length, 3)
+assert.equal(cut.periods.at(-1).matriculados.length, 70)
+const mixed = structuredClone(periods)
+mixed.push({ period: '2025.2', label: '2025.2', semester: '2', inscritos: [{ ...mixed[1].inscritos[0], cpf: '99999999991', ano_semestre: '2025.1' }], matriculados: [{ ...mixed[1].matriculados[0], cpf: '99999999992', tipo_aluno: 'VETERANO', data_baixa_do_pagamento: '2019-01-01' }] })
+assert.equal(scopeHistoryByDate(mixed, 'full', config.asOf).periods.find((row) => row.period === '2025.2').inscritos.length, 0)
+assert.equal(scopeHistoryByDate(mixed, 'sameDate', config.asOf).unplacedVeterans, 1)
+console.log('Coerencia: demanda x conversao por CPF, saldo historico aditivo, Medicina separada sem quota inventada, stock anterior preservado, sem vazamento futuro e cortes do historico verificados.')
