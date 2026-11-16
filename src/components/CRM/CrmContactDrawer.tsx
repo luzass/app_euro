@@ -4,10 +4,10 @@ import {
   ArrowLeft,
   Check,
   Circle,
-  Copy,
   ExternalLink,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   X,
 } from 'lucide-react'
@@ -30,6 +30,8 @@ import {
 import { crmRpc, loadCrmDetail, loadCrmPersona } from '../../lib/crmKanbanApi'
 import { CrmContactForm, crmButton, crmInput } from './CrmContactForm'
 import { todayInBrazil } from '../../lib/historyDateScope'
+import { activityDirections, crmAcademicProgress } from '../../lib/crmWorkflow'
+import { CrmFollowupPanel } from './CrmFollowupPanel'
 
 const stamp = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -146,6 +148,11 @@ function EventContent({
     return (
       <span>
         {p.before ? 'Atendimento editado' : 'Atendimento registrado'}
+        {p.direction ? (
+          <span className="block text-xs text-slate-500">
+            {activityDirections[p.direction as keyof typeof activityDirections]}
+          </span>
+        ) : null}
         <span className="mt-1 block whitespace-pre-wrap text-slate-600">
           {String(p.note ?? '')}
         </span>
@@ -157,6 +164,12 @@ function EventContent({
         )}
       </span>
     )
+  if (event.event_type === 'cadence_completed')
+    return <span>Cadência {String(p.code)} · contato registrado</span>
+  if (event.event_type === 'cadence_paused')
+    return <span>Cadência pausada após resposta do candidato</span>
+  if (event.event_type === 'cadence_resumed') return <span>Cadência retomada pelo atendente</span>
+  if (event.event_type === 'callback_completed') return <span>Retorno agendado realizado</span>
   return (
     <span>
       {event.event_type === 'created'
@@ -168,6 +181,7 @@ function EventContent({
 
 export function CrmContactDrawer({
   contact,
+  now,
   profile,
   members,
   busy,
@@ -177,6 +191,7 @@ export function CrmContactDrawer({
   notify,
 }: {
   contact: CrmContact
+  now: number
   profile: Profile
   members: CrmMember[]
   busy: boolean
@@ -190,13 +205,22 @@ export function CrmContactDrawer({
   const [historyMore, setHistoryMore] = useState(false)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<CrmContact | null>(null)
-  const [baseline, setBaseline] = useState<CrmPersonaRows | null>(null)
-  const [personaError, setPersonaError] = useState('')
+  const [personaBase, setPersonaBase] = useState<{
+    course: string
+    data?: CrmPersonaRows
+    error?: string
+  } | null>(null)
+  const [personaAttempt, setPersonaAttempt] = useState(0)
+  const personaCourse = contact.current_data.curso?.trim() ?? ''
+  const baseline = personaBase?.course === personaCourse ? (personaBase.data ?? null) : null
+  const personaError = personaBase?.course === personaCourse ? (personaBase.error ?? '') : ''
   const [note, setNote] = useState(''),
     [channel, setChannel] = useState('whatsapp'),
     [occurred, setOccurred] = useState(localNow)
   const [activity, setActivity] = useState<CrmActivity | null>(null),
     [activityBusy, setActivityBusy] = useState(false)
+  const [direction, setDirection] = useState<NonNullable<CrmActivity['direction']>>('outbound')
+  const [cadence, setCadence] = useState<{ code: string; anchor: string } | null>(null)
   const [nextAction, setNextAction] = useState(
     contact.next_action_at ? localValue(contact.next_action_at) : '',
   )
@@ -264,11 +288,19 @@ export function CrmContactDrawer({
     }
   }, [onClose])
   useEffect(() => {
-    if (tab === 'Persona' && !baseline)
-      void loadCrmPersona()
-        .then(setBaseline)
-        .catch((e) => setPersonaError(e.message))
-  }, [tab, baseline])
+    if (tab !== 'Persona' || !personaCourse) return
+    let live = true
+    void loadCrmPersona(personaCourse)
+      .then((data) => {
+        if (live) setPersonaBase({ course: personaCourse, data })
+      })
+      .catch((e) => {
+        if (live) setPersonaBase({ course: personaCourse, error: e.message })
+      })
+    return () => {
+      live = false
+    }
+  }, [tab, personaCourse, personaAttempt])
   const persona = useMemo(
     () => (baseline ? crmPersona(contact, baseline, todayInBrazil()) : null),
     [contact, baseline],
@@ -457,6 +489,9 @@ export function CrmContactDrawer({
                     </button>
                   </div>
                 </div>
+                <p className="border-l-2 border-sky-500 pl-3 text-sm text-slate-700">
+                  {crmAcademicProgress(contact, now).label}
+                </p>
                 <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                   {Object.entries(labels).map(([key, label]) => (
                     <div key={key} className={key === 'observacao' ? 'sm:col-span-2' : ''}>
@@ -471,6 +506,22 @@ export function CrmContactDrawer({
                 </dl>
                 <section className="border-t border-slate-200 pt-4">
                   <h3 className="mb-3 text-sm font-semibold">Próxima ação</h3>
+                  <dl className="mb-4 grid gap-3 text-xs sm:grid-cols-3">
+                    {(
+                      [
+                        ['Último contato da equipe', contact.last_outreach_at],
+                        ['Última resposta do candidato', contact.last_response_at],
+                        ['Última interação', contact.last_interaction_at],
+                      ] as const
+                    ).map(([label, value]) => (
+                      <div key={label}>
+                        <dt className="text-slate-500">{label}</dt>
+                        <dd className="mt-1 text-slate-800">
+                          {value ? stamp(value) : 'Não registrado'}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                   <form
                     className="flex flex-wrap gap-2"
                     onSubmit={(event) => {
@@ -523,39 +574,34 @@ export function CrmContactDrawer({
                     })}
                   </div>
                 </section>
-                <section className="border-t border-slate-200 pt-4">
-                  <h3 className="mb-3 text-sm font-semibold">Contato e acompanhamento</h3>
-                  <div className="divide-y divide-slate-100">
-                    {stage.scripts.map((script, index) => {
-                      const text = script.text.replaceAll(
-                        '{nome}',
-                        (contact.current_data.nome || '').split(' ')[0],
-                      )
-                      return (
-                        <div key={index} className="flex items-start gap-3 py-3">
-                          <span className="shrink-0 pt-1 text-xs font-semibold text-sky-700">
-                            D+{script.day}
-                          </span>
-                          <p className="min-w-0 flex-1 text-sm leading-6 text-slate-600">{text}</p>
-                          <button
-                            type="button"
-                            className={crmButton + ' !p-2'}
-                            title="Copiar mensagem"
-                            aria-label={'Copiar mensagem D+' + script.day}
-                            onClick={() =>
-                              void navigator.clipboard
-                                .writeText(text)
-                                .then(() => notify('Mensagem copiada.'))
-                                .catch(() => notify('Não foi possível copiar.', true))
-                            }
-                          >
-                            <Copy size={14} />
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
+                <CrmFollowupPanel
+                  contact={contact}
+                  now={now}
+                  editable={editable}
+                  busy={busy}
+                  onPatch={patch}
+                  notify={notify}
+                  onResume={() => {
+                    void crmRpc('crm_kanban_resume_cadence', {
+                      p_id: contact.id,
+                      p_version: contact.version,
+                    })
+                      .then(async () => {
+                        await onChanged()
+                        await load()
+                        notify('Cadência retomada.')
+                      })
+                      .catch((e) => notify(e.message, true))
+                  }}
+                  onRecord={(code, text) => {
+                    setCadence({ code, anchor: contact.stage_entered_at })
+                    setActivity(null)
+                    setDirection('outbound')
+                    setOccurred(localNow())
+                    setNote(text)
+                    setTab('Atendimentos')
+                  }}
+                />
               </div>
             ))}
           {tab === 'Atendimentos' && (
@@ -566,15 +612,19 @@ export function CrmContactDrawer({
                   event.preventDefault()
                   setActivityBusy(true)
                   try {
-                    await crmRpc('crm_kanban_activity', {
+                    await crmRpc('crm_kanban_activity_v2', {
                       p_contact: contact.id,
                       p_note: note,
                       p_channel: channel,
                       p_occurred: new Date(occurred).toISOString(),
                       p_activity: activity?.id ?? null,
+                      p_direction: direction,
+                      p_code: cadence?.code ?? null,
+                      p_anchor: cadence?.anchor ?? null,
                     })
                     setNote('')
                     setActivity(null)
+                    setCadence(null)
                     await onChanged()
                     await load()
                     notify('Atendimento salvo.')
@@ -588,6 +638,34 @@ export function CrmContactDrawer({
                 <h3 className="font-semibold">
                   {activity ? 'Editar atendimento' : 'Novo atendimento'}
                 </h3>
+                {cadence && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-sky-800">
+                    <span>Registrar contato da cadência {cadence.code}</span>
+                    <button type="button" onClick={() => setCadence(null)}>
+                      Desvincular cadência
+                    </button>
+                  </div>
+                )}
+                <label className="block space-y-1 text-xs text-slate-500">
+                  <span>Tipo de registro</span>
+                  <select
+                    aria-label="Tipo de interação"
+                    className={crmInput}
+                    disabled={!editable || activityBusy || Boolean(cadence)}
+                    value={direction}
+                    onChange={(e) =>
+                      setDirection(e.target.value as NonNullable<CrmActivity['direction']>)
+                    }
+                  >
+                    {Object.entries(activityDirections)
+                      .filter(([value]) => value !== 'unknown' || activity?.direction === 'unknown')
+                      .map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-xs text-slate-500">
                     <span>Data e hora</span>
@@ -632,6 +710,7 @@ export function CrmContactDrawer({
                       type="button"
                       onClick={() => {
                         setActivity(null)
+                        setCadence(null)
                         setNote('')
                       }}
                     >
@@ -661,6 +740,8 @@ export function CrmContactDrawer({
                           aria-label="Editar atendimento"
                           onClick={() => {
                             setActivity(item)
+                            setCadence(null)
+                            setDirection(item.direction || 'unknown')
                             setNote(item.note)
                             setChannel(item.channel)
                             setOccurred(localValue(item.occurred_at))
@@ -670,6 +751,9 @@ export function CrmContactDrawer({
                         </button>
                       )}
                     </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {activityDirections[item.direction || 'unknown']}
+                    </p>
                     <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">
                       {item.note}
                     </p>
@@ -741,8 +825,25 @@ export function CrmContactDrawer({
           {tab === 'Persona' && (
             <section className="space-y-4">
               <h3 className="font-semibold">Compatibilidade com a persona do curso</h3>
-              {personaError ? (
-                <p className="text-sm text-amber-800">{personaError}</p>
+              {!personaCourse ? (
+                <p className="text-sm text-amber-800">Curso não informado.</p>
+              ) : personaError ? (
+                <div className="space-y-3">
+                  <p role="alert" className="text-sm text-amber-800">
+                    {personaError}
+                  </p>
+                  <button
+                    type="button"
+                    className={crmButton}
+                    onClick={() => {
+                      setPersonaBase(null)
+                      setPersonaAttempt((value) => value + 1)
+                    }}
+                  >
+                    <RefreshCw size={15} />
+                    Tentar novamente
+                  </button>
+                </div>
               ) : !persona ? (
                 <p className="text-sm text-slate-500">Consultando base histórica…</p>
               ) : persona.incomplete ? (

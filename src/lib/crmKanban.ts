@@ -8,6 +8,7 @@ export const crmStages = [
   {
     id: 'primeiro_contato',
     label: 'Primeiro contato',
+    group: 'Lead',
     color: '#0284c7',
     tasks: ['Identificar a origem', 'Confirmar o contato', 'Direcionar o atendimento'],
     scripts: [
@@ -20,6 +21,7 @@ export const crmStages = [
   {
     id: 'abordagem',
     label: 'Abordagem / Sondagem',
+    group: 'Lead',
     color: '#0d9488',
     tasks: ['Identificar o curso de interesse', 'Confirmar o campus'],
     scripts: [
@@ -31,6 +33,7 @@ export const crmStages = [
   {
     id: 'negociacao',
     label: 'Negociação',
+    group: 'Lead',
     color: '#7c3aed',
     tasks: [
       'Enviar apresentação do curso',
@@ -44,54 +47,92 @@ export const crmStages = [
         day: 1,
         text: 'Você deseja conhecer as alternativas de pagamento disponíveis para o curso?',
       },
-      { day: 5, text: 'Podemos dar continuidade ao seu atendimento? É sua primeira graduação?' },
+      { day: 5, text: 'Podemos dar continuidade ao seu atendimento?' },
     ],
   },
   {
     id: 'fechamento',
     label: 'Fechamento',
+    group: 'Lead',
     color: '#d97706',
     tasks: [
-      'Conferir os dados da inscrição',
-      'Orientar vestibular, transferência ou reingresso',
+      'Conferir nome, nascimento, CPF, telefone e e-mail',
+      'Orientar inscrição pela forma de ingresso escolhida',
       'Solicitar documentação aplicável',
-      'Acompanhar prova ou análise documental',
-    ],
-    scripts: [
-      { day: 1, text: 'Olá, {nome}! Conseguiu acessar o portal do candidato?' },
-      { day: 3, text: 'Conseguiu realizar a prova ou encaminhar a documentação solicitada?' },
-      { day: 5, text: 'Posso ajudar você com alguma pendência para avançarmos?' },
-    ],
-  },
-  {
-    id: 'vestibular',
-    label: 'Vestibular',
-    color: '#db2777',
-    tasks: [
-      'Conferir resultado da seleção',
-      'Orientar assinatura do contrato',
-      'Orientar pagamento da primeira mensalidade',
     ],
     scripts: [
       {
         day: 0,
-        text: 'Olá, {nome}! Podemos conferir o resultado da sua seleção e os próximos passos para a matrícula?',
+        text: 'Olá, {nome}! Vamos concluir sua inscrição? Podemos conferir seus dados e os documentos necessários?',
+      },
+    ],
+  },
+  {
+    id: 'inscrito',
+    label: 'Inscrito',
+    group: 'Inscrito',
+    color: '#b45309',
+    tasks: [
+      'Conferir inscrição e forma de ingresso',
+      'Identificar prova ou análise documental pendente',
+      'Direcionar para o próximo passo confirmado',
+    ],
+    scripts: [
+      {
+        day: 0,
+        text: 'Olá, {nome}! Recebemos sua inscrição. Posso ajudar você com o próximo passo do processo seletivo?',
+      },
+    ],
+  },
+  {
+    id: 'vestibular',
+    label: 'Vestibular · Prova online',
+    group: 'Inscrito',
+    color: '#db2777',
+    tasks: [
+      'Enviar o link oficial da prova',
+      'Orientar acesso ao portal',
+      'Acompanhar realização e resultado da prova',
+    ],
+    scripts: [
+      { day: 1, text: 'Olá, {nome}! Conseguiu acessar o portal do candidato?' },
+      { day: 3, text: 'Conseguiu realizar sua prova online? Posso ajudar com o acesso?' },
+      { day: 5, text: 'Olá, {nome}! Ficou alguma pendência para concluir sua prova?' },
+    ],
+  },
+  {
+    id: 'aguardando_matricula',
+    label: 'Aguardando matrícula',
+    group: 'Inscrito',
+    color: '#2563eb',
+    tasks: [
+      'Conferir aprovação ou análise documental',
+      'Orientar assinatura do contrato',
+      'Conferir emissão do boleto e pagamento',
+      'Confirmar matrícula na base oficial',
+    ],
+    scripts: [
+      {
+        day: 0,
+        text: 'Olá, {nome}! Vamos conferir os próximos passos de contrato e pagamento para concluir sua matrícula?',
       },
       {
         day: 3,
-        text: 'Precisa de ajuda para assinar o contrato ou consultar as condições vigentes?',
+        text: 'Precisa de ajuda com o contrato, boleto ou condições vigentes para sua matrícula?',
       },
-      { day: 10, text: 'Você tem interesse em conhecer o campus? Podemos combinar uma visita.' },
+      {
+        day: 10,
+        text: 'Olá, {nome}! Ficou alguma dúvida para concluir sua matrícula? Podemos conversar ou combinar uma visita ao campus.',
+      },
     ],
   },
   {
     id: 'matriculado',
     label: 'Matriculado',
+    group: 'Matriculado',
     color: '#059669',
     tasks: ['Conferir matrícula na base oficial', 'Acompanhar conclusão do processo'],
-    scripts: [
-      { day: 0, text: 'Olá, {nome}! Ficou alguma dúvida sobre os próximos passos no UNIEURO?' },
-    ],
+    scripts: [],
   },
 ] as const
 export type CrmStage = (typeof crmStages)[number]['id']
@@ -111,6 +152,9 @@ export interface CrmContact {
   archived: boolean
   checklist: Record<string, boolean>
   next_action_at: string | null
+  last_outreach_at?: string | null
+  last_response_at?: string | null
+  last_interaction_at?: string | null
   stage_entered_at: string
   version: number
   created_at: string
@@ -137,6 +181,7 @@ export interface CrmWorkspace {
     history_limit: number
     last_sync_at: string | null
     last_sync_result: CrmSyncResult
+    workflow_version?: number
   }
 }
 export interface CrmEvent {
@@ -154,6 +199,7 @@ export interface CrmActivity {
   channel: string
   occurred_at: string
   updated_at: string
+  direction?: 'outbound' | 'inbound' | 'note' | 'unknown'
 }
 export interface CrmSource {
   source: string

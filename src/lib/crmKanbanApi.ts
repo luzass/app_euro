@@ -11,6 +11,19 @@ export async function crmRpc<T>(name: string, parameters?: Record<string, unknow
   if (!supabase) throw new Error('Supabase não configurado.')
   const { data, error } = await supabase.rpc(name, parameters)
   if (error) {
+    if (
+      ['crm_kanban_activity_v2', 'crm_kanban_resume_cadence'].includes(name) &&
+      ['PGRST202', '42883'].includes(error.code)
+    )
+      throw new Error(
+        'A atualização do funil e das cadências ainda precisa ser instalada no Supabase.',
+      )
+    if (name === 'crm_kanban_persona_course' && ['PGRST202', '42883'].includes(error.code))
+      throw new Error('A consulta atualizada da persona precisa ser instalada no Supabase.')
+    if (name === 'crm_kanban_persona_course' && error.code === '57014')
+      throw new Error(
+        'A consulta da persona excedeu o tempo limite. Tente novamente; se persistir, revise a atualização da consulta no Supabase.',
+      )
     if (['PGRST202', '42P01', '42883'].includes(error.code))
       throw new Error('A estrutura do CRM ainda não está disponível no Supabase.')
     throw new Error(error.message || 'Não foi possível concluir a operação.')
@@ -47,12 +60,18 @@ export const saveCrmContact = (contact: CrmContact, patch: Record<string, unknow
     p_version: contact.version,
   })
 export const syncCrmSources = () => crmRpc<CrmSyncResult>('crm_kanban_sync')
-let personaCache: Promise<CrmPersonaRows> | null = null
-export function loadCrmPersona() {
-  if (!personaCache)
-    personaCache = crmRpc<CrmPersonaRows>('crm_kanban_persona_rows').catch((error) => {
-      personaCache = null
+const personaCache = new Map<string, { expires: number; promise: Promise<CrmPersonaRows> }>()
+export function loadCrmPersona(course: string) {
+  const key = course.trim()
+  if (!key) return Promise.resolve({ rows: [], missing: [] } as CrmPersonaRows)
+  const cached = personaCache.get(key)
+  if (cached && cached.expires > Date.now()) return cached.promise
+  const promise = crmRpc<CrmPersonaRows>('crm_kanban_persona_course', { p_course: key }).catch(
+    (error) => {
+      if (personaCache.get(key)?.promise === promise) personaCache.delete(key)
       throw error
-    })
-  return personaCache
+    },
+  )
+  personaCache.set(key, { expires: Date.now() + 10 * 60 * 1000, promise })
+  return promise
 }

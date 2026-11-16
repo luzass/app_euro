@@ -64,6 +64,8 @@ import {
 } from '../lib/crmKanbanApi'
 import { CrmContactForm, crmButton, crmInput } from '../components/CRM/CrmContactForm'
 import { CrmContactDrawer } from '../components/CRM/CrmContactDrawer'
+import { CrmAgenda } from '../components/CRM/CrmAgenda'
+import { crmAcademicProgress, crmReminders } from '../lib/crmWorkflow'
 import { Loading } from '../components/UI/Loading'
 import { EmptyState } from '../components/UI/EmptyState'
 
@@ -87,16 +89,24 @@ function CardContent({
   now: number
 }) {
   const overdue = contact.next_action_at && new Date(contact.next_action_at).getTime() < now
+  const progress = crmAcademicProgress(contact, now)
+  const alerts = crmReminders([contact], now)
+  const next = alerts.find((item) => item.kind === 'cadence' || item.kind === 'manual')
+  const idle = alerts.find((item) => item.kind === 'idle' || item.kind === 'response')
   return (
     <>
       <div className="mb-2 flex flex-wrap items-center gap-1.5 pr-6 text-[10px] font-semibold uppercase tracking-normal">
         <span
           className={
             'rounded px-1.5 py-0.5 ' +
-            (contact.has_inscription ? 'bg-violet-50 text-violet-700' : 'bg-sky-50 text-sky-700')
+            (contact.official_enrollment
+              ? 'bg-emerald-50 text-emerald-700'
+              : contact.has_inscription
+                ? 'bg-violet-50 text-violet-700'
+                : 'bg-sky-50 text-sky-700')
           }
         >
-          {contact.has_inscription ? 'Inscrito' : 'Lead'}
+          {progress.category}
         </span>
         {contact.test_only && (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">Teste</span>
@@ -121,6 +131,20 @@ function CardContent({
         {contact.current_data.campus || 'Campus não informado'} ·{' '}
         {contact.current_data.turno || 'Turno não informado'}
       </p>
+      {contact.has_inscription && (
+        <p className="mt-1 break-words text-[11px] leading-4 text-slate-600">{progress.label}</p>
+      )}
+      {(next || idle) && (
+        <p
+          className={
+            'mt-2 break-words text-[11px] leading-4 ' +
+            (idle || (next && next.due < now) ? 'text-red-700' : 'text-slate-500')
+          }
+        >
+          {idle?.label ||
+            (next ? next.label + ' · ' + shortDate(new Date(next.due).toISOString()) : '')}
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 border-t border-slate-100 pt-2 text-[11px]">
         <span className="truncate text-slate-500">{owner || 'Sem responsável'}</span>
         {contact.next_action_at && (
@@ -315,8 +339,13 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
         )
     }
     resize()
+    const observer = new ResizeObserver(resize)
+    if (board.current?.parentElement) observer.observe(board.current.parentElement)
     window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', resize)
+    }
   }, [loading, showFilters, feedback, workspace, loadError])
   const notify = useCallback((text: string, error = false) => setFeedback({ text, error }), [])
   useEffect(() => {
@@ -486,8 +515,9 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
                 crmSearchKey(query),
               )) &&
             (kind === 'all' ||
-              (kind === 'inscrito' && contact.has_inscription) ||
-              (kind === 'lead' && !contact.has_inscription)) &&
+              (kind === 'inscrito' && contact.has_inscription && !contact.official_enrollment) ||
+              (kind === 'lead' && !contact.has_inscription && !contact.official_enrollment) ||
+              (kind === 'matriculado' && contact.official_enrollment)) &&
             (!ownerFilter || contact.owner_id === ownerFilter) &&
             (!course || d.curso === course) &&
             (!campus || d.campus === campus) &&
@@ -528,8 +558,18 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
           <h1 className="text-xl font-semibold text-slate-950">CRM · Captação</h1>
           <p className="mt-1 text-xs text-slate-500">
             {countLabel(visible.length)} contatos ·{' '}
-            {countLabel(visible.filter((contact) => !contact.has_inscription).length)} leads ·{' '}
-            {countLabel(visible.filter((contact) => contact.has_inscription).length)} inscritos
+            {countLabel(
+              visible.filter((contact) => !contact.has_inscription && !contact.official_enrollment)
+                .length,
+            )}{' '}
+            leads ·{' '}
+            {countLabel(
+              visible.filter((contact) => contact.has_inscription && !contact.official_enrollment)
+                .length,
+            )}{' '}
+            inscritos ·{' '}
+            {countLabel(visible.filter((contact) => contact.official_enrollment).length)}{' '}
+            matriculados
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -584,6 +624,11 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
               : 'Sem sincronização inicial'}
           </span>
         </div>
+      )}
+      {workspace && workspace.config.workflow_version !== 2 && (
+        <p role="alert" className="border-l-2 border-amber-500 px-3 py-2 text-xs text-amber-900">
+          Atualização do funil e das cadências pendente no banco.
+        </p>
       )}
       {feedback && (
         <div
@@ -666,6 +711,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
             <option value="all">Leads e inscritos</option>
             <option value="lead">Leads</option>
             <option value="inscrito">Inscritos</option>
+            <option value="matriculado">Matriculados</option>
           </select>
           <button
             className={crmButton + ' !p-2.5'}
@@ -785,6 +831,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
           ))}
         </select>
       </div>
+      <CrmAgenda contacts={visible} now={now} onOpen={setSelected} />
       <DndContext
         sensors={sensors}
         collisionDetection={collision}
@@ -855,6 +902,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
         <CrmContactDrawer
           key={selected.id}
           contact={selected}
+          now={now}
           profile={profile}
           members={members}
           busy={busy}

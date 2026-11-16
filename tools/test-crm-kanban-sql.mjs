@@ -44,6 +44,12 @@ try {
   ])
     await db.query('insert into public.profiles values($1,$2,$3)', [uid(id), nome, role])
   await db.exec(sql)
+  const personaMigration = await readFile(
+    new URL('../sql/crm_kanban_otimizar_persona.sql', import.meta.url),
+    'utf8',
+  )
+  await db.exec(personaMigration)
+  await db.exec(personaMigration)
   for (let i = 1; i <= 250; i++)
     await db.query('insert into public.leads_cursos values($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
       i,
@@ -286,6 +292,8 @@ try {
     'Persona must not expose actual historical CPF',
   )
   assert.equal(Object.hasOwn(persona.rows[0], 'aluno'), false)
+  assert.deepEqual(await rpc('crm_kanban_persona_course', ['Direito']), persona)
+  assert.equal((await rpc('crm_kanban_persona_course', ['Farmácia'])).rows.length, 0)
   await rpc('crm_kanban_create', [cpf(1), { nome: 'Cadastro manual real' }, null])
   await actor(1)
   await assert.rejects(() => rpc('crm_kanban_finish_tests', ['SEM CONFIRMACAO']), /Confirmacao/)

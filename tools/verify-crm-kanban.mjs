@@ -44,6 +44,7 @@ try {
   await page.route('https://fonts.gstatic.com/**', (route) => route.abort())
   let rows = crmFixture(),
     eventId = 100
+  let personaTimeout = true
   const events = [
       {
         id: 1,
@@ -79,6 +80,7 @@ try {
       result = {
         members,
         config: {
+          workflow_version: 2,
           cutoff: '2026-11-13',
           include_history: true,
           history_limit: 200,
@@ -106,6 +108,10 @@ try {
         manual_data: { ...old.manual_data, ...patch.manual_data },
         current_data: { ...old.current_data, ...patch.manual_data },
         version: old.version + 1,
+        stage_entered_at:
+          patch.stage && patch.stage !== old.stage
+            ? new Date().toISOString()
+            : old.stage_entered_at,
       }
       result = rows[index]
     } else if (name === 'crm_kanban_detail')
@@ -164,15 +170,16 @@ try {
         rows.push(added)
         result = added
       }
-    } else if (name === 'crm_kanban_activity') {
+    } else if (name === 'crm_kanban_activity_v2') {
       const value = {
-        id: data.p_activity ?? 'act1',
+        id: data.p_activity ?? 'act' + ++eventId,
         contact_id: data.p_contact,
         author_id: 'manager-1',
         note: data.p_note,
         channel: data.p_channel,
         occurred_at: data.p_occurred,
         updated_at: new Date().toISOString(),
+        direction: data.p_direction,
       }
       const index = activities.findIndex((item) => item.id === value.id)
       if (index >= 0) activities[index] = value
@@ -185,14 +192,58 @@ try {
         created_at: new Date().toISOString(),
         payload: { note: value.note },
       })
-      rows.find((row) => row.id === data.p_contact).version++
+      const person = rows.find((row) => row.id === data.p_contact)
+      person.version++
+      if (data.p_direction !== 'note') person.last_interaction_at = data.p_occurred
+      if (data.p_direction === 'outbound') person.last_outreach_at = data.p_occurred
+      if (
+        data.p_direction === 'outbound' &&
+        person.next_action_at &&
+        Date.parse(person.next_action_at) <= Date.parse(data.p_occurred)
+      )
+        person.next_action_at = null
+      if (data.p_direction === 'inbound') {
+        person.last_response_at = data.p_occurred
+        person.checklist[
+          'cadence-paused:' + person.stage + ':' + Date.parse(person.stage_entered_at)
+        ] = true
+      }
+      if (data.p_code)
+        person.checklist[
+          'cadence:' + person.stage + ':' + Date.parse(person.stage_entered_at) + ':' + data.p_code
+        ] = true
       result = value.id
-    } else if (name === 'crm_kanban_persona_rows')
+    } else if (name === 'crm_kanban_resume_cadence') {
+      const person = rows.find((row) => row.id === data.p_id)
+      delete person.checklist[
+        'cadence-paused:' + person.stage + ':' + Date.parse(person.stage_entered_at)
+      ]
+      person.version++
+      result = person
+    } else if (name === 'crm_kanban_persona_course') {
+      assert.ok(
+        ['Direito', 'Psicologia'].includes(data.p_course),
+        'Persona must query only the selected course',
+      )
+      if (personaTimeout) {
+        personaTimeout = false
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: '57014',
+            message: 'canceling statement due to statement timeout',
+            details: null,
+            hint: null,
+          }),
+        })
+        return
+      }
       result = {
         missing: [],
         rows: Array.from({ length: 25 }, (_, index) => ({
           cpf: String(index + 100).padStart(11, '0'),
-          curso: 'DIREITO',
+          curso: data.p_course.toUpperCase(),
           periodo_letivo: '2026.1',
           tipo_aluno: 'CALOURO',
           contrato: 'ATIVO',
@@ -202,7 +253,7 @@ try {
           tipo_de_ingresso: 'VESTIBULAR',
         })),
       }
-    else if (name === 'crm_kanban_sync')
+    } else if (name === 'crm_kanban_sync')
       result = { updated: 0, conflicts: 0, invalid: 0, missing_sources: [] }
     else throw new Error('Unexpected request: ' + name)
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(result) })
@@ -222,6 +273,13 @@ try {
     element.scrollTop = 0
   })
   await page.screenshot({ path: resolve(output, 'kanban-desktop.png'), fullPage: true })
+  await page.getByText('Agenda de atendimento', { exact: false }).first().click()
+  await page.getByRole('combobox', { name: 'Exibir na agenda' }).selectOption('all')
+  await page
+    .getByRole('button', { name: /Ana Oliveira/ })
+    .first()
+    .waitFor()
+  await page.getByText('Agenda de atendimento', { exact: false }).first().click()
   const handle = page.getByRole('button', { name: 'Mover Ana Oliveira', exact: true })
   const start = await handle.boundingBox(),
     target = await page.locator('[data-stage="negociacao"] header').boundingBox()
@@ -272,6 +330,10 @@ try {
   await page.mouse.up()
   await edgeSaved
   await board.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth
+  })
+  await page.screenshot({ path: resolve(output, 'crm-etapas-finais.png'), fullPage: true })
+  await board.evaluate((element) => {
     element.scrollLeft = 0
   })
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).click()
@@ -296,14 +358,56 @@ try {
     'Editing a name must not freeze all imported fields',
   )
   drawer = page.getByRole('dialog', { name: 'Ana Oliveira Atualizada', exact: true })
+  await drawer
+    .getByRole('combobox', { name: 'Primeira graduação', exact: true })
+    .selectOption('Sim')
+  await drawer
+    .getByRole('combobox', { name: 'Via de ingresso na negociação', exact: true })
+    .selectOption('ENEM')
+  await drawer.getByText('N6', { exact: true }).waitFor()
+  await drawer.getByRole('button', { name: 'Registrar contato N1', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Dados', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Registrar contato N1', exact: true }).waitFor()
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('[data-crm-drawer] button')].some(
+      (button) => button.textContent.includes('Registrar contato N1') && button.disabled,
+    ),
+  )
+  assert.equal(
+    await drawer.getByRole('button', { name: 'Registrar contato N1', exact: true }).isDisabled(),
+    true,
+  )
   await drawer.getByRole('button', { name: 'Atendimentos', exact: true }).click()
+  await drawer
+    .getByRole('combobox', { name: 'Tipo de interação', exact: true })
+    .selectOption('inbound')
   await drawer
     .getByRole('textbox', { name: 'Observação do atendimento', exact: true })
     .fill('Documentação solicitada')
   await drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click()
   await drawer.getByText('Documentação solicitada', { exact: true }).waitFor()
+  await drawer.getByRole('button', { name: 'Dados', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).waitFor()
+  await drawer
+    .getByRole('heading', { name: 'Cadência de atendimento', exact: true })
+    .scrollIntoViewIfNeeded()
+  await drawer.screenshot({ path: resolve(output, 'crm-cadencias-desktop.png') })
+  await drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Registrar contato N2', exact: true }).waitFor()
+  await drawer.getByRole('button', { name: 'Persona', exact: true }).click()
+  await drawer.getByRole('alert').filter({ hasText: 'excedeu o tempo limite' }).waitFor()
+  await drawer.getByRole('button', { name: 'Tentar novamente', exact: true }).click()
+  await drawer.getByText('100/100', { exact: true }).waitFor()
+  assert.equal(calls.filter((call) => call.name === 'crm_kanban_persona_course').length, 2)
+  await drawer.getByRole('button', { name: 'Dados', exact: true }).click()
   await drawer.getByRole('button', { name: 'Persona', exact: true }).click()
   await drawer.getByText('100/100', { exact: true }).waitFor()
+  assert.equal(
+    calls.filter((call) => call.name === 'crm_kanban_persona_course').length,
+    2,
+    'Reopening the same course reuses the cached reference',
+  )
   await drawer.getByRole('button', { name: 'Histórico', exact: true }).click()
   await drawer.locator('article').filter({ hasText: 'Primeiro contato' }).first().waitFor()
   await drawer.screenshot({ path: resolve(output, 'crm-detail-desktop.png') })
@@ -362,6 +466,13 @@ try {
   await page
     .getByRole('dialog', { name: 'Bruno Souza', exact: true })
     .screenshot({ path: resolve(output, 'crm-detail-mobile.png') })
+  await sellerDrawer.getByRole('button', { name: 'Persona', exact: true }).click()
+  await sellerDrawer.getByText('75/100', { exact: true }).waitFor()
+  assert.equal(
+    calls.filter((call) => call.name === 'crm_kanban_persona_course').length,
+    3,
+    'A different course gets its own reference',
+  )
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
   assert.deepEqual(errors, [])
   console.log(
