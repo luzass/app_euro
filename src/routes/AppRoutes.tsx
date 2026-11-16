@@ -7,6 +7,7 @@ import { useProfile } from '../hooks/useProfile'
 import { getDefaultRouteForProfile } from '../lib/navigation'
 import type { Role } from '../lib/types'
 import { CriarUsuario } from '../pages/CriarUsuario'
+import { CrmKanban } from '../pages/CrmKanban'
 import { DashboardFunil } from '../pages/DashboardFunil'
 import { DashboardHistorico } from '../pages/DashboardHistorico'
 import { Login } from '../pages/Login'
@@ -125,6 +126,16 @@ export function AppRoutes() {
                 allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
               >
                 <PainelCaptacao />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="crm"
+            element={
+              <RequireRole
+                allowedRoles={['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario']}
+              >
+                <CrmKanban />
               </RequireRole>
             }
           />

@@ -6,6 +6,7 @@ import {
   Target,
   UserRoundPlus,
   Gauge,
+  Kanban,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
 
@@ -59,6 +60,12 @@ export const navItems: NavItem[] = [
     title: 'Painel de Captação',
     path: '/app/painel-captacao',
     icon: Target,
+    allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
+  },
+  {
+    title: 'CRM - Kanban',
+    path: '/app/crm',
+    icon: Kanban,
     allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
   },
   {
