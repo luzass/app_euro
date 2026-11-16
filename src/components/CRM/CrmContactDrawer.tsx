@@ -25,6 +25,7 @@ import {
   type CrmContact,
   type CrmDetail,
   type CrmMember,
+  type CrmLossReason,
   type CrmPersonaRows,
 } from '../../lib/crmKanban'
 import { crmRpc, loadCrmDetail, loadCrmPersona } from '../../lib/crmKanbanApi'
@@ -32,6 +33,8 @@ import { CrmContactForm, crmButton, crmInput } from './CrmContactForm'
 import { todayInBrazil } from '../../lib/historyDateScope'
 import { activityDirections, crmAcademicProgress } from '../../lib/crmWorkflow'
 import { CrmFollowupPanel } from './CrmFollowupPanel'
+import { CrmLossPanel } from './CrmLossPanel'
+import { lossEvidence } from '../../lib/crmLoss'
 
 const stamp = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -170,6 +173,35 @@ function EventContent({
     return <span>Cadência pausada após resposta do candidato</span>
   if (event.event_type === 'cadence_resumed') return <span>Cadência retomada pelo atendente</span>
   if (event.event_type === 'callback_completed') return <span>Retorno agendado realizado</span>
+  if (event.event_type === 'loss_closed')
+    return (
+      <div>
+        <strong>Desistência · {String(p.reason_label)}</strong>
+        <p className="mt-1 text-xs text-slate-500">
+          {lossEvidence[p.evidence as keyof typeof lossEvidence]} · {crmStageLabel(String(p.stage))}
+        </p>
+        {p.note ? (
+          <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">{String(p.note)}</p>
+        ) : null}
+      </div>
+    )
+  if (event.event_type === 'loss_reopened') {
+    const previous = p.previous as Record<string, unknown> | undefined
+    return (
+      <div>
+        <strong>Atendimento reaberto</strong>
+        <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">
+          {String(p.note || '')}
+        </p>
+        {previous && (
+          <p className="mt-1 text-xs text-slate-500">
+            Encerramento anterior: {String(previous.reason_label)} ·{' '}
+            {lossEvidence[previous.evidence as keyof typeof lossEvidence]}
+          </p>
+        )}
+      </div>
+    )
+  }
   return (
     <span>
       {event.event_type === 'created'
@@ -184,6 +216,9 @@ export function CrmContactDrawer({
   now,
   profile,
   members,
+  lossReasons,
+  lossReady,
+  onContactUpdated,
   busy,
   onClose,
   onPatch,
@@ -194,6 +229,9 @@ export function CrmContactDrawer({
   now: number
   profile: Profile
   members: CrmMember[]
+  lossReasons: CrmLossReason[]
+  lossReady: boolean
+  onContactUpdated: (contact: CrmContact) => void
   busy: boolean
   onClose: () => void
   onPatch: (contact: CrmContact, patch: Record<string, unknown>) => Promise<CrmContact>
@@ -228,6 +266,7 @@ export function CrmContactDrawer({
   const closeRef = useRef<HTMLButtonElement>(null)
   const manager = isCrmManager(profile),
     editable = canEditCrm(contact, profile)
+  const operationalEditable = editable && !contact.loss_data
   const owner = members.find((member) => member.id === contact.owner_id)
   const stage = crmStages.find((item) => item.id === contact.stage)!
   const load = async () => {
@@ -331,6 +370,7 @@ export function CrmContactDrawer({
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
               <span>{contact.has_inscription ? 'Inscrito' : 'Lead'}</span>
+              {contact.loss_data && <span className="text-red-700">Desistência registrada</span>}
               {contact.test_only && <span className="text-amber-700">Teste</span>}
               {contact.official_enrollment && (
                 <span className="text-emerald-700">Matrícula confirmada na base</span>
@@ -360,7 +400,7 @@ export function CrmContactDrawer({
                 className={crmInput}
                 aria-label="Fase do contato"
                 value={contact.stage}
-                disabled={!editable || busy}
+                disabled={!operationalEditable || busy}
                 onChange={(event) => void patch({ stage: event.target.value })}
               >
                 {crmStages.map((item) => (
@@ -457,10 +497,11 @@ export function CrmContactDrawer({
                 <div className="flex flex-wrap justify-between gap-2">
                   <a
                     className={
-                      crmButton + (!whatsapp || !editable ? ' pointer-events-none opacity-50' : '')
+                      crmButton +
+                      (!whatsapp || !operationalEditable ? ' pointer-events-none opacity-50' : '')
                     }
-                    aria-disabled={!whatsapp || !editable}
-                    href={editable ? (whatsapp ?? undefined) : undefined}
+                    aria-disabled={!whatsapp || !operationalEditable}
+                    href={operationalEditable ? (whatsapp ?? undefined) : undefined}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -477,18 +518,37 @@ export function CrmContactDrawer({
                       <Pencil size={15} />
                       Editar dados
                     </button>
-                    <button
-                      className={crmButton + ' !p-2'}
-                      type="button"
-                      title={contact.archived ? 'Reabrir contato' : 'Arquivar contato'}
-                      aria-label={contact.archived ? 'Reabrir contato' : 'Arquivar contato'}
-                      disabled={!editable || busy}
-                      onClick={() => void patch({ archived: !contact.archived })}
-                    >
-                      {contact.archived ? <ArrowLeft size={16} /> : <Archive size={16} />}
-                    </button>
+                    {!contact.loss_data && (
+                      <button
+                        className={crmButton + ' !p-2'}
+                        type="button"
+                        title={
+                          contact.archived
+                            ? 'Reabrir contato'
+                            : 'Arquivar sem registrar desistência'
+                        }
+                        aria-label={contact.archived ? 'Reabrir contato' : 'Arquivar contato'}
+                        disabled={!editable || busy}
+                        onClick={() => void patch({ archived: !contact.archived })}
+                      >
+                        {contact.archived ? <ArrowLeft size={16} /> : <Archive size={16} />}
+                      </button>
+                    )}
                   </div>
                 </div>
+                <CrmLossPanel
+                  contact={contact}
+                  reasons={lossReasons}
+                  ready={lossReady}
+                  editable={editable}
+                  busy={busy}
+                  onSaved={(updated) => {
+                    setActivity(null)
+                    setCadence(null)
+                    onContactUpdated(updated)
+                  }}
+                  notify={notify}
+                />
                 <p className="border-l-2 border-sky-500 pl-3 text-sm text-slate-700">
                   {crmAcademicProgress(contact, now).label}
                 </p>
@@ -542,9 +602,13 @@ export function CrmContactDrawer({
                         setNextAction(event.target.value)
                         setNextActionBase(contact)
                       }}
-                      disabled={!editable || busy}
+                      disabled={!operationalEditable || busy}
                     />
-                    <button type="submit" className={crmButton} disabled={!editable || busy}>
+                    <button
+                      type="submit"
+                      className={crmButton}
+                      disabled={!operationalEditable || busy}
+                    >
                       <Save size={15} />
                       Salvar
                     </button>
@@ -561,7 +625,7 @@ export function CrmContactDrawer({
                             type="checkbox"
                             className="mt-0.5 h-4 w-4 accent-sky-600"
                             checked={Boolean(contact.checklist[key])}
-                            disabled={!editable || busy}
+                            disabled={!operationalEditable || busy}
                             onChange={(event) =>
                               void patch({
                                 checklist: { ...contact.checklist, [key]: event.target.checked },
@@ -577,7 +641,7 @@ export function CrmContactDrawer({
                 <CrmFollowupPanel
                   contact={contact}
                   now={now}
-                  editable={editable}
+                  editable={operationalEditable}
                   busy={busy}
                   onPatch={patch}
                   notify={notify}
@@ -618,9 +682,9 @@ export function CrmContactDrawer({
                       p_channel: channel,
                       p_occurred: new Date(occurred).toISOString(),
                       p_activity: activity?.id ?? null,
-                      p_direction: direction,
-                      p_code: cadence?.code ?? null,
-                      p_anchor: cadence?.anchor ?? null,
+                      p_direction: contact.loss_data ? 'note' : direction,
+                      p_code: contact.loss_data ? null : (cadence?.code ?? null),
+                      p_anchor: contact.loss_data ? null : (cadence?.anchor ?? null),
                     })
                     setNote('')
                     setActivity(null)
@@ -638,7 +702,7 @@ export function CrmContactDrawer({
                 <h3 className="font-semibold">
                   {activity ? 'Editar atendimento' : 'Novo atendimento'}
                 </h3>
-                {cadence && (
+                {cadence && !contact.loss_data && (
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-sky-800">
                     <span>Registrar contato da cadência {cadence.code}</span>
                     <button type="button" onClick={() => setCadence(null)}>
@@ -651,8 +715,10 @@ export function CrmContactDrawer({
                   <select
                     aria-label="Tipo de interação"
                     className={crmInput}
-                    disabled={!editable || activityBusy || Boolean(cadence)}
-                    value={direction}
+                    disabled={
+                      !editable || activityBusy || Boolean(cadence) || Boolean(contact.loss_data)
+                    }
+                    value={contact.loss_data ? 'note' : direction}
                     onChange={(e) =>
                       setDirection(e.target.value as NonNullable<CrmActivity['direction']>)
                     }
@@ -732,24 +798,26 @@ export function CrmContactDrawer({
                         {members.find((member) => member.id === item.author_id)?.nome ??
                           'Atendente'}
                       </p>
-                      {editable && (manager || item.author_id === profile.id) && (
-                        <button
-                          type="button"
-                          className={crmButton + ' !p-1.5'}
-                          title="Editar atendimento"
-                          aria-label="Editar atendimento"
-                          onClick={() => {
-                            setActivity(item)
-                            setCadence(null)
-                            setDirection(item.direction || 'unknown')
-                            setNote(item.note)
-                            setChannel(item.channel)
-                            setOccurred(localValue(item.occurred_at))
-                          }}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      )}
+                      {editable &&
+                        (!contact.loss_data || item.direction === 'note') &&
+                        (manager || item.author_id === profile.id) && (
+                          <button
+                            type="button"
+                            className={crmButton + ' !p-1.5'}
+                            title="Editar atendimento"
+                            aria-label="Editar atendimento"
+                            onClick={() => {
+                              setActivity(item)
+                              setCadence(null)
+                              setDirection(item.direction || 'unknown')
+                              setNote(item.note)
+                              setChannel(item.channel)
+                              setOccurred(localValue(item.occurred_at))
+                            }}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
                       {activityDirections[item.direction || 'unknown']}

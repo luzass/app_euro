@@ -38,6 +38,7 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
+  Tags,
   UserRoundCheck,
   X,
 } from 'lucide-react'
@@ -66,6 +67,8 @@ import { CrmContactForm, crmButton, crmInput } from '../components/CRM/CrmContac
 import { CrmContactDrawer } from '../components/CRM/CrmContactDrawer'
 import { CrmAgenda } from '../components/CRM/CrmAgenda'
 import { crmAcademicProgress, crmReminders } from '../lib/crmWorkflow'
+import { matchesCrmArchiveView, type CrmArchiveView } from '../lib/crmLoss'
+import { CrmLossReasonManager } from '../components/CRM/CrmLossReasonManager'
 import { Loading } from '../components/UI/Loading'
 import { EmptyState } from '../components/UI/EmptyState'
 
@@ -134,6 +137,11 @@ function CardContent({
       {contact.has_inscription && (
         <p className="mt-1 break-words text-[11px] leading-4 text-slate-600">{progress.label}</p>
       )}
+      {contact.loss_data && (
+        <p className="mt-2 break-words text-xs font-medium text-red-700">
+          Desistência · {contact.loss_data.reason_label}
+        </p>
+      )}
       {(next || idle) && (
         <p
           className={
@@ -180,7 +188,7 @@ function SortableCard({
   onClaim: () => void
   now: number
 }) {
-  const editable = canEditCrm(contact, profile) && !busy
+  const editable = canEditCrm(contact, profile) && !busy && !contact.archived && !contact.loss_data
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: contact.id,
     disabled: !editable,
@@ -220,18 +228,21 @@ function SortableCard({
       </button>
       {(!contact.owner_id || whatsapp) && (
         <div className="flex items-center justify-end gap-2 px-3 pb-2">
-          {!contact.owner_id && !isCrmManager(profile) && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-40"
-              disabled={busy}
-              onClick={onClaim}
-            >
-              <UserRoundCheck size={13} />
-              Assumir
-            </button>
-          )}
-          {whatsapp && canEditCrm(contact, profile) && (
+          {!contact.owner_id &&
+            !isCrmManager(profile) &&
+            !contact.archived &&
+            !contact.loss_data && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-40"
+                disabled={busy}
+                onClick={onClaim}
+              >
+                <UserRoundCheck size={13} />
+                Assumir
+              </button>
+            )}
+          {whatsapp && canEditCrm(contact, profile) && !contact.archived && !contact.loss_data && (
             <a
               href={whatsapp}
               target="_blank"
@@ -307,8 +318,9 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
     [course, setCourse] = useState(''),
     [campus, setCampus] = useState(''),
     [shift, setShift] = useState('')
-  const [showFilters, setShowFilters] = useState(false),
-    [archived, setArchived] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [archiveView, setArchiveView] = useState<CrmArchiveView>('active')
+  const [managingReasons, setManagingReasons] = useState(false)
   const [selectedId, setSelected] = useState<string | null>(null),
     [creating, setCreating] = useState(false)
   const [feedback, setFeedback] = useState<{ text: string; error: boolean } | null>(null)
@@ -392,6 +404,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
     }
   }, [load])
   const closeDrawer = useCallback(() => setSelected(null), [])
+  const closeReasons = useCallback(() => setManagingReasons(false), [])
   useEffect(() => {
     if (!creating) return
     const previous = document.activeElement as HTMLElement | null
@@ -497,12 +510,12 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
     () =>
       contacts.filter(
         (contact) =>
-          contact.archived === archived &&
+          matchesCrmArchiveView(contact, archiveView) &&
           (scope === 'all' ||
             (scope === 'mine' && contact.owner_id === profile.id) ||
             (scope === 'unassigned' && !contact.owner_id)),
       ),
-    [contacts, scope, profile.id, archived],
+    [contacts, scope, profile.id, archiveView],
   )
   const visible = useMemo(
     () =>
@@ -511,9 +524,16 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
           const d = contact.current_data
           return (
             (!query ||
-              crmSearchKey([d.nome, d.telefone, contact.cpf, d.curso].join(' ')).includes(
-                crmSearchKey(query),
-              )) &&
+              crmSearchKey(
+                [
+                  d.nome,
+                  d.telefone,
+                  contact.cpf,
+                  d.curso,
+                  contact.loss_data?.reason_label,
+                  contact.loss_data?.note,
+                ].join(' '),
+              ).includes(crmSearchKey(query))) &&
             (kind === 'all' ||
               (kind === 'inscrito' && contact.has_inscription && !contact.official_enrollment) ||
               (kind === 'lead' && !contact.has_inscription && !contact.official_enrollment) ||
@@ -601,6 +621,23 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
               <span className="hidden sm:inline">Sincronizar</span>
             </button>
           )}
+          {manager && (
+            <button
+              type="button"
+              className={crmButton}
+              disabled={workspace?.config.loss_version !== 1}
+              aria-label="Motivos de desistência"
+              title={
+                workspace?.config.loss_version !== 1
+                  ? 'Atualização dos motivos pendente no banco'
+                  : 'Gerenciar motivos de desistência'
+              }
+              onClick={() => setManagingReasons(true)}
+            >
+              <Tags size={16} />
+              <span className="hidden sm:inline">Motivos de desistência</span>
+            </button>
+          )}
           <button
             type="button"
             className={crmButton + ' !border-slate-950 !bg-slate-950 !text-white'}
@@ -681,7 +718,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
                 {
                   contacts.filter(
                     (contact) =>
-                      contact.archived === archived &&
+                      matchesCrmArchiveView(contact, archiveView) &&
                       (value === 'all' ||
                         (value === 'mine' && contact.owner_id === profile.id) ||
                         (value === 'unassigned' && !contact.owner_id)),
@@ -768,14 +805,18 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
             </label>
           )}
           <div className="flex items-center justify-between gap-2">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-sky-600"
-                checked={archived}
-                onChange={(event) => setArchived(event.target.checked)}
-              />
-              Arquivados
+            <label className="block min-w-0 flex-1 space-y-1 text-xs text-slate-600">
+              <span>Situação do atendimento</span>
+              <select
+                aria-label="Situação do atendimento"
+                className={crmInput}
+                value={archiveView}
+                onChange={(e) => setArchiveView(e.target.value as CrmArchiveView)}
+              >
+                <option value="active">Ativos</option>
+                <option value="lost">Desistências</option>
+                <option value="archived">Arquivados sem desistência</option>
+              </select>
             </label>
             <button
               type="button"
@@ -789,7 +830,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
                 setOwnerFilter('')
                 setKind('all')
                 setQuery('')
-                setArchived(false)
+                setArchiveView('active')
               }}
             >
               <X size={15} />
@@ -905,11 +946,35 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
           now={now}
           profile={profile}
           members={members}
+          lossReasons={workspace?.loss_reasons ?? []}
+          lossReady={workspace?.config.loss_version === 1}
+          onContactUpdated={(updated) =>
+            setContacts((current) => current.map((row) => (row.id === updated.id ? updated : row)))
+          }
           busy={busy}
           onClose={closeDrawer}
           onPatch={patch}
           onChanged={load}
           notify={notify}
+        />
+      )}
+      {managingReasons && manager && (
+        <CrmLossReasonManager
+          reasons={workspace?.loss_reasons ?? []}
+          onClose={closeReasons}
+          onSaved={(reason) =>
+            setWorkspace((current) =>
+              current
+                ? {
+                    ...current,
+                    loss_reasons: [
+                      ...(current.loss_reasons ?? []).filter((r) => r.id !== reason.id),
+                      reason,
+                    ].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+                  }
+                : current,
+            )
+          }
         />
       )}
       {creating && (

@@ -12,6 +12,15 @@ export async function crmRpc<T>(name: string, parameters?: Record<string, unknow
   const { data, error } = await supabase.rpc(name, parameters)
   if (error) {
     if (
+      ['crm_kanban_reason_save', 'crm_kanban_close_loss', 'crm_kanban_reopen_loss'].includes(
+        name,
+      ) &&
+      ['PGRST202', '42883'].includes(error.code)
+    )
+      throw new Error(
+        'A atualização dos motivos de desistência ainda precisa ser instalada no Supabase.',
+      )
+    if (
       ['crm_kanban_activity_v2', 'crm_kanban_resume_cadence'].includes(name) &&
       ['PGRST202', '42883'].includes(error.code)
     )

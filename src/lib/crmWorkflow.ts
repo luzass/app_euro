@@ -78,7 +78,12 @@ export interface CrmReminder {
 export function crmReminders(contacts: CrmContact[], now: number): CrmReminder[] {
   return contacts
     .flatMap((contact): CrmReminder[] => {
-      if (contact.archived || contact.stage === 'matriculado' || contact.official_enrollment)
+      if (
+        contact.archived ||
+        contact.loss_data ||
+        contact.stage === 'matriculado' ||
+        contact.official_enrollment
+      )
         return []
       const result: CrmReminder[] = []
       const manual = contact.next_action_at ? Date.parse(contact.next_action_at) : NaN

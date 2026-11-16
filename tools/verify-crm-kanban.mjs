@@ -45,6 +45,24 @@ try {
   let rows = crmFixture(),
     eventId = 100
   let personaTimeout = true
+  const reasons = [
+    {
+      id: 'reason-price',
+      seed_key: 'price',
+      name: 'Preço ou condições de pagamento',
+      active: true,
+      requires_note: false,
+      version: 1,
+    },
+    {
+      id: 'reason-other',
+      seed_key: 'other',
+      name: 'Outro',
+      active: true,
+      requires_note: true,
+      version: 1,
+    },
+  ]
   const events = [
       {
         id: 1,
@@ -79,7 +97,9 @@ try {
     else if (name === 'crm_kanban_workspace')
       result = {
         members,
+        loss_reasons: reasons,
         config: {
+          loss_version: 1,
           workflow_version: 2,
           cutoff: '2026-11-13',
           include_history: true,
@@ -88,7 +108,80 @@ try {
           last_sync_result: {},
         },
       }
-    else if (name === 'crm_kanban_save') {
+    else if (name === 'crm_kanban_reason_save') {
+      assert.equal(seller, false)
+      const prior = reasons.find((r) => r.id === data.p_id)
+      if (prior) {
+        assert.equal(prior.version, data.p_version)
+        Object.assign(prior, {
+          name: data.p_name,
+          active: data.p_active,
+          requires_note: data.p_requires_note,
+          version: prior.version + 1,
+        })
+        result = prior
+      } else {
+        result = {
+          id: 'reason-new',
+          seed_key: null,
+          name: data.p_name,
+          active: data.p_active,
+          requires_note: data.p_requires_note,
+          version: 1,
+        }
+        reasons.push(result)
+      }
+    } else if (name === 'crm_kanban_close_loss') {
+      const contact = rows.find((r) => r.id === data.p_id),
+        reason = reasons.find((r) => r.id === data.p_reason)
+      assert.equal(contact.version, data.p_version)
+      assert.equal(reason.active, true)
+      assert.ok(!reason.requires_note || data.p_note.trim())
+      contact.loss_data = {
+        id: 'loss-' + ++eventId,
+        reason_id: reason.id,
+        reason_label: reason.name,
+        note: data.p_note,
+        evidence: data.p_evidence,
+        closed_at: new Date().toISOString(),
+        closed_by: seller ? 'seller-1' : 'manager-1',
+        stage: contact.stage,
+        owner_id: contact.owner_id,
+        course: contact.current_data.curso,
+        campus: contact.current_data.campus,
+        shift: contact.current_data.turno,
+        category: contact.has_inscription ? 'Inscrito' : 'Lead',
+      }
+      contact.archived = true
+      contact.next_action_at = null
+      contact.version++
+      events.push({
+        id: ++eventId,
+        contact_id: contact.id,
+        event_type: 'loss_closed',
+        actor_id: contact.loss_data.closed_by,
+        created_at: new Date().toISOString(),
+        payload: structuredClone(contact.loss_data),
+      })
+      result = contact
+    } else if (name === 'crm_kanban_reopen_loss') {
+      const contact = rows.find((r) => r.id === data.p_id),
+        previous = structuredClone(contact.loss_data)
+      assert.equal(contact.version, data.p_version)
+      contact.loss_data = null
+      contact.archived = false
+      contact.version++
+      contact.stage_entered_at = new Date().toISOString()
+      events.push({
+        id: ++eventId,
+        contact_id: contact.id,
+        event_type: 'loss_reopened',
+        actor_id: seller ? 'seller-1' : 'manager-1',
+        created_at: new Date().toISOString(),
+        payload: { previous, note: data.p_note },
+      })
+      result = contact
+    } else if (name === 'crm_kanban_save') {
       const index = rows.findIndex((row) => row.id === data.p_id),
         old = rows[index],
         patch = data.p_patch
@@ -261,6 +354,27 @@ try {
   await page.goto('http://127.0.0.1:5191', { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.getByRole('heading', { name: 'CRM · Captação' }).waitFor()
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Motivos de desistência', exact: true }).click()
+  const reasonManager = page.getByRole('dialog', { name: 'Motivos de desistência', exact: true })
+  await reasonManager.getByRole('button', { name: 'Novo motivo', exact: true }).click()
+  await reasonManager
+    .getByRole('textbox', { name: 'Nome do motivo', exact: true })
+    .fill('Mudou de cidade')
+  await reasonManager.getByRole('checkbox', { name: 'Exigir observação', exact: true }).check()
+  await reasonManager.getByRole('button', { name: 'Salvar motivo', exact: true }).click()
+  await reasonManager
+    .getByRole('button', { name: 'Editar motivo Mudou de cidade', exact: true })
+    .click()
+  await reasonManager
+    .getByRole('textbox', { name: 'Nome do motivo', exact: true })
+    .fill('Mudou de cidade ou estado')
+  await reasonManager.getByRole('checkbox', { name: 'Ativo', exact: true }).uncheck()
+  await reasonManager.getByRole('button', { name: 'Salvar motivo', exact: true }).click()
+  await reasonManager
+    .getByRole('button', { name: 'Editar motivo Mudou de cidade ou estado', exact: true })
+    .waitFor()
+  await reasonManager.screenshot({ path: resolve(output, 'crm-motivos-supervisao.png') })
+  await reasonManager.getByRole('button', { name: 'Fechar motivos', exact: true }).click()
   const board = page.getByLabel('Quadro Kanban', { exact: true })
   assert.ok(await board.evaluate((element) => element.scrollWidth > element.clientWidth))
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
@@ -426,6 +540,10 @@ try {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
   })
+  assert.equal(
+    await page.getByRole('button', { name: 'Motivos de desistência', exact: true }).count(),
+    0,
+  )
   await page.getByRole('button', { name: /Sem responsável/ }).click()
   await page.getByRole('button', { name: 'Assumir', exact: true }).click()
   await page.getByRole('button', { name: /^Meus/ }).click()
@@ -473,10 +591,54 @@ try {
     3,
     'A different course gets its own reference',
   )
+  await sellerDrawer.getByRole('button', { name: 'Dados', exact: true }).click()
+  await sellerDrawer.getByRole('button', { name: 'Registrar desistência', exact: true }).click()
+  await sellerDrawer
+    .getByRole('combobox', { name: 'Motivo principal da desistência', exact: true })
+    .selectOption('reason-other')
+  await sellerDrawer
+    .getByRole('combobox', { name: 'Origem do motivo', exact: true })
+    .selectOption('candidate_reported')
+  await sellerDrawer.getByRole('button', { name: 'Confirmar desistência', exact: true }).click()
+  assert.equal(
+    await sellerDrawer
+      .getByRole('textbox', { name: 'Observação da desistência', exact: true })
+      .evaluate((el) => el.validity.valueMissing),
+    true,
+  )
+  await sellerDrawer
+    .getByRole('textbox', { name: 'Observação da desistência', exact: true })
+    .fill('Vai iniciar os estudos no próximo semestre')
+  await sellerDrawer.getByRole('button', { name: 'Confirmar desistência', exact: true }).click()
+  await sellerDrawer.getByRole('button', { name: 'Reabrir atendimento', exact: true }).waitFor()
+  await sellerDrawer.screenshot({ path: resolve(output, 'crm-desistencia-mobile.png') })
+  await sellerDrawer.getByRole('button', { name: 'Fechar ficha', exact: true }).click()
+  await page.getByRole('button', { name: 'Filtros do quadro', exact: true }).click()
+  await page
+    .getByRole('combobox', { name: 'Situação do atendimento', exact: true })
+    .selectOption('lost')
+  await page.getByRole('button', { name: 'Abrir ficha de Bruno Souza', exact: true }).click()
+  await sellerDrawer.getByRole('button', { name: 'Reabrir atendimento', exact: true }).click()
+  await sellerDrawer
+    .getByRole('textbox', { name: 'Motivo da reabertura', exact: true })
+    .fill('Candidato voltou a conversar com a equipe')
+  await sellerDrawer.getByRole('button', { name: 'Confirmar reabertura', exact: true }).click()
+  await sellerDrawer.getByRole('button', { name: 'Registrar desistência', exact: true }).waitFor()
+  await sellerDrawer.getByRole('button', { name: 'Histórico', exact: true }).click()
+  await sellerDrawer.getByText('Atendimento reaberto', { exact: true }).waitFor()
+  assert.ok(
+    events.some(
+      (e) =>
+        e.contact_id === 'c2' &&
+        e.event_type === 'loss_closed' &&
+        e.payload.evidence === 'candidate_reported',
+    ),
+  )
+  assert.equal(rows.find((r) => r.id === 'c2').loss_data, null)
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
   assert.deepEqual(errors, [])
   console.log(
-    'CRM navegador: arrastar entre fases, teclado, auto-scroll horizontal, scroll por toque, ficha, edicao parcial, atendimento, persona, cadastro sem duplicar, assumir lead e desktop/mobile verificados.',
+    'CRM navegador: movimentacao, scroll, ficha, persona, cadencias, motivos editaveis pela supervisao, desistencia com observacao, filtros e reabertura com historico em desktop/mobile verificados.',
   )
 } finally {
   await browser?.close()

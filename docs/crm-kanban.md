@@ -45,6 +45,19 @@ Na Negociação, N4 registra se é a primeira graduação; N5 seleciona ENEM/Ves
 - Uma resposta recebida pausa as mensagens automáticas daquela etapa; o vendedor pode agendar um retorno ou retomar a cadência. Retomar não apaga os envios anteriores. Um retorno combinado para o futuro prevalece sobre a cadência e os alertas de inatividade. Registrar um contato após o horário combinado conclui esse retorno.
 - Matriculados e arquivados não geram cobranças automáticas. Os lembretes aparecem dentro do CRM e são recalculados enquanto a página está aberta; não há envio automático de WhatsApp, e-mail ou notificações fora do aplicativo. Respostas do WhatsApp precisam ser registradas pelo atendente até existir integração de conversas.
 
+## Motivos De Desistência
+
+Para atualizar uma instalação existente, publique a nova versão do aplicativo e execute `sql/crm_kanban_motivos_desistencia.sql` depois da migração de funil/cadências. A estrutura completa já contém essas definições. O SQL não encerra contatos existentes, não recarrega planilhas e não modifica as fontes acadêmicas.
+
+- Nove motivos iniciais: preço/condições, turno, acesso ao campus, curso/modalidade, outra instituição, adiamento, documentação/requisitos, motivos pessoais e Outro.
+- Admin, reitoria e gerente de captação podem criar, editar e desativar motivos. O Diego precisa ter o perfil `captacao_gerente`; não há permissão especial vinculada ao seu nome. Motivos não são apagados pelo aplicativo. Outro sempre exige observação; a supervisão pode tornar a observação obrigatória nos demais.
+- Encerrar exige motivo ativo e origem explícita: informado pelo candidato ou percepção do atendente. Nenhum motivo/origem vem pré-selecionado. Falta de resposta e contato inválido são tratados separadamente e não podem ser cadastrados como motivos de desistência.
+- O registro preserva nome do motivo escolhido, observação, origem, data, autor, etapa, responsável, curso, campus, turno e ingresso do momento. Renomear/desativar o catálogo não reescreve registros anteriores. A edição do catálogo também mantém auditoria própria.
+- Desistências saem do quadro ativo e ficam no filtro Situação do atendimento / Desistências. Arquivos sem desistência continuam separados. A busca também encontra o motivo e a observação. Cadências e contatos de WhatsApp ficam suspensos até reabrir; anotações internas continuam permitidas e não contam como conversa.
+- Vendedores encerram/reabrem apenas contatos próprios; um contato sem responsável deve ser assumido antes. Gestores têm acesso ao recorte da equipe. Não se registra desistência de atendimento já matriculado.
+- Reabrir exige observação, preserva todos os eventos anteriores e inicia uma nova visita à etapa, respeitando a situação acadêmica já conhecida. O botão comum de arquivar não contorna essa reabertura. Novas cargas de lead/inscrição não reabrem uma desistência por conta própria. Matrícula confirmada na base oficial reabre automaticamente e preserva o encerramento anterior na auditoria.
+- Dados estruturados ficam disponíveis para análises futuras por motivo, curso, campus, etapa e responsável, distinguindo relatos dos candidatos de hipóteses da equipe. As telas atuais mostram o encerramento registrado, não uma causa comprovada quando a origem é percepção do atendente.
+
 ## Cadastro único e atualização
 
 - CPF obrigatório no cadastro manual. Normaliza pontuação/zeros; valida formato, não situação cadastral na Receita. Nunca une pessoas por nome, e-mail ou telefone compartilhado.
@@ -86,6 +99,7 @@ O encerramento não foi executado. Existe uma função administrativa protegida 
 - `tools/test-crm-kanban.mjs`: movimentação/ordem, regras de perfil, contato e persona.
 - `tools/test-crm-persona.mjs`: 18 mil linhas históricas, recorte por curso, compatibilidade do cliente anterior, deduplicação, idade e privacidade.
 - `tools/test-crm-workflow.mjs` e `tools/test-crm-workflow-sql.mjs`: etapas, N4/N7, prazos, resposta x tentativa x anotação, pausa/retomada, envios auditados, avanço por fonte e migração sem duplicar.
+- `tools/test-crm-loss.mjs` e `tools/test-crm-loss-sql.mjs`: motivos, gestão por perfil, observação obrigatória, ausência de encerramento por falta de resposta, snapshots, reabertura, matrícula confirmada, RLS e migração repetível.
 - `tools/verify-crm-kanban.mjs`: navegador com fontes fictícias, arrastar entre fases, ordenar por teclado, rolagem automática horizontal e por toque, ficha, edição parcial, atendimento, persona, cadastro sem duplicação, assumir lead e desktop/mobile.
 
 ## Diagnóstico

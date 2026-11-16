@@ -137,6 +137,29 @@ export const crmStages = [
 ] as const
 export type CrmStage = (typeof crmStages)[number]['id']
 export type CrmData = Record<string, string | null>
+export interface CrmLossReason {
+  id: string
+  seed_key: string | null
+  name: string
+  active: boolean
+  requires_note: boolean
+  version: number
+}
+export interface CrmLossInfo {
+  id: string
+  reason_id: string
+  reason_label: string
+  evidence: 'candidate_reported' | 'staff_inferred'
+  note: string
+  closed_at: string
+  closed_by: string
+  stage: CrmStage
+  owner_id: string | null
+  course: string | null
+  campus: string | null
+  shift: string | null
+  category: string
+}
 export interface CrmContact {
   id: string
   cpf: string
@@ -150,6 +173,7 @@ export interface CrmContact {
   official_enrollment: boolean
   test_only: boolean
   archived: boolean
+  loss_data?: CrmLossInfo | null
   checklist: Record<string, boolean>
   next_action_at: string | null
   last_outreach_at?: string | null
@@ -175,6 +199,7 @@ export interface CrmSyncResult {
 }
 export interface CrmWorkspace {
   members: CrmMember[]
+  loss_reasons?: CrmLossReason[]
   config: {
     cutoff: string
     include_history: boolean
@@ -182,6 +207,7 @@ export interface CrmWorkspace {
     last_sync_at: string | null
     last_sync_result: CrmSyncResult
     workflow_version?: number
+    loss_version?: number
   }
 }
 export interface CrmEvent {
@@ -259,6 +285,8 @@ export function crmMovePreview(contacts: CrmContact[], id: string, over: string,
     : contacts.find((contact) => contact.id === over)?.stage
   if (
     !active ||
+    active.archived ||
+    active.loss_data ||
     !destination ||
     !crmStages.some((stage) => stage.id === destination) ||
     over === id
