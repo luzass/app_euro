@@ -14,6 +14,8 @@ import {
 import { EmptyState } from '../components/UI/EmptyState'
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
+import { MedicineToggle } from '../components/UI/MedicineToggle'
+import { isMedicine } from '../lib/campaignData'
 import {
   fetchAllRows,
   getUniqueCpfCount,
@@ -266,6 +268,7 @@ function ChartCard({
 export function DashboardFunil() {
   const [state, setState] = useState<FunilState>(initialState)
   const [onlyTraffic, setOnlyTraffic] = useState(false)
+  const [includeMedicine, setIncludeMedicine] = useState(true)
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [chartSelections, setChartSelections] =
     useState<FunilChartSelections>(initialChartSelections)
@@ -316,10 +319,14 @@ export function DashboardFunil() {
   }, [])
 
   const analysis = useMemo(() => {
-    const inscritosCpfSet = buildCpfSet(state.inscritos)
-    const matriculadosCpfSet = buildCpfSet(state.matriculados)
+    const inCourseScope = (row: GenericRow) => includeMedicine || !isMedicine(row)
+    const leads = state.leads.filter(inCourseScope)
+    const inscritos = state.inscritos.filter(inCourseScope)
+    const matriculados = state.matriculados.filter(inCourseScope)
+    const inscritosCpfSet = buildCpfSet(inscritos)
+    const matriculadosCpfSet = buildCpfSet(matriculados)
     const activePeriodCpfSet = buildMergedCpfSet(inscritosCpfSet, matriculadosCpfSet)
-    const periodFilteredLeads = state.leads.filter((row) => {
+    const periodFilteredLeads = leads.filter((row) => {
       const cpf = normalizeCpf(row.cpf)
 
       return matchesActiveFunnelPeriod(row) || Boolean(cpf && activePeriodCpfSet.has(cpf))
@@ -328,10 +335,10 @@ export function DashboardFunil() {
     const typeFilteredLeads = periodFilteredLeads.filter((row) =>
       matchesStudentType(row, studentTypeFilter),
     )
-    const typeFilteredInscritos = state.inscritos.filter((row) =>
+    const typeFilteredInscritos = inscritos.filter((row) =>
       matchesStudentType(row, studentTypeFilter),
     )
-    const typeFilteredMatriculados = state.matriculados.filter((row) =>
+    const typeFilteredMatriculados = matriculados.filter((row) =>
       matchesStudentType(row, studentTypeFilter),
     )
     const filteredInscritos = onlyTraffic
@@ -382,6 +389,7 @@ export function DashboardFunil() {
   }, [
     chartSelections,
     onlyTraffic,
+    includeMedicine,
     state.inscritos,
     state.leads,
     state.matriculados,
@@ -444,6 +452,18 @@ export function DashboardFunil() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <MedicineToggle
+              checked={includeMedicine}
+              onChange={(checked) => {
+                setIncludeMedicine(checked)
+                if (!checked) {
+                  setChartSelections((current) => ({
+                    ...current,
+                    curso: current.curso.filter((curso) => !isMedicine({ curso })),
+                  }))
+                }
+              }}
+            />
             {[
               { id: 'all', label: 'Todos' },
               { id: 'calouro', label: 'Calouros' },

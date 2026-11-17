@@ -17,6 +17,8 @@ import {
 import { EmptyState } from '../components/UI/EmptyState'
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
+import { MedicineToggle } from '../components/UI/MedicineToggle'
+import { isMedicine } from '../lib/campaignData'
 import {
   fetchAllRows,
   getUniqueCpfCount,
@@ -273,6 +275,7 @@ export function DashboardHistorico() {
   const [semester, setSemester] = useState<SemesterFilter>('1')
   const [dateMode, setDateMode] = useState<HistoryDateMode>('full')
   const [onlyActiveContracts, setOnlyActiveContracts] = useState(true)
+  const [includeMedicine, setIncludeMedicine] = useState(true)
   const [asOf, setAsOf] = useState(todayInBrazil)
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([])
@@ -333,7 +336,18 @@ export function DashboardHistorico() {
     void loadData()
   }, [])
 
-  const dateScope = useMemo(() => scopeHistoryByDate(state.periods, dateMode, asOf), [state.periods, dateMode, asOf])
+  const dateScope = useMemo(
+    () => scopeHistoryByDate(
+      state.periods.map((period) => ({
+        ...period,
+        inscritos: period.inscritos.filter((row) => includeMedicine || !isMedicine(row)),
+        matriculados: period.matriculados.filter((row) => includeMedicine || !isMedicine(row)),
+      })),
+      dateMode,
+      asOf,
+    ),
+    [state.periods, dateMode, asOf, includeMedicine],
+  )
 
   const analysis = useMemo(() => {
     const basePeriods = dateScope.periods
@@ -532,6 +546,18 @@ export function DashboardHistorico() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <MedicineToggle
+              checked={includeMedicine}
+              onChange={(checked) => {
+                setIncludeMedicine(checked)
+                if (!checked) {
+                  setChartSelections((current) => ({
+                    ...current,
+                    curso: current.curso.filter((curso) => !isMedicine({ curso })),
+                  }))
+                }
+              }}
+            />
             {[
               { id: 'all', label: 'Todos' },
               { id: 'calouro', label: 'Calouros' },
