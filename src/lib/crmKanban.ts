@@ -173,6 +173,7 @@ export interface CrmContact {
   official_enrollment: boolean
   test_only: boolean
   archived: boolean
+  intake_visible?: boolean
   loss_data?: CrmLossInfo | null
   checklist: Record<string, boolean>
   next_action_at: string | null
@@ -231,6 +232,7 @@ export interface CrmSource {
   source: string
   source_key: string
   source_date: string
+  source_date_inferred?: boolean
   is_test: boolean
   payload: GenericRow
   observed_at: string
@@ -285,6 +287,7 @@ export function crmMovePreview(contacts: CrmContact[], id: string, over: string,
     : contacts.find((contact) => contact.id === over)?.stage
   if (
     !active ||
+    active.intake_visible === false ||
     active.archived ||
     active.loss_data ||
     !destination ||
@@ -293,7 +296,13 @@ export function crmMovePreview(contacts: CrmContact[], id: string, over: string,
   )
     return contacts
   const list = contacts
-    .filter((contact) => contact.stage === destination && contact.id !== id && !contact.archived)
+    .filter(
+      (contact) =>
+        contact.intake_visible !== false &&
+        contact.stage === destination &&
+        contact.id !== id &&
+        !contact.archived,
+    )
     .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
   const index = over.startsWith('stage:')
     ? list.length

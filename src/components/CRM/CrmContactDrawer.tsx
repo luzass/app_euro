@@ -981,7 +981,11 @@ export function CrmContactDrawer({
                     {source.is_test && <span className="ml-1 text-xs text-amber-700">Teste</span>}
                   </h3>
                   <p className="mt-1 text-xs text-slate-500">
-                    Referência: {source.source_date} · consultado em {stamp(source.observed_at)}
+                    Referência:{' '}
+                    {source.source_date_inferred
+                      ? 'data de inscrição ausente ou inválida'
+                      : source.source_date}{' '}
+                    · consultado em {stamp(source.observed_at)}
                   </p>
                   <dl className="mt-3 grid gap-3 sm:grid-cols-2">
                     {Object.entries(source.payload).map(([key, value]) => (

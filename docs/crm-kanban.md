@@ -8,6 +8,21 @@
 
 Os SQLs não foram executados no Supabase real durante o desenvolvimento. A validação foi feita em PostgreSQL local isolado e com dados fictícios no navegador.
 
+### Recorte De Entrada A Partir De 15/11/2026
+
+Para uma instalação existente, publique a versão atual do aplicativo e execute `sql/crm_kanban_recorte_20261115.sql` depois das migrações de funil/cadências e motivos. O script atualiza a configuração, sincroniza as fontes e retorna contagens de contatos visíveis e ocultos. Não precisa alterar o n8n nem criar outro agendamento.
+
+- Todas as inscrições de `inscritos_20271`, sem corte de data. Continua a exclusão de Medicina combinada para o CRM.
+- Leads de `leads_cursos` com data de criação a partir de 15/11/2026, inclusive, no fuso America/Sao_Paulo. Datas sem fuso são interpretadas como a data civil informada; timestamps com fuso são convertidos para Brasília.
+- Leads anteriores ao corte ficam ocultos por `intake_visible=false`, sem apagar contato, responsável, anotações, fontes, desistências ou eventos. Um CPF também inscrito continua visível, qualquer que seja a data da inscrição.
+- O cadastro manual continua permitido e uma retomada manual explícita torna o contato visível. Um lead oculto que se inscreva reaparece na mesma ficha, sem duplicação.
+- A sincronização preserva responsáveis existentes. Inscrições antigas antes marcadas como teste são promovidas a reais mesmo quando o conteúdo da planilha não mudou.
+- CPF e identificador de origem continuam necessários. Inscrições sem data válida são importadas: a data acadêmica original não é alterada; uma referência auxiliar de ordenação recebe o corte e fica marcada como inferida. A ficha informa a ausência de data válida. Leads sem data válida permanecem pendentes porque não é possível comprovar o corte.
+- O BI retira os ocultos apenas da carteira atual e dos alertas. Eventos e conversões passados continuam disponíveis nas análises históricas.
+- Fontes temporariamente indisponíveis são sinalizadas e não apagam o último vínculo conhecido. A retirada de uma linha da fonte não equivale a desistência.
+
+`tools/test-crm-intake-scope-sql.mjs` verifica corte/fuso, inscrições antigas ou sem data, promoção de testes, responsáveis, ficha única, histórico preservado, retomada manual, permissões e reaplicação sem duplicar.
+
 ### Correção De Timeout Da Persona
 
 Para uma instalação existente, execute apenas `sql/crm_kanban_otimizar_persona.sql` no SQL Editor e recarregue a aplicação. Não precisa refazer a importação, recriar contatos ou aumentar o limite de execução do banco. A correção também atende a versão já publicada pela função antiga.
@@ -87,7 +102,7 @@ Usa a data real da inscrição quando disponível; para lead/manual, a referênc
 
 ## Modo de teste e corte
 
-Configuração inicial: corte **13/11/2026**, amostra fixa de até **200 CPFs antigos** e todos os registros válidos a partir do corte. A seleção antiga é persistida, para não importar mais 200 a cada execução. Novos registros do mesmo CPF atualizam o card existente e o tornam real, preservando o histórico.
+Configuração original de testes: corte **13/11/2026**, amostra fixa de até **200 CPFs antigos** e registros válidos a partir do corte. Essa configuração foi substituída pelo recorte acima: inscrições sem corte de data e leads desde **15/11/2026**, com importação da amostra desligada. Os cadastros antigos permanecem armazenados; somente a visibilidade operacional muda. A instalação nova já começa com a configuração atual.
 
 Contatos de teste são marcados. Não são dados fictícios injetados na produção: vêm da amostra autorizada das fontes. Um cadastro manual real também retira o contato do grupo exclusivamente de teste.
 

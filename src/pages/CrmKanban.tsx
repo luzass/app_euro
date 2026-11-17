@@ -517,6 +517,7 @@ export function CrmKanbanView({
     () =>
       contacts.filter(
         (contact) =>
+          contact.intake_visible !== false &&
           matchesCrmArchiveView(contact, archiveView) &&
           (scope === 'all' ||
             (scope === 'mine' && contact.owner_id === profile.id) ||
@@ -660,7 +661,7 @@ export function CrmKanbanView({
         <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <span>
             Teste ativo · amostra de até {workspace.config.history_limit} contatos anteriores a
-            13/11/2026
+            {workspace.config.cutoff.split('-').reverse().join('/')}
           </span>
           <span>
             {workspace.config.last_sync_at
@@ -725,6 +726,7 @@ export function CrmKanbanView({
                 {
                   contacts.filter(
                     (contact) =>
+                      contact.intake_visible !== false &&
                       matchesCrmArchiveView(contact, archiveView) &&
                       (value === 'all' ||
                         (value === 'mine' && contact.owner_id === profile.id) ||

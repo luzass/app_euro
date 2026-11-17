@@ -44,6 +44,7 @@ try {
   ])
     await db.query('insert into public.profiles values($1,$2,$3)', [uid(id), nome, role])
   await db.exec(sql)
+  await db.exec("update public.crm_kanban_config set cutoff='2026-11-13',include_history=true")
   const personaMigration = await readFile(
     new URL('../sql/crm_kanban_otimizar_persona.sql', import.meta.url),
     'utf8',

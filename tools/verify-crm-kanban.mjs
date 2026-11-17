@@ -93,7 +93,15 @@ try {
     calls.push({ name, data })
     let result
     if (name === 'crm_kanban_contacts')
-      result = rows.filter((row) => !seller || row.owner_id === 'seller-1' || !row.owner_id)
+      result = [
+        ...rows.filter((row) => !seller || row.owner_id === 'seller-1' || !row.owner_id),
+        {
+          ...rows[0],
+          id: 'outside-intake',
+          current_data: { ...rows[0].current_data, nome: 'Contato fora do recorte' },
+          intake_visible: false,
+        },
+      ]
     else if (name === 'crm_kanban_workspace')
       result = {
         members,
@@ -354,6 +362,12 @@ try {
   await page.goto('http://127.0.0.1:5191', { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.getByRole('heading', { name: 'CRM · Captação' }).waitFor()
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).waitFor()
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Abrir ficha de Contato fora do recorte', exact: true })
+      .count(),
+    0,
+  )
   await page.getByRole('button', { name: 'Motivos de desistência', exact: true }).click()
   const reasonManager = page.getByRole('dialog', { name: 'Motivos de desistência', exact: true })
   await reasonManager.getByRole('button', { name: 'Novo motivo', exact: true }).click()

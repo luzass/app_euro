@@ -8,6 +8,7 @@ import {
 import { crmReminders, type CrmReminderBase } from './crmWorkflow.ts'
 
 export interface BiContact extends CrmReminderBase {
+  intake_visible?: boolean
   owner_id: string | null
   has_inscription: boolean
   test_only: boolean
@@ -173,13 +174,13 @@ export function buildCrmManagement(snapshot: BiSnapshot, filters: BiFilters) {
   const base = contacts.filter((c) => attributes(c.current_data, c)),
     baseIds = new Set(base.map((c) => c.id))
   const scoped = base.filter((c) => ownerMatch(c.owner_id))
-  const active = scoped.filter((c) => !c.archived && !c.loss_data)
+  const active = scoped.filter((c) => c.intake_visible !== false && !c.archived && !c.loss_data)
   const stock = {
     active,
     leads: active.filter((c) => !c.has_inscription && !c.official_enrollment),
     inscriptions: active.filter((c) => c.has_inscription && !c.official_enrollment),
     enrolled: active.filter((c) => c.official_enrollment),
-    lost: scoped.filter((c) => c.loss_data),
+    lost: scoped.filter((c) => c.intake_visible !== false && c.loss_data),
   }
   const validEntry = (c: BiContact) =>
     c.entry_basis === 'event' || (filters.includeTests && c.test_only)
@@ -379,7 +380,9 @@ export function buildCrmManagement(snapshot: BiSnapshot, filters: BiFilters) {
     .filter((id) => ownerMatch(id === 'unassigned' ? null : id))
     .map((id) => {
       const owner = id === 'unassigned' ? null : id,
-        portfolio = base.filter((c) => c.owner_id === owner && !c.archived && !c.loss_data)
+        portfolio = base.filter(
+          (c) => c.intake_visible !== false && c.owner_id === owner && !c.archived && !c.loss_data,
+        )
       const sent = activities.filter((a) => a.author_id === id && a.direction === 'outbound'),
         received = activities.filter((a) => a.author_id === id && a.direction === 'inbound')
       const lateRows = crmReminders(portfolio, now).filter(

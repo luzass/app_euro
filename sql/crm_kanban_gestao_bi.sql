@@ -58,6 +58,7 @@ begin
     'contacts',(select coalesce(jsonb_agg(jsonb_build_object(
       'id',c.id,'owner_id',c.owner_id,'stage',c.stage,'archived',c.archived,'test_only',c.test_only,
       'has_inscription',c.has_inscription,'official_enrollment',c.official_enrollment,
+      'intake_visible',coalesce((to_jsonb(c)->>'intake_visible')::boolean,true),
       'current_data',jsonb_build_object('nome',c.current_data->>'nome','curso',c.current_data->>'curso','campus',c.current_data->>'campus','turno',c.current_data->>'turno','forma_ingresso',c.current_data->>'forma_ingresso'),
       'loss_data',c.loss_data-'note','created_at',c.created_at,'stage_entered_at',c.stage_entered_at,
       'next_action_at',c.next_action_at,'last_outreach_at',c.last_outreach_at,'last_response_at',c.last_response_at,'last_interaction_at',c.last_interaction_at,'checklist',c.checklist,

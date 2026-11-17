@@ -295,6 +295,28 @@ assert.equal(
   model.entries.length,
 )
 assert.equal(canAccessPath('/app/gestao-crm', 'captacao'), false)
+const hiddenHistory = buildCrmManagement(
+  {
+    ...data,
+    contacts: data.contacts.map((c) =>
+      c.id === 'lead-converted' ? { ...c, intake_visible: false } : c,
+    ),
+  },
+  biFilters,
+)
+assert.equal(
+  hiddenHistory.stock.active.some((c) => c.id === 'lead-converted'),
+  false,
+)
+assert.equal(
+  hiddenHistory.team.some((m) => m.portfolio.some((c) => c.id === 'lead-converted')),
+  false,
+)
+assert.equal(
+  hiddenHistory.cohortGroups[0].converted.some((c) => c.id === 'lead-converted'),
+  true,
+  'Hiding old intake must not erase historical conversion',
+)
 assert.equal(canAccessPath('/app/gestao-crm', 'reitoria'), true)
 assert.equal(
   getAllowedNavItems('captacao_gerente').some((n) => n.path === '/app/gestao-crm'),

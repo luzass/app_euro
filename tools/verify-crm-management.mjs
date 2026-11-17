@@ -44,6 +44,7 @@ try {
     }),
   )
   const fixture = managementFixture()
+  fixture.contacts.find((c) => c.id === 'lead-converted').intake_visible = false
   let missing = false
   await page.route('**/rest/v1/**', async (r) => {
     const name = new URL(r.request().url()).pathname.split('/').at(-1),
@@ -124,6 +125,21 @@ try {
   await page.getByRole('heading', { name: 'Conversão por entrada real' }).waitFor()
   assert.ok((await page.locator('table').nth(1).innerText()).includes('20%'))
   await page.screenshot({ path: 'outputs/crm-management-check/funil-desktop.png', fullPage: true })
+  await page.getByRole('button', { name: '1 · 20%', exact: true }).click()
+  await page.getByRole('link', { name: 'Abrir ficha', exact: true }).click()
+  await page.waitForURL('**/app/crm?contato=lead-converted')
+  await page
+    .getByRole('heading', { name: 'Candidato lead-converted', exact: true, level: 2 })
+    .waitFor()
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Abrir ficha de Candidato lead-converted', exact: true })
+      .count(),
+    0,
+    'Hidden contact remains available through history, not as a board card',
+  )
+  await page.goBack()
+  await page.getByRole('heading', { name: 'Conversão por entrada real' }).waitFor()
   await page.getByRole('button', { name: 'Equipe', exact: true }).click()
   await page.getByRole('heading', { name: 'Atendimento por responsável' }).waitFor()
   await page.getByRole('button', { name: 'Desistências', exact: true }).click()
