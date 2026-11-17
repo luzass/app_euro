@@ -43,6 +43,7 @@ import {
   X,
 } from 'lucide-react'
 import { useProfile } from '../hooks/useProfile'
+import { useSearchParams } from 'react-router-dom'
 import type { Profile } from '../lib/types'
 import {
   canEditCrm,
@@ -304,7 +305,13 @@ function Column({
   )
 }
 
-export function CrmKanbanView({ profile }: { profile: Profile }) {
+export function CrmKanbanView({
+  profile,
+  initialContactId = null,
+}: {
+  profile: Profile
+  initialContactId?: string | null
+}) {
   const manager = isCrmManager(profile)
   const [contacts, setContacts] = useState<CrmContact[]>([]),
     [workspace, setWorkspace] = useState<CrmWorkspace | null>(null)
@@ -321,7 +328,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
   const [showFilters, setShowFilters] = useState(false)
   const [archiveView, setArchiveView] = useState<CrmArchiveView>('active')
   const [managingReasons, setManagingReasons] = useState(false)
-  const [selectedId, setSelected] = useState<string | null>(null),
+  const [selectedId, setSelected] = useState<string | null>(initialContactId),
     [creating, setCreating] = useState(false)
   const [feedback, setFeedback] = useState<{ text: string; error: boolean } | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -1040,6 +1047,7 @@ export function CrmKanbanView({ profile }: { profile: Profile }) {
 
 export function CrmKanban() {
   const { profile, loading } = useProfile()
+  const [params] = useSearchParams()
   if (loading) return <Loading message="Validando acesso ao CRM…" />
   if (!profile)
     return (
@@ -1048,5 +1056,5 @@ export function CrmKanban() {
         description="Não foi possível identificar o usuário."
       />
     )
-  return <CrmKanbanView profile={profile} />
+  return <CrmKanbanView profile={profile} initialContactId={params.get('contato')} />
 }

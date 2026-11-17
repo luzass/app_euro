@@ -1,0 +1,349 @@
+.crm-bi {
+  max-width: 1600px;
+  margin: 0 auto;
+  color: #172033;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.crm-bi h1 {
+  font-size: 24px;
+  font-weight: 650;
+}
+.crm-bi h2,
+.crm-bi-dialog h2 {
+  font-size: 17px;
+  font-weight: 650;
+}
+.crm-bi h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.crm-bi-heading,
+.crm-bi-heading > div:last-child,
+.crm-bi-status,
+.crm-bi-chart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.crm-bi-heading p,
+.crm-bi-status,
+.crm-bi-note {
+  color: #62718a;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.crm-bi-heading {
+  padding-bottom: 24px;
+}
+.crm-bi-dates {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.crm-bi-dates > label:not(.crm-bi-tests) {
+  width: 160px;
+}
+.crm-bi label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  color: #475569;
+  min-width: 0;
+}
+.crm-bi select,
+.crm-bi input {
+  width: 100%;
+  min-width: 0;
+  border-radius: 6px;
+}
+.crm-bi-dates > select {
+  width: 195px;
+}
+.crm-bi label.crm-bi-tests {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  margin-left: auto;
+}
+.crm-bi-tests input {
+  width: 16px;
+  height: 16px;
+}
+.crm-bi-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.crm-bi-status {
+  justify-content: flex-start;
+  gap: 8px 24px;
+  padding: 16px 0;
+}
+.crm-bi-status strong {
+  color: #a16207;
+}
+.crm-bi-warning {
+  background: #fffbeb;
+  color: #92400e;
+  border-left: 3px solid #f59e0b;
+  padding: 12px;
+  margin: 12px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.crm-bi-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid #dce3ec;
+  overflow-x: auto;
+}
+.crm-bi-tabs button {
+  padding: 12px 0;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.crm-bi-tabs button[aria-current] {
+  color: #0369a1;
+  border-color: #0284c7;
+}
+.crm-bi-section {
+  padding: 24px 0;
+  border-bottom: 1px solid #dce3ec;
+}
+.crm-bi-note {
+  margin: 6px 0 16px;
+}
+.crm-bi-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.crm-bi-metric {
+  text-align: left;
+  display: grid;
+  grid-template-rows: minmax(34px, auto) auto minmax(32px, auto);
+  align-content: start;
+  position: relative;
+  min-height: 126px;
+  padding: 8px 22px 8px 12px;
+  border-left: 2px solid #cbd5e1;
+}
+.crm-bi-metric:hover {
+  background: #edf7fc;
+}
+.crm-bi-metric > span {
+  font-size: 12px;
+  color: #52627a;
+}
+.crm-bi-metric > strong {
+  font-size: 28px;
+  line-height: 1.25;
+  color: #0f172a;
+  font-weight: 650;
+}
+.crm-bi-metric small {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 6px;
+}
+.crm-bi-metric > svg {
+  position: absolute;
+  top: 12px;
+  right: 5px;
+  color: #64748b;
+}
+.crm-bi-alert {
+  border-color: #e7a33d;
+}
+.crm-bi-alert > strong {
+  color: #a4510a;
+}
+.crm-bi-chart-heading {
+  margin: 22px 0 14px;
+}
+.crm-bi-chart-heading select {
+  width: 125px;
+}
+.crm-bi-chart {
+  height: 280px;
+  width: 100%;
+  min-width: 0;
+}
+.crm-bi-table {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+.crm-bi-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+.crm-bi-table th,
+.crm-bi-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #e6edf3;
+  vertical-align: middle;
+  min-width: 95px;
+}
+.crm-bi-table th:first-child {
+  min-width: 190px;
+}
+.crm-bi-table thead th {
+  font-weight: 600;
+  color: #64748b;
+}
+.crm-bi-table tbody th {
+  font-weight: 500;
+}
+.crm-bi-table tbody tr:hover {
+  background: #f0f8fc;
+}
+.crm-bi-link {
+  color: #0369a1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-align: left;
+}
+.crm-bi-track {
+  height: 4px;
+  width: 130px;
+  margin-top: 8px;
+  background: #e8eef3;
+}
+.crm-bi-track span {
+  display: block;
+  height: 4px;
+}
+.crm-bi-method {
+  padding: 20px 0;
+  font-size: 12px;
+  color: #64748b;
+}
+.crm-bi-method summary {
+  cursor: pointer;
+  color: #334155;
+}
+.crm-bi-method p {
+  margin-top: 12px;
+  max-width: 1000px;
+  line-height: 1.7;
+}
+.crm-bi-dialog {
+  width: min(900px, calc(100vw - 24px));
+  max-height: calc(100dvh - 40px);
+  padding: 20px;
+  border: 1px solid #dce3ec;
+  border-radius: 8px;
+  color: #172033;
+}
+.crm-bi-dialog::backdrop {
+  background: #0f172a70;
+}
+.crm-bi-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.crm-bi-dialog header p,
+.crm-bi-dialog article p {
+  color: #64748b;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.crm-bi-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crm-bi-search input {
+  width: 100%;
+}
+.crm-bi-list {
+  margin-top: 12px;
+}
+.crm-bi-list article {
+  padding: 14px 0;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+.crm-bi-list article > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.crm-bi-list article > a {
+  flex-shrink: 0;
+}
+.crm-bi-dialog footer {
+  display: flex;
+  justify-content: end;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.crm-bi-dialog footer > span {
+  margin-right: auto;
+}
+.crm-bi button:focus-visible,
+.crm-bi a:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  .crm-bi-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .crm-bi-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .crm-bi-heading h1 {
+    font-size: 22px;
+  }
+  .crm-bi-dates > label:not(.crm-bi-tests) {
+    width: calc(50% - 6px);
+  }
+  .crm-bi label.crm-bi-tests {
+    margin-left: 0;
+  }
+  .crm-bi-dates > select {
+    width: 100%;
+  }
+  .crm-bi-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .crm-bi-metric {
+    padding-left: 8px;
+    min-height: 142px;
+  }
+  .crm-bi-metric > strong {
+    font-size: 25px;
+  }
+  .crm-bi-tabs {
+    gap: 20px;
+  }
+  .crm-bi-dialog {
+    padding: 14px;
+  }
+  .crm-bi-list article {
+    align-items: start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}

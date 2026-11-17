@@ -7,6 +7,7 @@ import {
   UserRoundPlus,
   Gauge,
   Kanban,
+  ChartNoAxesCombined,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
 
@@ -67,6 +68,12 @@ export const navItems: NavItem[] = [
     path: '/app/crm',
     icon: Kanban,
     allowedRoles: ['admin', 'reitoria', 'captacao', 'captacao_gerente', 'funcionario'],
+  },
+  {
+    title: 'Gestão do CRM',
+    path: '/app/gestao-crm',
+    icon: ChartNoAxesCombined,
+    allowedRoles: ['admin', 'reitoria', 'captacao_gerente'],
   },
   {
     title: 'Adicionar colaboradores',

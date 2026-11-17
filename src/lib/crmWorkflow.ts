@@ -33,10 +33,11 @@ export function crmAcademicProgress(contact: CrmContact, now: number) {
               : 'Inscrito · prova ou análise pendente',
   }
 }
-export function crmCadenceKey(contact: CrmContact, code: string) {
+type PhaseContact = Pick<CrmContact, 'stage' | 'stage_entered_at' | 'checklist'>
+export function crmCadenceKey(contact: PhaseContact, code: string) {
   return `cadence:${contact.stage}:${Date.parse(contact.stage_entered_at)}:${code}`
 }
-export const crmPauseKey = (contact: CrmContact) =>
+export const crmPauseKey = (contact: PhaseContact) =>
   `cadence-paused:${contact.stage}:${Date.parse(contact.stage_entered_at)}`
 export function crmScriptCode(stage: CrmStage, index: number) {
   return (
@@ -53,7 +54,7 @@ export function crmScriptCode(stage: CrmStage, index: number) {
     (index + 1)
   )
 }
-export function crmCadence(contact: CrmContact) {
+export function crmCadence(contact: PhaseContact) {
   const stage = crmStages.find((item) => item.id === contact.stage)!
   const anchor = Date.parse(contact.stage_entered_at)
   return stage.scripts.map((script, index) => {
@@ -67,17 +68,35 @@ export function crmCadence(contact: CrmContact) {
     }
   })
 }
-export interface CrmReminder {
+export type CrmReminderBase = Pick<
+  CrmContact,
+  | 'id'
+  | 'stage'
+  | 'stage_entered_at'
+  | 'archived'
+  | 'official_enrollment'
+  | 'checklist'
+  | 'next_action_at'
+  | 'last_interaction_at'
+  | 'last_outreach_at'
+  | 'last_response_at'
+  | 'created_at'
+  | 'current_data'
+> & { loss_data?: unknown }
+export interface CrmReminder<T = CrmContact> {
   id: string
-  contact: CrmContact
+  contact: T
   kind: 'cadence' | 'manual' | 'idle' | 'response'
   due: number
   label: string
   code?: string
 }
-export function crmReminders(contacts: CrmContact[], now: number): CrmReminder[] {
+export function crmReminders<T extends CrmReminderBase>(
+  contacts: T[],
+  now: number,
+): CrmReminder<T>[] {
   return contacts
-    .flatMap((contact): CrmReminder[] => {
+    .flatMap((contact): CrmReminder<T>[] => {
       if (
         contact.archived ||
         contact.loss_data ||
@@ -85,7 +104,7 @@ export function crmReminders(contacts: CrmContact[], now: number): CrmReminder[]
         contact.official_enrollment
       )
         return []
-      const result: CrmReminder[] = []
+      const result: CrmReminder<T>[] = []
       const manual = contact.next_action_at ? Date.parse(contact.next_action_at) : NaN
       if (Number.isFinite(manual))
         result.push({
