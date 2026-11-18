@@ -33,6 +33,10 @@ A consulta lê diretamente os cabeçalhos normalizados de matriculados. A versã
 
 Em uma instalação existente, publique primeiro a nova versão do aplicativo e depois execute `sql/crm_kanban_funil_cadencias.sql` no SQL Editor. O quadro antigo de seis colunas não exibe as novas etapas; não aplique esta migração mantendo somente a tela antiga em produção. Não precisa recriar os contatos nem repetir a carga das planilhas. A correção da persona é independente; execute também seu SQL se ainda estiver pendente. A instalação completa já inclui essas definições.
 
+## Documentação E Outra IES
+
+O cadastro inclui qualificação opcional de outra IES. A ficha tem a aba Documentação, com envios ao curso, recebimento da análise, histórico e prazos médios/medianos por curso. Em uma base existente, instale `sql/crm_kanban_documentacao.sql` depois do recorte de 15/11. Consulte `docs/crm-documentacao.md` para implantação e regras de cálculo.
+
 ## Funil
 
 Baseado em `Processo comercial Unieuro Central 5800.pdf`, página 1, e `Scripts Processo Comercial - UNIEURO.pdf`, páginas 1-3:

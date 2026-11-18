@@ -10,6 +10,16 @@ import type {
 export async function crmRpc<T>(name: string, parameters?: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Supabase não configurado.')
   const { data, error } = await supabase.rpc(name, parameters)
+  if (
+    error &&
+    ['crm_kanban_documents', 'crm_kanban_document_save', 'crm_kanban_document_cancel'].includes(
+      name,
+    ) &&
+    ['PGRST202', '42883', '42P01'].includes(error.code)
+  )
+    throw new Error(
+      'A atualização de Documentação ainda precisa ser instalada no Supabase: crm_kanban_documentacao.sql.',
+    )
   if (error && name === 'crm_kanban_bi_snapshot' && ['PGRST202', '42883'].includes(error.code))
     throw new Error(
       'A consulta da Gestão do CRM ainda precisa ser instalada no Supabase: crm_kanban_gestao_bi.sql.',

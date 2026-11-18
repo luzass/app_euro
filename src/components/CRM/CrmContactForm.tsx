@@ -43,6 +43,8 @@ export function CrmContactForm({
     Object.fromEntries([
       ...fields.map(([key]) => [key, initial[key] ?? '']),
       ['observacao', initial.observacao ?? ''],
+      ['ingressante_outra_ies', initial.ingressante_outra_ies ?? ''],
+      ['ies_origem', initial.ies_origem ?? ''],
     ]),
   )
   const [document, setDocument] = useState(cpf ?? '')
@@ -63,7 +65,12 @@ export function CrmContactForm({
           ? Object.fromEntries(
               Object.entries(data).filter(([key, value]) => (value ?? '') !== (initial[key] ?? '')),
             )
-          : data
+          : Object.fromEntries(
+              Object.entries(data).filter(
+                ([key, value]) =>
+                  !['ingressante_outra_ies', 'ies_origem'].includes(key) || Boolean(value),
+              ),
+            )
         try {
           await onSave(changes, digits, selectedOwner || null)
         } catch (e) {
@@ -101,6 +108,43 @@ export function CrmContactForm({
             />
           </label>
         ))}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block space-y-1 text-xs font-medium text-slate-600">
+          <span>Ingressante de outra IES · opcional</span>
+          <select
+            aria-label="Ingressante de outra IES"
+            className={crmInput}
+            value={data.ingressante_outra_ies ?? ''}
+            disabled={busy}
+            onChange={(event) =>
+              setData((current) => ({
+                ...current,
+                ingressante_outra_ies: event.target.value,
+                ...(event.target.value !== 'Sim' ? { ies_origem: '' } : {}),
+              }))
+            }
+          >
+            <option value="">Não informado</option>
+            <option>Sim</option>
+            <option>Não</option>
+          </select>
+        </label>
+        {data.ingressante_outra_ies === 'Sim' && (
+          <label className="block space-y-1 text-xs font-medium text-slate-600">
+            <span>IES de origem · opcional</span>
+            <input
+              aria-label="IES de origem"
+              className={crmInput}
+              value={data.ies_origem ?? ''}
+              maxLength={200}
+              disabled={busy}
+              onChange={(event) =>
+                setData((current) => ({ ...current, ies_origem: event.target.value }))
+              }
+            />
+          </label>
+        )}
       </div>
       {manager && (
         <label className="block space-y-1 text-xs font-medium text-slate-600">

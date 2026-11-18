@@ -35,6 +35,8 @@ import { activityDirections, crmAcademicProgress } from '../../lib/crmWorkflow'
 import { CrmFollowupPanel } from './CrmFollowupPanel'
 import { CrmLossPanel } from './CrmLossPanel'
 import { lossEvidence } from '../../lib/crmLoss'
+import { CrmDocumentsPanel } from './CrmDocumentsPanel'
+import type { CrmDocument } from '../../lib/crmDocuments'
 
 const stamp = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -63,11 +65,13 @@ const labels: Record<string, string> = {
   cidade: 'Cidade',
   estado: 'Estado',
   observacao: 'Observação',
+  ingressante_outra_ies: 'Ingressante de outra IES',
+  ies_origem: 'IES de origem',
   data_inscricao: 'Data da inscrição',
   etapa_atual: 'Etapa acadêmica',
   data_matricula: 'Data da matrícula',
 }
-const tabs = ['Dados', 'Atendimentos', 'Histórico', 'Persona', 'Origens'] as const
+const tabs = ['Dados', 'Atendimentos', 'Documentação', 'Histórico', 'Persona', 'Origens'] as const
 
 function EventContent({
   event,
@@ -77,6 +81,48 @@ function EventContent({
   members: CrmMember[]
 }) {
   const p = event.payload
+  if (['document_saved', 'document_cancelled'].includes(event.event_type)) {
+    const before = p.before as CrmDocument | null
+    const after = p.after as CrmDocument
+    return (
+      <div>
+        <strong>
+          {event.event_type === 'document_cancelled'
+            ? 'Envio cancelado'
+            : !before
+              ? 'Documentação enviada'
+              : !before.received_at && after.received_at
+                ? 'Retorno da análise recebido'
+                : 'Documentação corrigida'}
+        </strong>
+        <p className="mt-1 text-xs">
+          {after.course} · {after.description}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Envio: {stamp(after.sent_at)} · Retorno:{' '}
+          {after.received_at ? stamp(after.received_at) : 'Pendente'}
+        </p>
+        {p.reason ? (
+          <p className="mt-1 whitespace-pre-wrap break-words text-xs">Motivo: {String(p.reason)}</p>
+        ) : null}
+        {before && (
+          <details className="mt-1 text-xs text-slate-500">
+            <summary>Registro anterior</summary>
+            <p>
+              {before.course} · {before.description}
+            </p>
+            <p>
+              Envio: {stamp(before.sent_at)} · Retorno:{' '}
+              {before.received_at ? stamp(before.received_at) : 'Pendente'}
+            </p>
+            <p className="whitespace-pre-wrap break-words">
+              {before.note} {before.receipt_note}
+            </p>
+          </details>
+        )}
+      </div>
+    )
+  }
   if (event.event_type === 'stage')
     return (
       <span>
@@ -832,6 +878,15 @@ export function CrmContactDrawer({
                 )}
               </div>
             </div>
+          )}
+          {tab === 'Documentação' && (
+            <CrmDocumentsPanel
+              key={contact.id}
+              contact={contact}
+              editable={editable}
+              now={now}
+              onSaved={onContactUpdated}
+            />
           )}
           {tab === 'Histórico' && (
             <div className="space-y-4">
