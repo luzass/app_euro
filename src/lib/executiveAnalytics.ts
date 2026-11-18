@@ -60,9 +60,11 @@ export function countUniqueRows(rows: GenericRow[]) {
   return people.size
 }
 
-export function cohortOutcomes(data: CampaignData[], institutionData: CampaignData[], entry: string, target: string, currentPeriod: string) {
-  const entrants = [...activePeople(matriculasForPeriod(data, entry)).values()].filter((person) => person.type === 'calouro')
-  const index = indexRenewalRows(institutionData.map((source) => ({ period: source.period, rows: source.matriculados })))
+export type TransitionPopulation = 'all' | 'calouro' | 'veterano'
+
+function populationOutcomes(data: CampaignData[], institutionData: CampaignData[], entry: string, target: string, currentPeriod: string, population: TransitionPopulation, index: ReturnType<typeof indexRenewalRows>) {
+  const originPeople = [...activePeople(matriculasForPeriod(data, entry)).values()]
+  const entrants = originPeople.filter((person) => population === 'all' || person.type === population)
   const inScope = activePeople(matriculasForPeriod(data, target))
   const available = (period: string) => institutionData.some((source) => source.period === period && !source.matriculadosError) && Boolean([...index.periods.get(period)?.values() ?? []].some((enrollments) => enrollments.some((enrollment) => enrollment.hasContract)))
   const validRange = Boolean(academicPeriod(entry) && academicPeriod(target) && entry <= target && target <= currentPeriod)
@@ -97,5 +99,27 @@ export function cohortOutcomes(data: CampaignData[], institutionData: CampaignDa
     }
   }
   const reason = !validRange ? 'Escolha um período igual ou posterior à entrada da turma.' : !sourceAvailable || !destinationAvailable ? 'Base de entrada ou acompanhamento indisponível ou vazia.' : gaps.length ? `Há bases intermediárias indisponíveis ou vazias: ${gaps.join(', ')}.` : ''
-  return { total: entrants.length, activeInScope, activeElsewhere, likelyGraduates, notLocated, pending, unknownGraduation, reason, partial: target === currentPeriod }
+  return { total: entrants.length, activeInScope, activeElsewhere, likelyGraduates, notLocated, pending, unknownGraduation, unclassifiedType: originPeople.filter((person) => person.type === null).length, sourceAvailable, destinationAvailable, reason, partial: target === currentPeriod }
+}
+
+export function cohortOutcomes(data: CampaignData[], institutionData: CampaignData[], entry: string, target: string, currentPeriod: string) {
+  const index = indexRenewalRows(institutionData.map((source) => ({ period: source.period, rows: source.matriculados })))
+  return populationOutcomes(data, institutionData, entry, target, currentPeriod, 'calouro', index)
+}
+
+export function semesterTransitions(data: CampaignData[], institutionData: CampaignData[], currentPeriod: string, population: TransitionPopulation) {
+  const index = indexRenewalRows(institutionData.map((source) => ({ period: source.period, rows: source.matriculados })))
+  const origins = [...new Set(data.map((source) => academicPeriod(source.period)).filter(Boolean))]
+    .filter((period) => nextAcademicPeriod(period) <= currentPeriod).sort()
+  return origins.map((origin) => {
+    const destination = nextAcademicPeriod(origin)
+    const model = populationOutcomes(data, institutionData, origin, destination, currentPeriod, population, index)
+    const retained = model.activeInScope + model.activeElsewhere
+    const notActive = model.likelyGraduates + model.notLocated
+    const comparable = model.total > 0 && model.pending === 0 && !model.reason
+    return { ...model, origin, destination, retained, notActive, comparable,
+      absenceRate: comparable ? notActive / model.total : null,
+      otherAbsenceRate: comparable ? model.notLocated / model.total : null,
+    }
+  })
 }

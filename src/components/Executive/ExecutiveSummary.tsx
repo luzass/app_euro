@@ -6,10 +6,13 @@ import type { CampaignData } from '../../lib/campaignForecast'
 import { formatNumberBR } from '../../lib/formatters'
 import { titleize } from '../../lib/dashboardHelpers'
 import { CohortOutcomesPanel } from './CohortOutcomesPanel'
+import { SemesterTransitionsPanel } from './SemesterTransitionsPanel'
+import { CheckboxFilter } from '../UI/CheckboxFilter'
+import type { FilterSelection } from '../../lib/profileFilters'
 
 const percent = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 }).format(value)
 
-export function ExecutiveSummary({ data, institutionData = data, currentPeriod }: { data: CampaignData[]; institutionData?: CampaignData[]; currentPeriod: string }) {
+export function ExecutiveSummary({ data, institutionData = data, currentPeriod, courseFilter }: { data: CampaignData[]; institutionData?: CampaignData[]; currentPeriod: string; courseFilter?: { options: string[]; selected: FilterSelection; onChange: (selection: FilterSelection) => void } }) {
   const analysis = useMemo(() => executiveOverview(data, currentPeriod), [data, currentPeriod])
   const failures = data.filter((item) => item.matriculadosError)
   const current = data.find((item) => item.period === currentPeriod)
@@ -61,7 +64,7 @@ export function ExecutiveSummary({ data, institutionData = data, currentPeriod }
       </div>
     </section>
     <section className="space-y-3 border-t border-slate-200 pt-5">
-      <h2 className="text-lg font-semibold text-slate-950">Acompanhamento das turmas de entrada</h2>
+      <div className="flex flex-wrap items-end justify-between gap-4"><h2 className="text-lg font-semibold text-slate-950">Acompanhamento das turmas de entrada</h2>{courseFilter && <div className="w-full sm:w-72"><CheckboxFilter label="Curso do acompanhamento" options={courseFilter.options.map((value) => ({ value, label: value }))} selected={courseFilter.selected} onChange={courseFilter.onChange} /></div>}</div>
       <p className="text-xs text-slate-500">Calouros identificados no semestre de entrada e vínculos ativos localizados depois, dentro do recorte. O semestre atual é parcial; a ausência não comprova desistência ou conclusão.</p>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="p-3">Entrada</th><th className="p-3 text-right">Calouros</th>{data.map((item) => <th key={item.period} className="p-3 text-center">{item.period}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
         {analysis.cohorts.map((cohort) => <tr key={cohort.period}><th scope="row" className="p-3 font-medium">{cohort.period}</th><td className="p-3 text-right">{formatNumberBR(cohort.entrants)}</td>{data.map((item) => {
@@ -71,6 +74,7 @@ export function ExecutiveSummary({ data, institutionData = data, currentPeriod }
         })}</tr>)}
       </tbody></table></div>
       <CohortOutcomesPanel data={data} institutionData={institutionData} currentPeriod={currentPeriod} />
+      <SemesterTransitionsPanel data={data} institutionData={institutionData} currentPeriod={currentPeriod} />
     </section>
     <p className="text-xs leading-5 text-slate-500">Entradas sem vínculo anterior significam primeira aparição na janela de dados, não necessariamente primeiro ingresso na instituição. Crescimento e permanência se referem ao recorte selecionado. A regra de conclusão é uma aproximação de 10º período ou 12º em Medicina.</p>
   </div>
