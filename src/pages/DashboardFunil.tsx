@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, SlidersHorizontal, X } from 'lucide-react'
+import { RefreshCw, X } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -17,19 +17,17 @@ import { Loading } from '../components/UI/Loading'
 import { MedicineToggle } from '../components/UI/MedicineToggle'
 import { cpfKey, isMedicine } from '../lib/campaignData'
 import {
-  filterFunnelCohort,
-  linkFunnelLeads,
+  analyzeLeadFunnel,
+  funnelStatusColors,
   type FunnelChartKey as FunilChartKey,
   type FunnelSelections as FunilChartSelections,
   type FunnelRow as CombinedRow,
 } from '../lib/funnelCohort'
 import {
   fetchAllRows,
-  getUniqueCpfCount,
-  matchesStudentType,
   normalizeCampus,
   normalizeIngresso,
-  normalizeText,
+  resolveStudentType,
   pickText,
   titleize,
   type GenericRow,
@@ -62,86 +60,20 @@ const activeFunnelPeriod = '2027.1'
 
 const initialChartSelections: FunilChartSelections = {
   origin: [],
+  status: [],
   curso: [],
   campus: [],
   processo: [],
   turno: [],
 }
 
-function buildCpfSet(rows: GenericRow[]) {
-  const cpfs = new Set<string>()
 
-  rows.forEach((row) => {
-    const cpf = cpfKey(row)
-
-    if (cpf) {
-      cpfs.add(cpf)
-    }
-  })
-
-  return cpfs
-}
-
-function buildMergedCpfSet(...sets: Set<string>[]) {
-  const merged = new Set<string>()
-
-  sets.forEach((set) => {
-    set.forEach((cpf) => merged.add(cpf))
-  })
-
-  return merged
-}
-
-function matchesActiveFunnelPeriod(row: GenericRow) {
-  const periodText = normalizeText(
-    pickText(row, [
-      'ano_semestre',
-      'anoSemestre',
-      'periodo_letivo',
-      'periodoLetivo',
-      'semestre',
-      'ANO/SEMESTRE',
-      'PERIODO LETIVO',
-      'SEMESTRE',
-    ]),
-  )
-  const compactPeriod = periodText.replace(/\D/g, '')
-  const activeCompactPeriod = activeFunnelPeriod.replace(/\D/g, '')
-
-  return periodText.includes(activeFunnelPeriod) || compactPeriod === activeCompactPeriod
-}
-
-function countUniqueCpfBy(
-  rows: CombinedRow[],
-  getLabel: (row: CombinedRow) => string,
-  options: { includeEmpty?: boolean } = {},
-) {
-  const includeEmpty = options.includeEmpty ?? false
-  const totals = new Map<string, Set<string>>()
-
-  rows.forEach((row, index) => {
-    const label = getLabel(row).trim() || 'Não informado'
-
-    if (!includeEmpty && label === 'Não informado') {
-      return
-    }
-
-    if (!totals.has(label)) {
-      totals.set(label, new Set<string>())
-    }
-
-    totals.get(label)?.add(row.cpf || `${label}-${index}`)
-  })
-
-  return Array.from(totals, ([label, cpfs]) => ({ label, value: cpfs.size })).sort(
-    (a, b) => b.value - a.value,
-  )
-}
-
-function mapLead(row: GenericRow): CombinedRow {
+function mapLead(row: GenericRow, index: number): CombinedRow {
   return {
     origin: 'Lead',
     cpf: cpfKey(row),
+    leadId: row.id == null ? `row:${index}` : `id:${row.id}`,
+    studentType: resolveStudentType(row),
     curso: titleize(pickText(row, ['curso', 'Curso'])),
     campus: normalizeCampus(pickText(row, ['campus', 'Campus'])),
     turno: titleize(pickText(row, ['turno', 'Turno', 'TURNO'])),
@@ -160,6 +92,7 @@ function mapInscrito(row: GenericRow): CombinedRow {
   return {
     origin: 'Inscrito',
     cpf: cpfKey(row),
+    studentType: resolveStudentType(row),
     curso: titleize(pickText(row, ['curso'])),
     campus: normalizeCampus(pickText(row, ['campus'])),
     turno: titleize(pickText(row, ['turno'])),
@@ -171,6 +104,7 @@ function mapMatriculado(row: GenericRow): CombinedRow {
   return {
     origin: 'Matriculado',
     cpf: cpfKey(row),
+    studentType: resolveStudentType(row),
     curso: titleize(pickText(row, ['curso'])),
     campus: normalizeCampus(pickText(row, ['filial', 'campus'])),
     turno: titleize(pickText(row, ['turno'])),
@@ -184,12 +118,14 @@ function ChartCard({
   chartKey,
   selectedValues,
   onSelect,
+  colors,
 }: {
   title: string
   data: Array<{ label: string; value: number }>
   chartKey: FunilChartKey
   selectedValues: string[]
   onSelect: (chartKey: FunilChartKey, label: string, event?: unknown) => void
+  colors?: Record<string, string>
 }) {
   const chartHeight = Math.max(240, data.length * 34)
   const hasSelection = selectedValues.length > 0
@@ -233,7 +169,7 @@ function ChartCard({
                   return (
                     <Cell
                       key={row.label}
-                      fill={!hasSelection || selected ? '#0ea5e9' : '#cbd5e1'}
+                      fill={!hasSelection || selected ? (colors?.[row.label] ?? '#0ea5e9') : '#cbd5e1'}
                     />
                   )
                 })}
@@ -261,7 +197,6 @@ function ChartCard({
 
 export function DashboardFunil() {
   const [state, setState] = useState<FunilState>(initialState)
-  const [onlyTraffic, setOnlyTraffic] = useState(false)
   const [includeMedicine, setIncludeMedicine] = useState(true)
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [chartSelections, setChartSelections] =
@@ -312,69 +247,12 @@ export function DashboardFunil() {
     void loadData()
   }, [])
 
-  const analysis = useMemo(() => {
-    const inCourseScope = (row: GenericRow) => includeMedicine || !isMedicine(row)
-    const leads = state.leads.filter(inCourseScope)
-    const inscritos = state.inscritos.filter(inCourseScope)
-    const matriculados = state.matriculados.filter(inCourseScope)
-    const inscritosCpfSet = buildCpfSet(inscritos)
-    const matriculadosCpfSet = buildCpfSet(matriculados)
-    const activePeriodCpfSet = buildMergedCpfSet(inscritosCpfSet, matriculadosCpfSet)
-    const periodFilteredLeads = leads.filter((row) => {
-      const cpf = cpfKey(row)
-
-      return matchesActiveFunnelPeriod(row) || Boolean(cpf && activePeriodCpfSet.has(cpf))
-    })
-    const leadCpfSet = buildCpfSet(periodFilteredLeads)
-    const typeFilteredLeads = periodFilteredLeads.filter((row) =>
-      matchesStudentType(row, studentTypeFilter),
-    )
-    const typeFilteredInscritos = inscritos.filter((row) =>
-      matchesStudentType(row, studentTypeFilter),
-    )
-    const typeFilteredMatriculados = matriculados.filter((row) =>
-      matchesStudentType(row, studentTypeFilter),
-    )
-    const filteredInscritos = onlyTraffic
-      ? typeFilteredInscritos.filter((row) => leadCpfSet.has(cpfKey(row)))
-      : typeFilteredInscritos
-    const filteredMatriculados = onlyTraffic
-      ? typeFilteredMatriculados.filter((row) => leadCpfSet.has(cpfKey(row)))
-      : typeFilteredMatriculados
-
-    const combinedRowsBase = linkFunnelLeads([
-      ...typeFilteredLeads.map(mapLead),
-      ...filteredInscritos.map(mapInscrito),
-      ...filteredMatriculados.map(mapMatriculado),
-    ])
-    const combinedRows = filterFunnelCohort(combinedRowsBase, chartSelections)
-
-    return {
-      leadsCount: getUniqueCpfCount(
-        combinedRows.filter((row) => row.origin === 'Lead').map((row) => ({ cpf: row.cpf })),
-      ),
-      inscritosCount: getUniqueCpfCount(
-        combinedRows.filter((row) => row.origin === 'Inscrito').map((row) => ({ cpf: row.cpf })),
-      ),
-      matriculadosCount: getUniqueCpfCount(
-        combinedRows
-          .filter((row) => row.origin === 'Matriculado')
-          .map((row) => ({ cpf: row.cpf })),
-      ),
-      courseData: countUniqueCpfBy(combinedRows, (row) => row.curso),
-      campusData: countUniqueCpfBy(combinedRows, (row) => row.campus),
-      processoData: countUniqueCpfBy(combinedRows, (row) => row.processo),
-      turnoData: countUniqueCpfBy(combinedRows, (row) => row.turno),
-      sourceData: countUniqueCpfBy(combinedRows, (row) => row.origin, { includeEmpty: true }),
-    }
-  }, [
-    chartSelections,
-    onlyTraffic,
-    includeMedicine,
-    state.inscritos,
-    state.leads,
-    state.matriculados,
-    studentTypeFilter,
+  const analysis = useMemo(() => analyzeLeadFunnel([
+    ...state.leads.map(mapLead),
+    ...state.inscritos.map(mapInscrito),
+    ...state.matriculados.map(mapMatriculado),
+  ], chartSelections, { includeMedicine, studentType: studentTypeFilter }), [
+    chartSelections, includeMedicine, state.leads, state.inscritos, state.matriculados, studentTypeFilter,
   ])
 
   const handleChartSelect = (chartKey: FunilChartKey, label: string, event?: unknown) => {
@@ -392,6 +270,7 @@ export function DashboardFunil() {
 
       return {
         ...currentSelections,
+        ...(chartKey === 'origin' ? { status: [] } : chartKey === 'status' ? { origin: [] } : {}),
         [chartKey]: nextValues,
       }
     })
@@ -428,8 +307,9 @@ export function DashboardFunil() {
               Dashboard - Funil
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Leitura geral do processo seletivo {activeFunnelPeriod}
+              Funil de leads
             </h1>
+            <p className="mt-2 text-sm text-slate-500">Base completa de leads · Inscrições e matrículas {activeFunnelPeriod}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -465,18 +345,6 @@ export function DashboardFunil() {
             ))}
             <button
               type="button"
-              onClick={() => setOnlyTraffic((current) => !current)}
-              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                onlyTraffic
-                  ? 'border-slate-950 bg-slate-950 text-white'
-                  : 'border-slate-200 bg-white text-slate-700'
-              }`}
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Somente tráfego pago
-            </button>
-            <button
-              type="button"
               onClick={() => setChartSelections(initialChartSelections)}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
             >
@@ -495,42 +363,49 @@ export function DashboardFunil() {
       </section>
 
       <div className="flex min-h-8 items-center gap-2 text-sm text-slate-600" role="status">
-        <span>Grupo: {chartSelections.origin.length
+        <span>Grupo: {chartSelections.status.length ? chartSelections.status.join(' + ') : chartSelections.origin.length
           ? chartSelections.origin.map(origin => ({ Lead: 'Leads', Inscrito: 'Inscritos', Matriculado: 'Matriculados' })[origin as 'Lead' | 'Inscrito' | 'Matriculado']).join(' + ')
-          : 'Geral'}</span>
-        {chartSelections.origin.length > 0 && (
+          : 'Todos os leads'}</span>
+        {(chartSelections.origin.length > 0 || chartSelections.status.length > 0) && (
           <button type="button" title="Limpar grupo acompanhado" aria-label="Limpar grupo acompanhado"
             className="rounded p-1 hover:bg-slate-100"
-            onClick={() => setChartSelections(current => ({ ...current, origin: [] }))}>
+            onClick={() => setChartSelections(current => ({ ...current, origin: [], status: [] }))}>
             <X size={16} />
           </button>
         )}
       </div>
+      {analysis.unknownCpfCount > 0 && <p role="status" className="text-sm text-amber-800">
+        {formatNumberBR(analysis.unknownCpfCount)} leads sem CPF válido para cruzamento.
+      </p>}
+      {analysis.enrollmentWithoutInscription > 0 && <p role="status" className="text-sm text-amber-800">
+        {formatNumberBR(analysis.enrollmentWithoutInscription)} leads com matrícula e sem inscrição localizada no recorte.
+      </p>}
 
       <section className="grid gap-4 md:grid-cols-3">
         {([
-          { origin: 'Lead', title: 'Leads', value: analysis.leadsCount },
-          { origin: 'Inscrito', title: 'Inscritos', value: analysis.inscritosCount },
-          { origin: 'Matriculado', title: 'Matriculados', value: analysis.matriculadosCount },
+          { origin: 'Lead', title: 'Leads', value: analysis.leadsCount, helper: 'Total de leads no recorte' },
+          { origin: 'Inscrito', title: 'Inscritos', value: analysis.inscritosCount, helper: 'Desses leads, com inscrição, incluindo matriculados' },
+          { origin: 'Matriculado', title: 'Matriculados', value: analysis.matriculadosCount, helper: 'Desses leads, com registro na base de matrículas' },
         ] as const).map(item => (
           <button key={item.origin} type="button" aria-label={'Acompanhar ' + item.title.toLowerCase()}
             aria-pressed={chartSelections.origin.includes(item.origin)}
             title={'Acompanhar ' + item.title.toLowerCase()}
             onClick={event => handleChartSelect('origin', item.origin, event)}
             className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600">
-            <KpiCard title={item.title} value={formatNumberBR(item.value)} helperText=""
-              emphasis={chartSelections.origin.includes(item.origin) || !chartSelections.origin.length && item.origin === 'Lead' ? 'primary' : 'neutral'} />
+            <KpiCard title={item.title} value={formatNumberBR(item.value)} helperText={item.helper}
+              emphasis={chartSelections.origin.includes(item.origin) || !chartSelections.origin.length && !chartSelections.status.length && item.origin === 'Lead' ? 'primary' : 'neutral'} />
           </button>
         ))}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
         <ChartCard
-          title="Funil por origem"
+          title="Situação dos leads"
           data={analysis.sourceData}
-          chartKey="origin"
-          selectedValues={chartSelections.origin}
+          chartKey="status"
+          selectedValues={chartSelections.status}
           onSelect={handleChartSelect}
+          colors={funnelStatusColors}
         />
         <ChartCard
           title="Curso"

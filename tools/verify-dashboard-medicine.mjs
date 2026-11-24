@@ -53,7 +53,7 @@ try {
   await toggle().click()
   await total('Leads', 1); await total('Inscritos', 1); await total('Matriculados', 1)
   await page.waitForFunction(() => ![...document.querySelectorAll('.recharts-cartesian-axis-tick-value')].some((node) => node.textContent === 'Medicina'))
-  await page.getByRole('button', { name: 'Somente tráfego pago', exact: true }).click()
+  assert.equal(await page.getByRole('button', { name: 'Somente tráfego pago', exact: true }).count(), 0, 'Lead membership alone is not paid-traffic attribution')
   await total('Inscritos', 1); await total('Matriculados', 1)
   await page.getByRole('button', { name: 'Calouros', exact: true }).click()
   await total('Inscritos', 1); await total('Matriculados', 1)
@@ -102,5 +102,5 @@ try {
   await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth, { timeout: 5000 })
   await toggle().screenshot({ path: 'outputs/dashboard-medicine-check/historico-toggle-mobile.png' })
   assert.deepEqual(errors, [])
-  console.log('Medicine toggle: both dashboards, all totals/charts, paid traffic, student type, course selection reset, date cut, both semesters and mobile passed.')
+  console.log('Medicine toggle: both dashboards, lead-linked totals/charts, student type, course selection reset, date cut, both semesters and mobile passed.')
 } finally { if (browser) await browser.close(); server.kill() }

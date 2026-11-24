@@ -21,7 +21,7 @@ try {
   await page.route('**/src/main.tsx', r => r.fulfill({ contentType: 'application/javascript', body: "import '/tools/dashboard-medicine-preview-entry.tsx'" }))
   const cpf = n => String(n).padStart(11, '0')
   const inscription = n => ({ cpf: cpf(n), curso: n <= 6 ? 'Direito' : 'Enfermagem', campus: n <= 6 ? 'Asa Sul' : 'Águas Claras', turno: n <= 6 ? 'Noturno' : 'Matutino', forma_de_ingresso: 'Vestibular', ano_semestre: '2027.1' })
-  const leads = Array.from({ length: 50 }, (_, i) => ({ cpf: cpf(i + 1), ano_semestre: '2027.1' }))
+  const leads = Array.from({ length: 50 }, (_, i) => ({ id: i + 1, cpf: cpf(i + 1), ...(i % 2 ? { ano_semestre: '2026.1' } : {}) }))
   leads.push({ ...leads[0], cpf: '000.000.000-01' })
   const inscriptions = [...Array.from({ length: 12 }, (_, i) => inscription(i + 1)), ...[101, 102, 103].map(inscription), inscription(1)]
   let enrollmentCount = 4
@@ -40,7 +40,7 @@ try {
   const clickBar = async (title, label) => {
     const section = chart(title)
     await page.waitForTimeout(1700)
-    const tick = await section.locator('.recharts-cartesian-axis-tick').filter({ hasText: new RegExp('^' + label + '$') }).boundingBox()
+    const tick = await section.locator('.recharts-cartesian-axis-tick').filter({ hasText: new RegExp('^' + label.split(/\s+/).join('\\s*') + '$') }).boundingBox()
     assert.ok(tick)
     const bars = section.locator('.recharts-bar-rectangle')
     let closest = 0, distance = Infinity
@@ -51,13 +51,26 @@ try {
     }
     await bars.nth(closest).click()
   }
-  await page.goto('http://127.0.0.1:5197/')
-  await totals(50, 15, 5)
+  await page.goto('http://127.0.0.1:5197/', { timeout: 60000, waitUntil: 'domcontentloaded' })
+  await totals(50, 12, 4)
   await page.getByRole('button', { name: 'Acompanhar leads', exact: true }).focus()
   await page.keyboard.press('Enter')
   await totals(50, 12, 4)
   await page.getByRole('status').filter({ hasText: 'Grupo: Leads' }).waitFor()
-  assert.equal(await chart('Funil por origem').locator('.recharts-bar-rectangle').count(), 3)
+  assert.equal(await chart('Situação dos leads').locator('.recharts-bar-rectangle').count(), 3)
+  assert.deepEqual(await chart('Situação dos leads').locator('.recharts-label-list text').allTextContents(), ['38', '8', '4'])
+  await clickBar('Situação dos leads', 'Não inscritos')
+  await totals(38, 0, 0)
+  await chart('Curso').locator('.recharts-cartesian-axis-tick').filter({ hasText: /^Não informado$/ }).waitFor()
+  await page.getByRole('button', { name: 'Limpar gráficos', exact: true }).click()
+  await totals(50, 12, 4)
+  await clickBar('Situação dos leads', 'Inscritos sem matrícula')
+  await totals(8, 8, 0)
+  await page.getByRole('button', { name: 'Acompanhar matriculados', exact: true }).click()
+  await totals(4, 4, 4)
+  await page.getByRole('button', { name: 'Acompanhar inscritos', exact: true }).click()
+  await totals(12, 12, 4)
+  await page.getByRole('button', { name: 'Limpar gráficos', exact: true }).click()
   await chart('Curso').locator('.recharts-cartesian-axis-tick').filter({ hasText: /^Direito$/ }).waitFor()
   await chart('Curso').locator('.recharts-cartesian-axis-tick').filter({ hasText: /^Enfermagem$/ }).waitFor()
   await clickBar('Curso', 'Enfermagem')
@@ -65,13 +78,11 @@ try {
   await chart('Campus').locator('.recharts-cartesian-axis-tick').filter({ hasText: /^Águas Claras$/ }).waitFor()
   await chart('Turno').locator('.recharts-cartesian-axis-tick').filter({ hasText: /^Matutino$/ }).waitFor()
   await page.getByRole('button', { name: 'Limpar gráficos', exact: true }).click()
-  await totals(50, 15, 5)
-  await clickBar('Funil por origem', 'Lead')
   await totals(50, 12, 4)
-  await clickBar('Funil por origem', 'Inscrito')
-  await totals(12, 15, 5)
+  await clickBar('Situação dos leads', 'Matriculados')
+  await totals(4, 4, 4)
   await page.getByRole('button', { name: 'Limpar grupo acompanhado', exact: true }).click()
-  await totals(50, 15, 5)
+  await totals(50, 12, 4)
   await page.getByRole('button', { name: 'Acompanhar leads', exact: true }).click()
   await totals(50, 12, 4)
   assert.equal(calls.length, 3, 'All selection changes use already-loaded data, without additional requests')
@@ -81,7 +92,7 @@ try {
   assert.equal(calls.length, 6)
   const output = resolve('outputs/funnel-cohort-check'); await mkdir(output, { recursive: true })
   const checkBars = async () => {
-    for (const title of ['Funil por origem', 'Curso', 'Campus', 'Processo seletivo', 'Turno']) {
+    for (const title of ['Situação dos leads', 'Curso', 'Campus', 'Processo seletivo', 'Turno']) {
       const section = chart(title), svg = await section.locator('.recharts-surface').boundingBox()
       assert.ok(svg)
       for (const bar of await section.locator('.recharts-bar-rectangle').all()) {
@@ -100,5 +111,5 @@ try {
   await checkBars()
   await page.screenshot({ path: resolve(output, 'leads-mobile.png'), fullPage: true })
   assert.deepEqual(errors, [])
-  console.log('PASS: keyboard/click KPI cohort, origin bars retain all stages, linked course/campus/shift charts, duplicate CPFs, unrelated registrations excluded, course filtering, cohort switching/clearing, no extra filter requests, manual refresh and desktop/mobile overflow checks.')
+  console.log('PASS: complete lead base including no semester/older periods, CPF intersection KPIs, exclusive lead statuses, KPI versus status filtering, linked attributes, duplicates, unrelated registrations excluded, no extra filter requests, manual refresh and desktop/mobile bars/overflow checks.')
 } finally { if (browser) await browser.close(); server.kill() }
