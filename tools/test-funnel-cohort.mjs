@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { analyzeLeadFunnel, funnelLeadCutoff, funnelLeadDay, scopeFunnelLeadsByDate } from '../src/lib/funnelCohort.ts'
+import { analyzeLeadFunnel, analyzeFunnelOverview, funnelLeadCutoff, funnelLeadDay, scopeFunnelLeadsByDate } from '../src/lib/funnelCohort.ts'
 const cpf = n => String(n).padStart(11, '0')
 const row = (origin, id, fields = {}) => ({ origin, cpf: cpf(id), curso: 'Não informado', campus: 'Não informado', processo: 'Não informado', turno: 'Não informado', studentType: 'calouro', ...fields })
 const selections = fields => ({ origin: [], status: [], curso: [], campus: [], processo: [], turno: [], ...fields })
@@ -21,6 +21,11 @@ const run = (filters = {}, opts = options, source = data) => analyzeLeadFunnel(s
 const counts = model => [model.leadsCount, model.inscritosCount, model.matriculadosCount]
 const stages = model => Object.fromEntries(model.sourceData.map(row => [row.label, row.value]))
 const all = run()
+const overview = analyzeFunnelOverview(data, selections({}), options)
+assert.deepEqual(counts(overview), [5, 3, 3], 'General view includes inscriptions/enrollments whose CPFs are absent from leads')
+assert.deepEqual(overview.sourceData, [{ label: 'Lead', value: 5 }, { label: 'Inscrito', value: 3 }, { label: 'Matriculado', value: 3 }])
+assert.deepEqual(counts(analyzeFunnelOverview(data, selections({ curso: ['Medicina'] }), options)), [1, 1, 1], 'General course filter keeps the independent non-lead academic records')
+assert.deepEqual(counts(analyzeFunnelOverview(data, selections({ origin: ['Inscrito'] }), options)), [0, 3, 0])
 assert.deepEqual(counts(all), [5, 2, 2], 'All lead records are eligible, not only matched inscriptions')
 assert.deepEqual(stages(all), { 'Não inscritos': 2, 'Inscritos sem matrícula': 1, Matriculados: 2 })
 assert.equal(all.sourceData.reduce((sum, row) => sum + row.value, 0), all.leadsCount)
@@ -90,4 +95,9 @@ const datedModel = run({}, options, [
   ]),
 ])
 assert.deepEqual(counts(datedModel), [3, 1, 1], 'Only the lead date is scoped; academic dates never apply this cutoff and never rescue old/undated leads')
-console.log('PASS: lead-only cutoff from 15/11/2026 inclusive, BRT boundaries, date aliases, invalid-date quality, unchanged academic-date scope, CPF intersections and exclusive statuses, cumulative/dimension filters, duplicates, medical/student scope and source immutability.')
+const datedGeneral = analyzeFunnelOverview([
+  ...dated.rows.map(lead => row('Lead', lead.id)),
+  ...[1, 2, 3].flatMap(id => [row('Inscrito', id), row('Matriculado', id)]),
+], selections({}), options)
+assert.deepEqual(counts(datedGeneral), [3, 3, 3], 'Lead date eligibility never restricts general academic totals')
+console.log('PASS: general totals independent across three tables, separate lead-only intersections/statuses, lead cutoff/BRT/aliases, academic dates and unrelated registrations preserved in overview, filters, duplicates and source immutability.')

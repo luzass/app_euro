@@ -52,6 +52,11 @@ export interface FunnelRow {
   leadId?: string
   studentType?: 'calouro' | 'veterano'
 }
+interface FunnelOptions {
+  includeMedicine: boolean
+  studentType: 'all' | 'calouro' | 'veterano'
+}
+const identity = (row: FunnelRow) => row.cpf || `unmatched:${row.leadId}`
 
 export function linkFunnelLeads(rows: FunnelRow[]) {
   const inscriptions = new Map<string, FunnelRow[]>()
@@ -73,22 +78,55 @@ export function linkFunnelLeads(rows: FunnelRow[]) {
   })
 }
 
-export function analyzeLeadFunnel(
+function scopedFunnelRows(
   rows: FunnelRow[],
   selections: FunnelSelections,
-  options: { includeMedicine: boolean; studentType: 'all' | 'calouro' | 'veterano' },
+  options: FunnelOptions,
 ) {
   const linked = linkFunnelLeads(rows.map((row, index) => ({
     ...row,
     cpf: cpfKey({ cpf: row.cpf }),
     leadId: row.leadId ?? `row:${index}`,
   })))
-  const scoped = linked.filter(row =>
+  return linked.filter(row =>
     (options.includeMedicine || !isMedicine({ curso: row.curso })) &&
     (options.studentType === 'all' || row.studentType === options.studentType) &&
     (['curso', 'campus', 'processo', 'turno'] as const).every(key =>
       !selections[key].length || selections[key].includes(row[key])))
-  const identity = (row: FunnelRow) => row.cpf || `unmatched:${row.leadId}`
+}
+
+function dimensions(rows: FunnelRow[]) {
+  const byDimension = (field: 'curso' | 'campus' | 'processo' | 'turno') => {
+    const totals = new Map<string, Set<string>>()
+    for (const row of rows) {
+      const label = row[field] || 'Não informado'
+      const keys = totals.get(label) ?? new Set<string>()
+      keys.add(identity(row))
+      totals.set(label, keys)
+    }
+    return [...totals].map(([label, keys]) => ({ label, value: keys.size })).sort((a, b) => b.value - a.value)
+  }
+  return {
+    courseData: byDimension('curso'), campusData: byDimension('campus'),
+    processoData: byDimension('processo'), turnoData: byDimension('turno'),
+  }
+}
+
+export function analyzeFunnelOverview(rows: FunnelRow[], selections: FunnelSelections, options: FunnelOptions) {
+  const scoped = scopedFunnelRows(rows, selections, options).filter(row =>
+    !selections.origin.length || selections.origin.includes(row.origin))
+  const count = (origin: FunnelOrigin) => new Set(scoped.filter(row => row.origin === origin).map(identity)).size
+  return {
+    leadsCount: count('Lead'), inscritosCount: count('Inscrito'), matriculadosCount: count('Matriculado'),
+    unknownCpfCount: new Set(scoped.filter(row => row.origin === 'Lead' && !row.cpf).map(identity)).size,
+    enrollmentWithoutInscription: 0,
+    sourceData: (['Lead', 'Inscrito', 'Matriculado'] as const).map(label => ({ label, value: count(label) })).sort((a, b) => b.value - a.value),
+    ...dimensions(scoped),
+  }
+}
+
+export function analyzeLeadFunnel(rows: FunnelRow[], selections: FunnelSelections, options: FunnelOptions) {
+  const scoped = scopedFunnelRows(rows, selections, options)
   const leads = scoped.filter(row => row.origin === 'Lead')
   const people = new Map(leads.map(row => [identity(row), row]))
   const inscriptions = new Set(scoped.filter(row => row.origin === 'Inscrito' && row.cpf && people.has(row.cpf)).map(row => row.cpf))
@@ -108,16 +146,6 @@ export function analyzeLeadFunnel(
     value: [...selected].filter(key => statusFor(key, people.get(key)!) === label).length,
   })).filter(row => row.label !== funnelStatuses[3] || row.value > 0)
   const chartRows = leads.filter(row => selected.has(identity(row)))
-  const byDimension = (field: 'curso' | 'campus' | 'processo' | 'turno') => {
-    const totals = new Map<string, Set<string>>()
-    for (const row of chartRows) {
-      const label = row[field] || 'Não informado'
-      const keys = totals.get(label) ?? new Set<string>()
-      keys.add(identity(row))
-      totals.set(label, keys)
-    }
-    return [...totals].map(([label, keys]) => ({ label, value: keys.size })).sort((a, b) => b.value - a.value)
-  }
   return {
     leadsCount: selected.size,
     inscritosCount: matchedCount(inscriptions),
@@ -125,7 +153,6 @@ export function analyzeLeadFunnel(
     unknownCpfCount: [...selected].filter(key => !people.get(key)!.cpf).length,
     enrollmentWithoutInscription: [...selected].filter(key => enrollments.has(key) && !inscriptions.has(key)).length,
     sourceData: statusData,
-    courseData: byDimension('curso'), campusData: byDimension('campus'),
-    processoData: byDimension('processo'), turnoData: byDimension('turno'),
+    ...dimensions(chartRows),
   }
 }

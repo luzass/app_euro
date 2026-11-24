@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, RefreshCw, X } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -18,6 +18,7 @@ import { MedicineToggle } from '../components/UI/MedicineToggle'
 import { cpfKey, isMedicine } from '../lib/campaignData'
 import {
   analyzeLeadFunnel,
+  analyzeFunnelOverview,
   funnelStatusColors,
   scopeFunnelLeadsByDate,
   type FunnelChartKey as FunilChartKey,
@@ -198,6 +199,7 @@ function ChartCard({
 
 export function DashboardFunil() {
   const [state, setState] = useState<FunilState>(initialState)
+  const [leadMode, setLeadMode] = useState(false)
   const [includeMedicine, setIncludeMedicine] = useState(true)
   const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [chartSelections, setChartSelections] =
@@ -249,15 +251,20 @@ export function DashboardFunil() {
   }, [])
 
   const leadDateScope = useMemo(() => scopeFunnelLeadsByDate(state.leads), [state.leads])
-  const analysis = useMemo(() => analyzeLeadFunnel([
+  const analysis = useMemo(() => (leadMode ? analyzeLeadFunnel : analyzeFunnelOverview)([
     ...leadDateScope.rows.map(mapLead),
     ...state.inscritos.map(mapInscrito),
     ...state.matriculados.map(mapMatriculado),
   ], chartSelections, { includeMedicine, studentType: studentTypeFilter }), [
-    chartSelections, includeMedicine, leadDateScope.rows, state.inscritos, state.matriculados, studentTypeFilter,
+    chartSelections, leadMode, includeMedicine, leadDateScope.rows, state.inscritos, state.matriculados, studentTypeFilter,
   ])
 
   const handleChartSelect = (chartKey: FunilChartKey, label: string, event?: unknown) => {
+    if (chartKey === 'origin' && label === 'Lead') {
+      setLeadMode(true)
+      setChartSelections(current => ({ ...current, origin: [], status: [] }))
+      return
+    }
     const nativeEvent = event as { ctrlKey?: boolean; metaKey?: boolean } | undefined
     const additive = Boolean(nativeEvent?.ctrlKey || nativeEvent?.metaKey)
 
@@ -309,12 +316,19 @@ export function DashboardFunil() {
               Dashboard - Funil
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Funil de leads
+              {leadMode ? 'Funil de leads' : `Visão geral do processo seletivo ${activeFunnelPeriod}`}
             </h1>
             <p className="mt-2 text-sm text-slate-500">Leads desde 15/11/2026 · Inscrições e matrículas {activeFunnelPeriod}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
+            {leadMode && <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+              onClick={() => {
+                setLeadMode(false)
+                setChartSelections(current => ({ ...current, origin: [], status: [] }))
+              }}>
+              <ArrowLeft size={16} /> Visão geral
+            </button>}
             <MedicineToggle
               checked={includeMedicine}
               onChange={(checked) => {
@@ -347,7 +361,10 @@ export function DashboardFunil() {
             ))}
             <button
               type="button"
-              onClick={() => setChartSelections(initialChartSelections)}
+              onClick={() => {
+                setChartSelections(initialChartSelections)
+                setLeadMode(false)
+              }}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
             >
               Limpar gráficos
@@ -365,13 +382,16 @@ export function DashboardFunil() {
       </section>
 
       <div className="flex min-h-8 items-center gap-2 text-sm text-slate-600" role="status">
-        <span>Grupo: {chartSelections.status.length ? chartSelections.status.join(' + ') : chartSelections.origin.length
-          ? chartSelections.origin.map(origin => ({ Lead: 'Leads', Inscrito: 'Inscritos', Matriculado: 'Matriculados' })[origin as 'Lead' | 'Inscrito' | 'Matriculado']).join(' + ')
-          : 'Todos os leads'}</span>
-        {(chartSelections.origin.length > 0 || chartSelections.status.length > 0) && (
+        <span>Visão: {leadMode ? 'Leads' : 'Geral'}{chartSelections.status.length ? ' · ' + chartSelections.status.join(' + ') : chartSelections.origin.length
+          ? ' · ' + chartSelections.origin.map(origin => ({ Lead: 'Leads', Inscrito: 'Inscritos', Matriculado: 'Matriculados' })[origin as 'Lead' | 'Inscrito' | 'Matriculado']).join(' + ')
+          : ''}</span>
+        {(leadMode || chartSelections.origin.length > 0 || chartSelections.status.length > 0) && (
           <button type="button" title="Limpar grupo acompanhado" aria-label="Limpar grupo acompanhado"
             className="rounded p-1 hover:bg-slate-100"
-            onClick={() => setChartSelections(current => ({ ...current, origin: [], status: [] }))}>
+            onClick={() => {
+              setLeadMode(false)
+              setChartSelections(current => ({ ...current, origin: [], status: [] }))
+            }}>
             <X size={16} />
           </button>
         )}
@@ -389,28 +409,28 @@ export function DashboardFunil() {
       <section className="grid gap-4 md:grid-cols-3">
         {([
           { origin: 'Lead', title: 'Leads', value: analysis.leadsCount, helper: 'Total de leads no recorte' },
-          { origin: 'Inscrito', title: 'Inscritos', value: analysis.inscritosCount, helper: 'Desses leads, com inscrição, incluindo matriculados' },
-          { origin: 'Matriculado', title: 'Matriculados', value: analysis.matriculadosCount, helper: 'Desses leads, com registro na base de matrículas' },
+          { origin: 'Inscrito', title: 'Inscritos', value: analysis.inscritosCount, helper: leadMode ? 'Desses leads, com inscrição, incluindo matriculados' : `Total da base de inscritos ${activeFunnelPeriod}` },
+          { origin: 'Matriculado', title: 'Matriculados', value: analysis.matriculadosCount, helper: leadMode ? 'Desses leads, com registro na base de matrículas' : `Total da base de matriculados ${activeFunnelPeriod}` },
         ] as const).map(item => (
           <button key={item.origin} type="button" aria-label={'Acompanhar ' + item.title.toLowerCase()}
-            aria-pressed={chartSelections.origin.includes(item.origin)}
+            aria-pressed={item.origin === 'Lead' ? leadMode : chartSelections.origin.includes(item.origin)}
             title={'Acompanhar ' + item.title.toLowerCase()}
             onClick={event => handleChartSelect('origin', item.origin, event)}
             className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600">
             <KpiCard title={item.title} value={formatNumberBR(item.value)} helperText={item.helper}
-              emphasis={chartSelections.origin.includes(item.origin) || !chartSelections.origin.length && !chartSelections.status.length && item.origin === 'Lead' ? 'primary' : 'neutral'} />
+              emphasis={chartSelections.origin.includes(item.origin) || leadMode && !chartSelections.origin.length && !chartSelections.status.length && item.origin === 'Lead' ? 'primary' : 'neutral'} />
           </button>
         ))}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
         <ChartCard
-          title="Situação dos leads"
+          title={leadMode ? 'Situação dos leads' : 'Funil por origem'}
           data={analysis.sourceData}
-          chartKey="status"
-          selectedValues={chartSelections.status}
+          chartKey={leadMode ? 'status' : 'origin'}
+          selectedValues={leadMode ? chartSelections.status : chartSelections.origin}
           onSelect={handleChartSelect}
-          colors={funnelStatusColors}
+          colors={leadMode ? funnelStatusColors : undefined}
         />
         <ChartCard
           title="Curso"

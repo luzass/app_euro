@@ -1,13 +1,25 @@
-# Dashboard Funil: leads desde 15/11/2026
+# Dashboard Funil: visao geral e filtro de leads
 
 ## Retangulos
 
-Leads conta a base leads_cursos cadastrada desde 15/11/2026, inclusive, sem exigir
-ano_semestre nem correspondencia academica. Inscritos e Matriculados contam somente
-os CPFs desses leads encontrados nas respectivas tabelas de 2027.1, nunca candidatos
-que existem apenas nas bases academicas. O corte de 15/11 NAO e aplicado as datas
-de inscricao ou matricula. Filtros de curso, campus, ingresso, turno, Medicina,
-tipo de aluno e grupo continuam aplicados ao recorte analitico.
+A pagina abre na visao Geral. Leads conta leads_cursos desde 15/11/2026, inclusive,
+sem exigir ano_semestre ou correspondencia academica. Inscritos conta TODOS os CPFs
+de inscritos_20271 e Matriculados TODOS os CPFs de matriculados_20271 dentro dos
+filtros escolhidos, inclusive quem nao aparece em leads_cursos ou tem lead anterior
+ao corte. O grafico Funil por origem mostra os totais independentes dessas tres bases.
+
+Clicar no retangulo Leads ou na barra Lead ativa uma visao separada. So nessa visao,
+Inscritos e Matriculados contam a intersecao de CPF com os leads elegiveis. O grafico
+muda para Situacao dos leads, com os estados exclusivos descritos abaixo. Os textos
+dos indicadores tambem mudam para deixar claro quando se referem a esses leads.
+
+Visao geral, limpar o grupo ou Limpar graficos sai da visao de leads e restaura os
+registros academicos que nao pertencem a esse grupo. Os dois primeiros preservam os
+filtros de dimensao; Limpar graficos remove esses filtros tambem. Um filtro por curso
+na visao geral continua considerando as tres bases, sem restringi-las a leads.
+
+O corte de 15/11 NAO e aplicado as datas de inscricao ou matricula. Filtros de curso,
+campus, ingresso, turno, Medicina e tipo de aluno continuam aplicados ao recorte.
 
 ## Corte exclusivo dos leads
 
@@ -27,7 +39,7 @@ CRM e nao altera tabelas, sincronizacao ou permissoes. Nao ha corte final adicio
 O indicador Inscritos e cumulativo: inclui quem possui inscricao e ja se matriculou.
 Uma matricula sem inscricao localizada conta como matricula, sem inventar inscricao.
 
-## Grafico sem sobreposicao
+## Grafico sem sobreposicao na visao de leads
 
 A situacao de cada lead tem prioridade:
 
@@ -48,7 +60,7 @@ Clicar em uma barra seleciona somente aquele grupo e atualiza os retangulos e os
 outros graficos. Os retangulos permitem acompanhar o total, inscritos cumulativos
 ou matriculados; mudar entre retangulo e situacao limpa a outra selecao para nao
 produzir uma intersecao acidental. Limpar o grupo conserva os filtros dimensionais;
-Limpar graficos remove todos os filtros dos graficos.
+Limpar graficos remove todos os filtros dos graficos e volta a visao Geral.
 
 ## Dimensoes e limites
 
@@ -70,10 +82,13 @@ publicar o frontend para ativar em producao.
 ## Verificacao
 
 - tools/test-funnel-cohort.mjs: corte somente de leads, limite inclusivo em Brasilia,
+  totais gerais independentes e distintos dos totais do filtro de leads,
   datas/aliases invalidos, registros academicos anteriores preservados, intersecoes CPF,
   estados exclusivos, soma dos grupos, filtros cumulativos/dimensionais, duplicatas,
   Medicina, tipo de aluno, matricula sem inscricao e identidade pendente.
 - tools/verify-funnel-cohort.mjs: leads recentes sem semestre/com semestre antigo,
+  abertura em Geral, entrada via card/barra Lead, retorno/limpeza restaurando todos
+  os inscritos e matriculados e capturas das duas visoes em desktop/mobile,
   exclusao de leads antigos/sem data apesar de inscricao e matricula, retangulos,
   cliques nas tres situacoes, cursos e filtros, ausencia de consultas extras,
   atualizacao e captura desktop/mobile com dados ficticios.
