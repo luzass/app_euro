@@ -4,7 +4,7 @@
 
 1. Execute **SQL - CRM Kanban Unieuro: estrutura, histórico e permissões** (`sql/crm_kanban_estrutura.sql`) no SQL Editor do projeto correto. Cria somente tabelas/funções `crm_kanban_*`; não escreve nas fontes existentes.
 2. Habilite `pg_cron` em Database / Extensions. Execute **SQL - Sincronizar e agendar o CRM Kanban a cada 10 minutos** (`sql/crm_kanban_sincronizar_agendar.sql`). O agendamento usa nome fixo e pode ser atualizado sem criar jobs duplicados. Sem a extensão, o script para com aviso explícito; o botão Sincronizar continua disponível para gestores.
-3. Publique o aplicativo e acesse `/app/crm`. Não é necessário alterar os fluxos n8n que já atualizam inscritos/matriculados/leads: a rotina lê essas fontes, e a página consulta o CRM a cada 30 segundos enquanto visível.
+3. Publique o aplicativo e acesse `/app/crm`. Não é necessário alterar os fluxos n8n que já atualizam inscritos/matriculados/leads: a rotina lê essas fontes, e a página consulta o CRM a cada 5 minutos enquanto visível. Recuperar o foco antes de 5 minutos desde a ultima leitura nao dispara outra consulta; o botao Atualizar e as acoes do atendente continuam imediatos. O relogio local dos lembretes continua a cada minuto, sem consulta ao banco. O agendamento de sincronizacao das fontes continua separado, a cada 10 minutos.
 
 Os SQLs não foram executados no Supabase real durante o desenvolvimento. A validação foi feita em PostgreSQL local isolado e com dados fictícios no navegador.
 

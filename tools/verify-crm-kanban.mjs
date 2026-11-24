@@ -37,6 +37,7 @@ try {
     output = resolve('outputs/crm-check'),
     errors = [],
     calls = []
+  await page.clock.install()
   await mkdir(output, { recursive: true })
   page.on('pageerror', (error) => errors.push(error.message))
   page.setDefaultTimeout(45000)
@@ -362,6 +363,21 @@ try {
   await page.goto('http://127.0.0.1:5191', { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.getByRole('heading', { name: 'CRM · Captação' }).waitFor()
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).waitFor()
+  const reads = () => calls.filter((call) => call.name === 'crm_kanban_contacts').length
+  const baselineReads = reads()
+  await page.clock.fastForward(4 * 60000)
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.waitForTimeout(100)
+  assert.equal(reads(), baselineReads, 'Kanban must not poll after 30 seconds or on early focus')
+  await page.clock.fastForward(61000)
+  for (let n = 0; n < 60 && reads() < baselineReads + 1; n++) await page.waitForTimeout(50)
+  assert.equal(reads(), baselineReads + 1, 'Kanban refreshes at five minutes')
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.waitForTimeout(100)
+  assert.equal(reads(), baselineReads + 1)
+  await page.getByRole('button', { name: 'Atualizar quadro', exact: true }).click()
+  for (let n = 0; n < 60 && reads() < baselineReads + 2; n++) await page.waitForTimeout(50)
+  assert.equal(reads(), baselineReads + 2, 'Manual board refresh is immediate')
   assert.equal(
     await page
       .getByRole('button', { name: 'Abrir ficha de Contato fora do recorte', exact: true })

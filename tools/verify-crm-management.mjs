@@ -109,6 +109,30 @@ try {
   })
   await page.goto('http://127.0.0.1:5192/app/gestao-crm?de=2026-11-13&ate=2026-11-17')
   await page.getByRole('heading', { name: 'Carteira atual', exact: true }).waitFor()
+  const biCalls = () => calls.filter((c) => c.name === 'crm_kanban_bi_snapshot').length
+  const waitForBiCalls = async (expected) => {
+    for (let n = 0; n < 80 && biCalls() < expected; n++) await page.waitForTimeout(50)
+    assert.equal(biCalls(), expected)
+    await page.waitForFunction(
+      () => !document.querySelector('button[aria-label="Atualizar indicadores"]')?.disabled,
+    )
+  }
+  const initialCalls = biCalls()
+  await page.clock.fastForward(5 * 60000)
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.waitForTimeout(100)
+  assert.equal(
+    biCalls(),
+    initialCalls,
+    'BI must not refresh every minute or on focus with a valid cache',
+  )
+  await page.getByRole('button', { name: 'Atualizar indicadores', exact: true }).click()
+  await waitForBiCalls(initialCalls + 1)
+  await page.clock.fastForward(23 * 60 * 60000)
+  await page.waitForTimeout(100)
+  assert.equal(biCalls(), initialCalls + 1, 'Manual refresh restarts the 24h deadline')
+  await page.clock.fastForward(60 * 60000 + 1000)
+  await waitForBiCalls(initialCalls + 2)
   assert.ok((await page.locator('.recharts-line-curve').count()) >= 3, 'Trend must render')
   await mkdir('outputs/crm-management-check', { recursive: true })
   await page.screenshot({ path: 'outputs/crm-management-check/resumo-desktop.png', fullPage: true })
@@ -120,6 +144,11 @@ try {
   await page.getByRole('heading', { name: 'Candidato claimed', exact: true, level: 2 }).waitFor()
   await page.goBack()
   await page.getByRole('heading', { name: 'Carteira atual', exact: true }).waitFor()
+  assert.equal(
+    biCalls(),
+    initialCalls + 2,
+    'Returning from the Kanban reuses the same session snapshot',
+  )
   assert.ok(page.url().includes('de=2026-11-13'))
   await page.getByRole('button', { name: 'Funil', exact: true }).click()
   await page.getByRole('heading', { name: 'Conversão por entrada real' }).waitFor()
@@ -185,7 +214,7 @@ try {
   await page.getByRole('alert').filter({ hasText: 'crm_kanban_gestao_bi.sql' }).waitFor()
   assert.deepEqual(errors, [])
   console.log(
-    'CRM management browser: four views, shared filters, drilldowns, deep link, test toggle, mobile, role gate and missing migration passed.',
+    'CRM management browser: 24h refresh, manual bypass, cache on navigation, four views, filters, drilldowns, mobile, role gate and missing migration passed.',
   )
 } finally {
   if (browser) await browser.close()

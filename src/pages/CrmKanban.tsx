@@ -72,6 +72,7 @@ import { matchesCrmArchiveView, type CrmArchiveView } from '../lib/crmLoss'
 import { CrmLossReasonManager } from '../components/CRM/CrmLossReasonManager'
 import { Loading } from '../components/UI/Loading'
 import { EmptyState } from '../components/UI/EmptyState'
+import { CRM_KANBAN_REFRESH } from '../lib/crmManagementCache'
 
 type Scope = 'mine' | 'unassigned' | 'all'
 const shortDate = (value: string) =>
@@ -335,6 +336,7 @@ export function CrmKanbanView({
   const [now, setNow] = useState(Date.now)
   const dragging = useRef(false),
     pending = useRef(false),
+    lastLoadAt = useRef(0),
     snapshot = useRef<CrmContact[]>([]),
     contactsRef = useRef(contacts)
   const board = useRef<HTMLDivElement>(null),
@@ -375,6 +377,7 @@ export function CrmKanbanView({
   const load = useCallback(async () => {
     if (pending.current || dragging.current) return
     pending.current = true
+    lastLoadAt.current = Date.now()
     try {
       const [rows, ws] = await Promise.all([loadCrmContacts(), loadCrmWorkspace()])
       if (!dragging.current) {
@@ -401,8 +404,10 @@ export function CrmKanbanView({
     const initial = window.setTimeout(() => void load(), 0)
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void load()
-    }, 30000)
-    const focus = () => void load()
+    }, CRM_KANBAN_REFRESH)
+    const focus = () => {
+      if (Date.now() - lastLoadAt.current >= CRM_KANBAN_REFRESH) void load()
+    }
     window.addEventListener('focus', focus)
     return () => {
       clearTimeout(initial)
@@ -601,6 +606,16 @@ export function CrmKanbanView({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={crmButton + ' !p-2'}
+            title="Atualizar quadro"
+            aria-label="Atualizar quadro"
+            disabled={busy || loading}
+            onClick={() => void load()}
+          >
+            <RefreshCw size={16} />
+          </button>
           {manager && (
             <button
               type="button"

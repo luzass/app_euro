@@ -27,6 +27,7 @@ import {
   type BiSnapshot,
 } from '../lib/crmManagement'
 import { loadCrmManagement } from '../lib/crmManagementApi'
+import type { CrmManagementCacheEntry } from '../lib/crmManagementCache'
 import { crmButton, crmInput } from '../components/CRM/CrmContactForm'
 import './GestaoCrm.css'
 
@@ -211,12 +212,16 @@ export function CrmManagementView({ profile }: { profile: Profile }) {
     tab: tabs.find((t) => t === params.get('aba')) || 'Resumo',
   }
   const { from, to, includeTests } = filters
-  const [snapshot, setSnapshot] = useState<BiSnapshot | null>(null),
+  const [snapshot, setSnapshot] = useState<(CrmManagementCacheEntry & { scope: string }) | null>(
+      null,
+    ),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0)
+  const forceRefresh = useRef(false)
   const [list, setList] = useState<{ title: string; rows: BiListRow[] } | null>(null)
   const allowed = isCrmManager(profile)
+  const scope = `${profile.id}:${profile.role}`
   const valid =
     /^\d{4}-\d{2}-\d{2}$/.test(from) &&
     /^\d{4}-\d{2}-\d{2}$/.test(to) &&
@@ -232,10 +237,12 @@ export function CrmManagementView({ profile }: { profile: Profile }) {
         if (cancelled) return null
         setBusy(true)
         setError('')
-        return loadCrmManagement(from, to, includeTests)
+        const force = forceRefresh.current
+        forceRefresh.current = false
+        return loadCrmManagement(scope, from, to, includeTests, force)
       })
       .then((data) => {
-        if (!cancelled && data) setSnapshot(data)
+        if (!cancelled && data) setSnapshot({ ...data, scope })
       })
       .catch((e: unknown) => {
         if (!cancelled)
@@ -247,26 +254,41 @@ export function CrmManagementView({ profile }: { profile: Profile }) {
     return () => {
       cancelled = true
     }
-  }, [allowed, valid, from, to, includeTests, refresh])
+  }, [allowed, valid, scope, from, to, includeTests, refresh])
+  const currentSnapshot = snapshot?.scope === scope ? snapshot : null
+  const expiresAt =
+    currentSnapshot &&
+    currentSnapshot.data.from === from &&
+    currentSnapshot.data.to === to &&
+    currentSnapshot.data.include_tests === includeTests
+      ? currentSnapshot.expiresAt
+      : null
   useEffect(() => {
+    if (!allowed || !valid) return
     const update = () => {
-      if (document.visibilityState === 'visible') setRefresh((n) => n + 1)
+      if (document.visibilityState === 'visible' && expiresAt !== null && Date.now() >= expiresAt) {
+        setRefresh((n) => n + 1)
+      }
     }
-    const timer = window.setInterval(update, 60000)
+    const timer =
+      expiresAt === null
+        ? undefined
+        : window.setTimeout(update, Math.max(0, expiresAt - Date.now()))
     window.addEventListener('focus', update)
     return () => {
-      clearInterval(timer)
+      clearTimeout(timer)
       window.removeEventListener('focus', update)
     }
-  }, [])
+  }, [allowed, valid, expiresAt])
+  const data = currentSnapshot?.data
   const usable =
-    snapshot &&
-    snapshot.from === from &&
-    snapshot.to === to &&
-    snapshot.include_tests === includeTests &&
+    data &&
+    data.from === from &&
+    data.to === to &&
+    data.include_tests === includeTests &&
     valid &&
     !error
-      ? snapshot
+      ? data
       : null
   const model = usable ? buildCrmManagement(usable, filters) : null
   const change = (values: Record<string, string>) => {
@@ -308,7 +330,10 @@ export function CrmManagementView({ profile }: { profile: Profile }) {
             title="Atualizar indicadores"
             aria-label="Atualizar indicadores"
             disabled={busy}
-            onClick={() => setRefresh((n) => n + 1)}
+            onClick={() => {
+              forceRefresh.current = true
+              setRefresh((n) => n + 1)
+            }}
           >
             <RefreshCw size={17} className={busy ? 'animate-spin' : ''} />
           </button>
@@ -456,6 +481,10 @@ export function CrmManagementView({ profile }: { profile: Profile }) {
           </div>
           <div className="crm-bi-status">
             <span>Estoque atual · {date(usable.generated_at)}</span>
+            <span>
+              Próxima atualização automática ·{' '}
+              {date(expiresAt ? new Date(expiresAt).toISOString() : null)}
+            </span>
             <span>Última sincronização de origem · {date(usable.sync?.at)}</span>
             {includeTests && <strong>Inclui testes</strong>}
           </div>

@@ -17,7 +17,11 @@ A migracao pressupoe estrutura, funil/cadencias e motivos de desistencia ja inst
 - Equipe: carteira atual, contatos e respostas registrados, candidatos contatados, pendencias, confirmacoes observadas e encerramentos.
 - Desistencias: episodios e pessoas distintas, motivos informados pelo candidato separados da percepcao do atendente e reaberturas.
 
-Filtros compartilhados: datas, responsavel, curso, campus, ingresso e origem de entrada. Testes ficam excluidos por padrao; podem ser incluidos explicitamente. Listas abertas pelos indicadores permitem buscar candidatos e acessar a ficha completa. Filtros e aba permanecem na URL ao voltar da ficha. Atualizacao automatica a cada minuto enquanto a pagina estiver visivel e ao retornar para ela.
+Filtros compartilhados: datas, responsavel, curso, campus, ingresso e origem de entrada. Testes ficam excluidos por padrao; podem ser incluidos explicitamente. Listas abertas pelos indicadores permitem buscar candidatos e acessar a ficha completa. Filtros e aba permanecem na URL ao voltar da ficha.
+
+O BI reutiliza o resultado por ate 24 horas na mesma sessao da aplicacao. A atualizacao automatica acontece ao vencer esse prazo com a pagina visivel, ou ao retornar a janela depois do vencimento. O botao Atualizar indicadores ignora o cache e reinicia o prazo apos uma leitura bem-sucedida. Voltar da ficha, trocar de aba do BI ou recuperar o foco antes do vencimento nao recalcula os dados no banco.
+
+O cache e somente em memoria, separado por usuario/perfil, periodo e inclusao de testes, com ate oito consultas recentes. Logout, troca de usuario ou perfil removem os resultados anteriores; respostas atrasadas nao repovoam o cache depois da limpeza. Nao grava dados de candidatos em localStorage/IndexedDB. Recarregar o navegador, abrir outra aba ou consultar um periodo ainda nao armazenado exige uma nova leitura. Nao e um cache compartilhado no Supabase nem um job diario global. A tela informa a data da base e a proxima atualizacao automatica. Esta alteracao nao exige SQL novo.
 
 ## Criterios
 
@@ -37,6 +41,7 @@ Filtros compartilhados: datas, responsavel, curso, campus, ingresso e origem de 
 ## Verificacao local
 
 - `node tools/test-crm-management.mjs`
+- `node tools/test-crm-refresh-cache.mjs`
 - `node tools/test-crm-management-sql.mjs <caminho-do-pglite>`
 - `node tools/verify-crm-management.mjs <pasta-de-pacotes-com-playwright>`
 - `node tools/test-crm-workflow.mjs`

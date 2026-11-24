@@ -7,6 +7,7 @@ import {
   type PropsWithChildren,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
+import { clearCrmManagementCache } from '../lib/crmManagementApi'
 import {
   isSupabaseConfigured,
   normalizeSupabaseError,
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     let isMounted = true
+    let cacheUserId: string | null = null
 
     supabase.auth
       .getSession()
@@ -59,7 +61,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const nextUserId = nextSession?.user.id ?? null
+      if (event === 'SIGNED_OUT' || event === 'USER_UPDATED' || nextUserId !== cacheUserId) {
+        clearCrmManagementCache()
+      }
+      cacheUserId = nextUserId
       setSession(nextSession)
       setUser(nextSession?.user ?? null)
       setLoading(false)
@@ -99,6 +106,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return
         }
 
+        clearCrmManagementCache()
         const { error } = await supabase.auth.signOut()
 
         if (error) {
