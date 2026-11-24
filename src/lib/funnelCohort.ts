@@ -1,4 +1,36 @@
-import { cpfKey, isMedicine } from './campaignData.ts'
+import { cpfKey, dateDay, isMedicine } from './campaignData.ts'
+import { profileField } from './studentProfile.ts'
+import type { GenericRow } from './dashboardHelpers'
+
+export const funnelLeadCutoff = '2026-11-15'
+const leadCalendar = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+})
+
+export function funnelLeadDay(value: unknown) {
+  const text = String(value ?? '').trim()
+  const day = dateDay(text)
+  if (day === null) return null
+  if (/^\d{4}-\d{2}-\d{2}[T ].*(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    const instant = new Date(text)
+    if (!Number.isFinite(instant.getTime())) return null
+    const parts = leadCalendar.formatToParts(instant)
+    return ['year', 'month', 'day'].map(type => parts.find(part => part.type === type)!.value).join('-')
+  }
+  return new Date(day * 86400000).toISOString().slice(0, 10)
+}
+
+export function scopeFunnelLeadsByDate<T extends GenericRow>(rows: T[], cutoff = funnelLeadCutoff) {
+  const eligible: T[] = []
+  let excludedBefore = 0, missingOrInvalidDates = 0
+  for (const row of rows) {
+    const day = funnelLeadDay(profileField(row, 'created_at', 'data_criacao', 'data'))
+    if (!day) missingOrInvalidDates++
+    else if (day < cutoff) excludedBefore++
+    else eligible.push(row)
+  }
+  return { rows: eligible, excludedBefore, missingOrInvalidDates }
+}
 
 export type FunnelOrigin = 'Lead' | 'Inscrito' | 'Matriculado'
 export type FunnelChartKey = 'origin' | 'status' | 'curso' | 'campus' | 'processo' | 'turno'

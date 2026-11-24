@@ -20,16 +20,21 @@ try {
   await page.route('https://fonts.gstatic.com/**', r => r.abort())
   await page.route('**/src/main.tsx', r => r.fulfill({ contentType: 'application/javascript', body: "import '/tools/dashboard-medicine-preview-entry.tsx'" }))
   const cpf = n => String(n).padStart(11, '0')
-  const inscription = n => ({ cpf: cpf(n), curso: n <= 6 ? 'Direito' : 'Enfermagem', campus: n <= 6 ? 'Asa Sul' : 'Águas Claras', turno: n <= 6 ? 'Noturno' : 'Matutino', forma_de_ingresso: 'Vestibular', ano_semestre: '2027.1' })
-  const leads = Array.from({ length: 50 }, (_, i) => ({ id: i + 1, cpf: cpf(i + 1), ...(i % 2 ? { ano_semestre: '2026.1' } : {}) }))
+  const inscription = n => ({ cpf: cpf(n), curso: n <= 6 ? 'Direito' : 'Enfermagem', campus: n <= 6 ? 'Asa Sul' : 'Águas Claras', turno: n <= 6 ? 'Noturno' : 'Matutino', forma_de_ingresso: 'Vestibular', ano_semestre: '2027.1', data_inscricao: '01/11/2026', data_de_matricula: '02/11/2026' })
+  const leads = Array.from({ length: 50 }, (_, i) => ({ id: i + 1, cpf: cpf(i + 1), created_at: '2026-11-15T03:00:00Z', ...(i % 2 ? { ano_semestre: '2026.1' } : {}) }))
   leads.push({ ...leads[0], cpf: '000.000.000-01' })
-  const inscriptions = [...Array.from({ length: 12 }, (_, i) => inscription(i + 1)), ...[101, 102, 103].map(inscription), inscription(1)]
+  leads.push(
+    { id: 51, cpf: cpf(51), created_at: '2026-11-15T02:59:59Z' },
+    { id: 52, cpf: cpf(52), created_at: '' },
+    { id: 53, cpf: cpf(53), created_at: 'invalid' },
+  )
+  const inscriptions = [...Array.from({ length: 12 }, (_, i) => inscription(i + 1)), ...[51, 52, 53, 101, 102, 103].map(inscription), inscription(1)]
   let enrollmentCount = 4
   await page.route('**/rest/v1/**', route => {
     const table = new URL(route.request().url()).pathname.split('/').at(-1)
     calls.push(table)
     assert.ok(['leads_cursos', 'inscritos_20271', 'matriculados_20271'].includes(table))
-    const enrolled = [...Array.from({ length: enrollmentCount }, (_, i) => inscription(i + 1)), inscription(101)].map(row => ({ ...row, filial: row.campus, tipo_de_ingresso: row.forma_de_ingresso, contrato: 'ATIVO', tipo_aluno: 'CALOURO', nivel_de_ensino: 'GRADUAÇÃO', periodo_letivo: '2027.1' }))
+    const enrolled = [...Array.from({ length: enrollmentCount }, (_, i) => inscription(i + 1)), ...[51, 52, 53, 101].map(inscription)].map(row => ({ ...row, filial: row.campus, tipo_de_ingresso: row.forma_de_ingresso, contrato: 'ATIVO', tipo_aluno: 'CALOURO', nivel_de_ensino: 'GRADUAÇÃO', periodo_letivo: '2027.1' }))
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(table === 'leads_cursos' ? leads : table === 'inscritos_20271' ? inscriptions : enrolled) })
   })
   const kpi = label => page.locator('article').filter({ has: page.getByText(label, { exact: true }) })
@@ -53,6 +58,8 @@ try {
   }
   await page.goto('http://127.0.0.1:5197/', { timeout: 60000, waitUntil: 'domcontentloaded' })
   await totals(50, 12, 4)
+  await page.getByText('Leads desde 15/11/2026 · Inscrições e matrículas 2027.1', { exact: true }).waitFor()
+  await page.getByRole('status').filter({ hasText: '2 cadastros de lead sem data válida' }).waitFor()
   await page.getByRole('button', { name: 'Acompanhar leads', exact: true }).focus()
   await page.keyboard.press('Enter')
   await totals(50, 12, 4)
@@ -111,5 +118,5 @@ try {
   await checkBars()
   await page.screenshot({ path: resolve(output, 'leads-mobile.png'), fullPage: true })
   assert.deepEqual(errors, [])
-  console.log('PASS: complete lead base including no semester/older periods, CPF intersection KPIs, exclusive lead statuses, KPI versus status filtering, linked attributes, duplicates, unrelated registrations excluded, no extra filter requests, manual refresh and desktop/mobile bars/overflow checks.')
+  console.log('PASS: lead-only cutoff inclusive at BRT midnight, old/undated leads excluded despite academic matches, older academic dates retained, invalid-date warning, CPF intersection KPIs, exclusive statuses, filters, no extra requests, refresh and desktop/mobile bars/overflow checks.')
 } finally { if (browser) await browser.close(); server.kill() }

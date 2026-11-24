@@ -1,12 +1,28 @@
-# Dashboard Funil: base completa de leads
+# Dashboard Funil: leads desde 15/11/2026
 
 ## Retangulos
 
-Leads conta toda a base leads_cursos, sem exigir ano_semestre nem correspondencia
-academica. A base inclui leads antigos. Inscritos e Matriculados contam somente os
-CPFs desses leads encontrados nas respectivas tabelas de 2027.1, nunca candidatos
-que existem apenas nas bases academicas. Filtros de curso, campus, ingresso, turno,
-Medicina, tipo de aluno e grupo continuam aplicados ao recorte analitico.
+Leads conta a base leads_cursos cadastrada desde 15/11/2026, inclusive, sem exigir
+ano_semestre nem correspondencia academica. Inscritos e Matriculados contam somente
+os CPFs desses leads encontrados nas respectivas tabelas de 2027.1, nunca candidatos
+que existem apenas nas bases academicas. O corte de 15/11 NAO e aplicado as datas
+de inscricao ou matricula. Filtros de curso, campus, ingresso, turno, Medicina,
+tipo de aluno e grupo continuam aplicados ao recorte analitico.
+
+## Corte exclusivo dos leads
+
+A origem da data segue a mesma prioridade do CRM: created_at, data_criacao, data.
+Timestamps com fuso explicito sao convertidos para America/Sao_Paulo antes de
+comparar o dia. Datas sem fuso representam o dia de calendario informado. Assim,
+15/11/2026 00:00 em Brasilia entra; 15/11/2026 02:59:59Z ainda e dia 14 e nao entra.
+
+Datas ausentes ou invalidas ficam fora, com quantidade de cadastros sinalizada na
+tela. Nao se usa data de inscricao, ano_semestre ou presenca na base academica para
+resgatar um lead sem data ou anterior ao corte. Registros academicos do CPF de um
+lead elegivel continuam participando mesmo com datas anteriores a 15/11.
+
+O corte e so de leitura/analise no navegador: nao apaga leads antigos, nao muda o
+CRM e nao altera tabelas, sincronizacao ou permissoes. Nao ha corte final adicional.
 
 O indicador Inscritos e cumulativo: inclui quem possui inscricao e ja se matriculou.
 Uma matricula sem inscricao localizada conta como matricula, sem inventar inscricao.
@@ -53,10 +69,12 @@ publicar o frontend para ativar em producao.
 
 ## Verificacao
 
-- tools/test-funnel-cohort.mjs: base independente de conversao, intersecoes CPF,
+- tools/test-funnel-cohort.mjs: corte somente de leads, limite inclusivo em Brasilia,
+  datas/aliases invalidos, registros academicos anteriores preservados, intersecoes CPF,
   estados exclusivos, soma dos grupos, filtros cumulativos/dimensionais, duplicatas,
   Medicina, tipo de aluno, matricula sem inscricao e identidade pendente.
-- tools/verify-funnel-cohort.mjs: leads sem semestre/com semestre antigo, retangulos,
+- tools/verify-funnel-cohort.mjs: leads recentes sem semestre/com semestre antigo,
+  exclusao de leads antigos/sem data apesar de inscricao e matricula, retangulos,
   cliques nas tres situacoes, cursos e filtros, ausencia de consultas extras,
   atualizacao e captura desktop/mobile com dados ficticios.
 - tools/verify-dashboard-medicine.mjs: regressao dos dois dashboards e filtros.

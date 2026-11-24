@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { analyzeLeadFunnel } from '../src/lib/funnelCohort.ts'
+import { analyzeLeadFunnel, funnelLeadCutoff, funnelLeadDay, scopeFunnelLeadsByDate } from '../src/lib/funnelCohort.ts'
 const cpf = n => String(n).padStart(11, '0')
 const row = (origin, id, fields = {}) => ({ origin, cpf: cpf(id), curso: 'Não informado', campus: 'Não informado', processo: 'Não informado', turno: 'Não informado', studentType: 'calouro', ...fields })
 const selections = fields => ({ origin: [], status: [], curso: [], campus: [], processo: [], turno: [], ...fields })
@@ -58,4 +58,36 @@ for (let n = 0; n < 40; n++) {
   assert.ok(result.inscritosCount <= n && result.matriculadosCount <= n)
 }
 assert.deepEqual(counts(run({}, options, [])), [0, 0, 0])
-console.log('PASS: total lead base independent of conversion, CPF intersections, exclusive statuses summing to the total, cumulative KPI filters, status/dimension filters, duplicates, real multi-course tuples, enrollment-only matches, invalid/short/formatted CPFs, medicine/student scope, empty data and source immutability.')
+assert.equal(funnelLeadCutoff, '2026-11-15')
+for (const [input, expected] of [
+  ['2026-11-15', '2026-11-15'], ['15/11/2026', '2026-11-15'],
+  ['2026-11-15 00:00:00', '2026-11-15'], ['15/11/2026 00:00', '2026-11-15'],
+  ['2026-11-15T02:59:59.999999Z', '2026-11-14'], ['2026-11-15T03:00:00Z', '2026-11-15'],
+  ['2026-11-15T00:00:00-03:00', '2026-11-15'], ['2026-11-15T00:00:00+00:00', '2026-11-14'],
+  ['2026-11-15 03:00:00+00:00', '2026-11-15'],
+  ['2026-11-15T00:00:00-0300', '2026-11-15'],
+  ['', null], [null, null], ['31/11/2026', null], ['2026-02-30', null], ['2026-11-15T25:00:00Z', null],
+]) assert.equal(funnelLeadDay(input), expected, String(input))
+const leadInputs = [
+  { id: 1, cpf: cpf(1), created_at: '2026-11-15T03:00:00Z' },
+  { id: 2, cpf: cpf(2), created_at: '2026-11-15T02:59:59Z' },
+  { id: 3, cpf: cpf(3) },
+  { id: 4, cpf: cpf(4), data_criacao: '15/11/2026' },
+  { id: 5, cpf: cpf(5), DATA: '2026-11-16' },
+  { id: 6, cpf: cpf(6), created_at: 'invalid', data_criacao: '2026-11-16' },
+  { id: 7, cpf: cpf(7), created_at: '14/11/2026' },
+]
+const inputCopy = structuredClone(leadInputs), dated = scopeFunnelLeadsByDate(leadInputs)
+assert.deepEqual(dated.rows.map(row => row.id), [1, 4, 5])
+assert.equal(dated.excludedBefore, 2)
+assert.equal(dated.missingOrInvalidDates, 2)
+assert.deepEqual(leadInputs, inputCopy)
+const datedModel = run({}, options, [
+  ...dated.rows.map(lead => row('Lead', lead.id)),
+  ...[1, 2, 3].flatMap(id => [
+    row('Inscrito', id, { data_inscricao: '01/11/2026' }),
+    row('Matriculado', id, { data_de_matricula: '02/11/2026' }),
+  ]),
+])
+assert.deepEqual(counts(datedModel), [3, 1, 1], 'Only the lead date is scoped; academic dates never apply this cutoff and never rescue old/undated leads')
+console.log('PASS: lead-only cutoff from 15/11/2026 inclusive, BRT boundaries, date aliases, invalid-date quality, unchanged academic-date scope, CPF intersections and exclusive statuses, cumulative/dimension filters, duplicates, medical/student scope and source immutability.')

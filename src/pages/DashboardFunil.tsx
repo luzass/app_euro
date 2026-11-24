@@ -19,6 +19,7 @@ import { cpfKey, isMedicine } from '../lib/campaignData'
 import {
   analyzeLeadFunnel,
   funnelStatusColors,
+  scopeFunnelLeadsByDate,
   type FunnelChartKey as FunilChartKey,
   type FunnelSelections as FunilChartSelections,
   type FunnelRow as CombinedRow,
@@ -247,12 +248,13 @@ export function DashboardFunil() {
     void loadData()
   }, [])
 
+  const leadDateScope = useMemo(() => scopeFunnelLeadsByDate(state.leads), [state.leads])
   const analysis = useMemo(() => analyzeLeadFunnel([
-    ...state.leads.map(mapLead),
+    ...leadDateScope.rows.map(mapLead),
     ...state.inscritos.map(mapInscrito),
     ...state.matriculados.map(mapMatriculado),
   ], chartSelections, { includeMedicine, studentType: studentTypeFilter }), [
-    chartSelections, includeMedicine, state.leads, state.inscritos, state.matriculados, studentTypeFilter,
+    chartSelections, includeMedicine, leadDateScope.rows, state.inscritos, state.matriculados, studentTypeFilter,
   ])
 
   const handleChartSelect = (chartKey: FunilChartKey, label: string, event?: unknown) => {
@@ -309,7 +311,7 @@ export function DashboardFunil() {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
               Funil de leads
             </h1>
-            <p className="mt-2 text-sm text-slate-500">Base completa de leads · Inscrições e matrículas {activeFunnelPeriod}</p>
+            <p className="mt-2 text-sm text-slate-500">Leads desde 15/11/2026 · Inscrições e matrículas {activeFunnelPeriod}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -374,6 +376,9 @@ export function DashboardFunil() {
           </button>
         )}
       </div>
+      {leadDateScope.missingOrInvalidDates > 0 && <p role="status" className="text-sm text-amber-800">
+        {formatNumberBR(leadDateScope.missingOrInvalidDates)} cadastros de lead sem data válida ficaram fora do corte.
+      </p>}
       {analysis.unknownCpfCount > 0 && <p role="status" className="text-sm text-amber-800">
         {formatNumberBR(analysis.unknownCpfCount)} leads sem CPF válido para cruzamento.
       </p>}

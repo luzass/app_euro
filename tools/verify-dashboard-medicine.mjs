@@ -37,9 +37,9 @@ try {
         { cpf: '44444444444', curso: ' Medicina ', campus: 'Asa Sul', turno: 'INTEGRAL', forma_de_ingresso: 'PROUNI', data_inscricao: `${year}-11-20`, data_baixa_do_pagamento: `${year}-11-20` },
       ].map((row) => ({ ...row, ano_semestre: period, periodo_letivo: period, filial: row.campus, tipo_de_ingresso: row.forma_de_ingresso, tipo_aluno: 'CALOURO', contrato: 'ATIVO', nivel_de_ensino: 'GRADUAÇÃO' }))
     } else if (table === 'leads_cursos') rows = [
-      { cpf: '11111111111', curso: 'Medicina', campus: 'Asa Sul', ano_semestre: '2027.1' },
-      { cpf: '22222222222', curso: 'Direito', campus: 'Águas Claras', ano_semestre: '2027.1' },
-      { cpf: '44444444444', curso: 'Direito', campus: 'Águas Claras', ano_semestre: '2026.1' },
+      { cpf: '11111111111', curso: 'Medicina', campus: 'Asa Sul', ano_semestre: '2027.1', created_at: '2026-11-15T03:00:00Z' },
+      { cpf: '22222222222', curso: 'Direito', campus: 'Águas Claras', ano_semestre: '2027.1', created_at: '2026-11-15T03:00:00Z' },
+      { cpf: '44444444444', curso: 'Direito', campus: 'Águas Claras', ano_semestre: '2026.1', created_at: '2026-11-15T03:00:00Z' },
     ]
     return r.fulfill({ contentType: 'application/json', body: JSON.stringify(rows) })
   })
