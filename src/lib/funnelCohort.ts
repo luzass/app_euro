@@ -35,10 +35,10 @@ export function scopeFunnelLeadsByDate<T extends GenericRow>(rows: T[], cutoff =
 export type FunnelOrigin = 'Lead' | 'Inscrito' | 'Matriculado'
 export type FunnelChartKey = 'origin' | 'status' | 'curso' | 'campus' | 'processo' | 'turno'
 export type FunnelSelections = Record<FunnelChartKey, string[]>
-export const funnelStatuses = ['Não inscritos', 'Inscritos sem matrícula', 'Matriculados', 'Sem CPF para cruzar'] as const
+export const funnelStatuses = ['Leads', 'Leads Inscritos', 'Matriculados', 'Sem CPF para cruzar'] as const
 export const funnelStatusColors: Record<string, string> = {
-  'Não inscritos': '#64748b',
-  'Inscritos sem matrícula': '#0284c7',
+  Leads: '#64748b',
+  'Leads Inscritos': '#0284c7',
   Matriculados: '#059669',
   'Sem CPF para cruzar': '#b45309',
 }

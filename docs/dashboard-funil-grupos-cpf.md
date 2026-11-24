@@ -44,8 +44,11 @@ Uma matricula sem inscricao localizada conta como matricula, sem inventar inscri
 A situacao de cada lead tem prioridade:
 
 1. Matriculados: CPF encontrado em matriculados_20271 no recorte.
-2. Inscritos sem matricula: tem inscricao, mas nao matricula no recorte.
-3. Nao inscritos: nao foi encontrado em nenhuma das duas bases academicas no recorte.
+2. Leads Inscritos: tem inscricao, mas nao matricula no recorte.
+3. Leads: nao foi encontrado em nenhuma das duas bases academicas no recorte.
+
+Esses rotulos sao exclusivos do grafico. A troca dos nomes nao altera os calculos
+nem o indicador cumulativo Inscritos, que continua incluindo os ja matriculados.
 
 Se existirem leads sem CPF utilizavel, aparece adicionalmente Sem CPF para cruzar.
 Ausencia de identidade nao e prova de nao conversao. Esses cadastros sao contados
@@ -53,7 +56,7 @@ individualmente pelo ID, sem associacao por telefone ou nome. Com CPF, a contage
 por pessoa distinta, mesmo com varias linhas de origem ou varias inscricoes.
 
 Exemplo: 100 leads, 30 com inscricao e 10 matriculados (todos com inscricao).
-Retangulos: 100 / 30 / 10. Grafico: 70 nao inscritos / 20 inscritos sem matricula /
+Retangulos: 100 / 30 / 10. Grafico: 70 Leads / 20 Leads Inscritos /
 10 matriculados. A soma dos grupos do grafico recompõe o total de leads.
 
 Clicar em uma barra seleciona somente aquele grupo e atualiza os retangulos e os
