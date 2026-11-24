@@ -32,13 +32,13 @@ const fixture: CrmContact = {
   created_at: now,
   updated_at: now,
 }
-function Preview() {
+export function Preview() {
   const [contact, setContact] = useState(fixture)
   const readonly = new URLSearchParams(location.search).has('readonly')
   return (
     <CrmContactDrawer
       contact={contact}
-      now={Date.now()}
+      now={Date.parse(now)}
       profile={{
         id: readonly ? 'seller-2' : 'seller-1',
         nome: 'Vendedor de demonstração',
@@ -52,7 +52,6 @@ function Preview() {
       onContactUpdated={setContact}
       busy={false}
       onClose={() => {}}
-      onChanged={async () => {}}
       notify={() => {}}
       onPatch={async (c, patch) => {
         const updated = await crmRpc<CrmContact>('crm_kanban_save', {

@@ -67,7 +67,7 @@ begin
       if p_version is null and old_d.created_by<>auth.uid() then raise exception 'Identificador do envio ja utilizado'; end if;
       return jsonb_build_object('document',to_jsonb(old_d),'contact',to_jsonb(c));
     end if;
-    if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de salvar.' using errcode='40001'; end if;
+    if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de salvar.' using errcode='PT409'; end if;
     completion:=old_d.received_at is null and p_received is not null and old_d.course=p_course and old_d.description=p_description and old_d.sent_at=p_sent and old_d.note=p_note;
     if not completion and p_reason is null then raise exception 'Informe o motivo da correcao para preservar a auditoria'; end if;
     update public.crm_kanban_documents set course=p_course,description=p_description,sent_at=p_sent,received_at=p_received,note=p_note,receipt_note=p_receipt_note,updated_by=auth.uid(),updated_at=now(),version=version+1 where id=p_id returning * into d;
@@ -85,7 +85,7 @@ begin
   select * into c from public.crm_kanban_contacts where id=contact_id for update;
   if not found or auth.uid() is null or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Cancelamento de documentacao nao permitido' using errcode='42501'; end if;
   select * into old_d from public.crm_kanban_documents where id=p_id for update;
-  if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de cancelar.' using errcode='40001'; end if;
+  if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de cancelar.' using errcode='PT409'; end if;
   if old_d.cancelled_at is not null then raise exception 'Envio ja cancelado'; end if;
   p_reason:=btrim(coalesce(p_reason,''));
   if length(p_reason) not between 1 and 2000 then raise exception 'Informe o motivo do cancelamento'; end if;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Ban, Check, Pencil, Plus, RefreshCw, Save, X } from 'lucide-react'
 import type { CrmContact } from '../../lib/crmKanban'
 import {
@@ -10,6 +10,7 @@ import {
 } from '../../lib/crmDocuments'
 import { cancelCrmDocument, loadCrmDocuments, saveCrmDocument } from '../../lib/crmDocumentsApi'
 import { crmButton, crmInput } from './CrmContactForm'
+import { CRM_KANBAN_REFRESH } from '../../lib/crmManagementCache'
 
 type Mode = 'new' | 'receipt' | 'edit' | 'cancel'
 interface Draft {
@@ -50,12 +51,22 @@ export function CrmDocumentsPanel({
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const lastLoadAt = useRef(0)
+  const pendingRead = useRef<Promise<CrmDocumentsWorkspace> | null>(null)
   const coursesId = useId()
   useEffect(() => {
     let live = true
-    void loadCrmDocuments(contact.id)
+    void Promise.resolve()
+      .then(() => {
+        if (!live) return null
+        setLoading(true)
+        lastLoadAt.current = Date.now()
+        const request = loadCrmDocuments(contact.id)
+        pendingRead.current = request
+        return request
+      })
       .then((data) => {
-        if (live) {
+        if (live && data) {
           setWorkspace(data)
           setError('')
           setLoading(false)
@@ -67,13 +78,32 @@ export function CrmDocumentsPanel({
           setLoading(false)
         }
       })
+      .finally(() => {
+        if (live) pendingRead.current = null
+      })
     return () => {
       live = false
     }
   }, [contact.id, contact.version, refresh])
   useEffect(() => {
-    const timer = window.setInterval(() => setRefresh((n) => n + 1), 60000)
-    return () => window.clearInterval(timer)
+    const update = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        !pendingRead.current &&
+        Date.now() - lastLoadAt.current >= CRM_KANBAN_REFRESH
+      ) {
+        lastLoadAt.current = Date.now()
+        setRefresh((n) => n + 1)
+      }
+    }
+    const timer = window.setInterval(update, CRM_KANBAN_REFRESH)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
   }, [])
   const begin = (mode: Mode, row: CrmDocument | null = null) => {
     setError('')

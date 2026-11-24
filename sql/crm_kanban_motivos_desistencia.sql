@@ -52,7 +52,7 @@ begin
   else
     select * into old_r from public.crm_kanban_loss_reasons where id=p_id for update;
     if not found then raise exception 'Motivo nao encontrado'; end if;
-    if p_version is null or p_version<>old_r.version then raise exception 'Este motivo foi atualizado. Reabra a edicao.' using errcode='40001'; end if;
+    if p_version is null or p_version<>old_r.version then raise exception 'Este motivo foi atualizado. Reabra a edicao.' using errcode='PT409'; end if;
     if old_r.seed_key='other' and not coalesce(p_requires_note,false) then raise exception 'Outro sempre exige uma observacao'; end if;
     update public.crm_kanban_loss_reasons set name=btrim(p_name),active=p_active,requires_note=p_requires_note,version=version+1,updated_at=now() where id=p_id returning * into r;
   end if;
@@ -67,7 +67,7 @@ declare c public.crm_kanban_contacts; r public.crm_kanban_loss_reasons; loss jso
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Encerramento nao permitido' using errcode='42501'; end if;
-  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha antes de encerrar.' using errcode='40001'; end if;
+  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha antes de encerrar.' using errcode='PT409'; end if;
   if c.loss_data is not null or c.archived then raise exception 'Este atendimento ja esta encerrado ou arquivado'; end if;
   if c.official_enrollment or c.stage='matriculado' then raise exception 'Nao registre desistencia de um atendimento matriculado'; end if;
   if p_evidence is null or p_evidence not in ('candidate_reported','staff_inferred') then raise exception 'Informe se o motivo veio do candidato ou da percepcao do atendente'; end if;
@@ -90,7 +90,7 @@ declare c public.crm_kanban_contacts; previous jsonb;
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Reabertura nao permitida' using errcode='42501'; end if;
-  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha.' using errcode='40001'; end if;
+  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha.' using errcode='PT409'; end if;
   if c.loss_data is null then raise exception 'Este contato nao tem desistencia ativa'; end if;
   if coalesce(length(btrim(p_note)),0) not between 3 and 2000 then raise exception 'Informe uma observacao de reabertura entre 3 e 2000 caracteres'; end if;
   previous:=c.loss_data;

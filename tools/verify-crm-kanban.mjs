@@ -296,8 +296,8 @@ try {
       })
       const person = rows.find((row) => row.id === data.p_contact)
       person.version++
-      if (data.p_direction !== 'note') person.last_interaction_at = data.p_occurred
-      if (data.p_direction === 'outbound') person.last_outreach_at = data.p_occurred
+      if (data.p_direction !== 'note' && (!person.last_interaction_at || Date.parse(data.p_occurred) > Date.parse(person.last_interaction_at))) person.last_interaction_at = data.p_occurred
+      if (data.p_direction === 'outbound' && (!person.last_outreach_at || Date.parse(data.p_occurred) > Date.parse(person.last_outreach_at))) person.last_outreach_at = data.p_occurred
       if (
         data.p_direction === 'outbound' &&
         person.next_action_at &&
@@ -310,7 +310,7 @@ try {
           'cadence-paused:' + person.stage + ':' + Date.parse(person.stage_entered_at)
         ] = true
       }
-      if (data.p_code)
+      if (data.p_code && Date.parse(data.p_occurred) >= Date.parse(person.stage_entered_at))
         person.checklist[
           'cadence:' + person.stage + ':' + Date.parse(person.stage_entered_at) + ':' + data.p_code
         ] = true
@@ -509,6 +509,9 @@ try {
     .getByRole('combobox', { name: 'Via de ingresso na negociação', exact: true })
     .selectOption('ENEM')
   await drawer.getByText('N6', { exact: true }).waitFor()
+  await page.waitForLoadState('networkidle')
+  const beforeActivityReads = reads()
+  const activityCallStart = calls.length
   await drawer.getByRole('button', { name: 'Registrar contato N1', exact: true }).click()
   await drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click()
   await drawer.getByRole('button', { name: 'Dados', exact: true }).click()
@@ -522,6 +525,26 @@ try {
     await drawer.getByRole('button', { name: 'Registrar contato N1', exact: true }).isDisabled(),
     true,
   )
+  assert.equal(reads(), beforeActivityReads, 'Saving an activity must not reload all cards')
+  const activityCalls = calls.slice(activityCallStart)
+  const activityWrite = activityCalls.findIndex((call) => call.name === 'crm_kanban_activity_v2')
+  assert.ok(activityWrite >= 0)
+  assert.equal(
+    activityCalls.slice(activityWrite + 1).filter((call) => call.name === 'crm_kanban_detail').length,
+    1,
+    'Saving an activity must refresh detail only once (excluding reads before the write)',
+  )
+  await drawer.getByRole('button', { name: 'Registrar contato N2', exact: true }).click()
+  await drawer.getByLabel('Data do atendimento', { exact: true }).fill('2020-01-01T10:00')
+  await drawer.getByRole('status').filter({ hasText: 'sem concluir a cadência atual' }).waitFor()
+  await drawer.getByLabel('Observação do atendimento', { exact: true }).fill('Contato retroativo de teste')
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith('/rpc/crm_kanban_detail')),
+    drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click(),
+  ])
+  await drawer.locator('article').filter({ hasText: 'Contato retroativo de teste' }).waitFor()
+  await drawer.getByRole('button', { name: 'Dados', exact: true }).click()
+  assert.equal(await drawer.getByRole('button', { name: 'Registrar contato N2', exact: true }).isEnabled(), true, 'Retroactive contact must not complete the current cadence')
   await drawer.getByRole('button', { name: 'Atendimentos', exact: true }).click()
   await drawer
     .getByRole('combobox', { name: 'Tipo de interação', exact: true })
@@ -537,7 +560,19 @@ try {
     .getByRole('heading', { name: 'Cadência de atendimento', exact: true })
     .scrollIntoViewIfNeeded()
   await drawer.screenshot({ path: resolve(output, 'crm-cadencias-desktop.png') })
-  await drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).click()
+  const beforeResumeReads = reads()
+  const beforeResumeDetail = calls.filter((call) => call.name === 'crm_kanban_detail').length
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith('/rpc/crm_kanban_detail')),
+    drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).click(),
+  ])
+  await drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).waitFor({ state: 'hidden' })
+  assert.equal(reads(), beforeResumeReads, 'Resuming cadence must not reload all cards')
+  assert.equal(
+    calls.filter((call) => call.name === 'crm_kanban_detail').length,
+    beforeResumeDetail + 1,
+    'Resuming cadence must refresh detail only once',
+  )
   await drawer.getByRole('button', { name: 'Registrar contato N2', exact: true }).waitFor()
   await drawer.getByRole('button', { name: 'Persona', exact: true }).click()
   await drawer.getByRole('alert').filter({ hasText: 'excedeu o tempo limite' }).waitFor()

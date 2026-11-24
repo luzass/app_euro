@@ -32,6 +32,14 @@ try {
     timezoneId: 'America/Sao_Paulo',
   })
   const page = await context.newPage()
+  await page.clock.install()
+  await page.addInitScript(() => {
+    window.__crmTestVisible = true
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => (window.__crmTestVisible ? 'visible' : 'hidden'),
+    })
+  })
   const errors = []
   page.on('pageerror', (e) => {
     errors.push(e.message)
@@ -66,7 +74,9 @@ try {
     next_action_at: null,
   }
   const documents = [],
-    events = []
+    events = [],
+    activities = []
+  const calls = new Map()
   let missing = false
   await page.route('https://fonts.googleapis.com/**', (r) => r.abort())
   await page.route('https://fonts.gstatic.com/**', (r) => r.abort())
@@ -78,17 +88,33 @@ try {
   )
   await page.route('**/rest/v1/**', async (route) => {
     const name = new URL(route.request().url()).pathname.split('/').at(-1)
+    calls.set(name, (calls.get(name) ?? 0) + 1)
     const p = route.request().postDataJSON() ?? {}
     let result
     if (name === 'crm_kanban_detail')
       result = {
         contact,
         events: events.toReversed(),
-        activities: [],
+        activities,
         sources: [],
         visited_stages: ['inscrito'],
       }
-    else if (name === 'crm_kanban_save') {
+    else if (name === 'crm_kanban_activity_v2') {
+      const activity = {
+        id: 'activity-' + (activities.length + 1),
+        author_id: 'seller-1',
+        note: p.p_note,
+        channel: p.p_channel,
+        direction: p.p_direction,
+        occurred_at: p.p_occurred,
+      }
+      activities.push(activity)
+      contact = { ...contact, version: contact.version + 1 }
+      result = activity.id
+    } else if (name === 'crm_kanban_resume_cadence') {
+      contact = { ...contact, version: contact.version + 1, checklist: {} }
+      result = contact
+    } else if (name === 'crm_kanban_save') {
       assert.equal(contact.version, p.p_version)
       contact = {
         ...contact,
@@ -175,6 +201,40 @@ try {
   assert.equal(contact.current_data.ingressante_outra_ies, 'Sim')
   await drawer.getByRole('button', { name: 'Documentação', exact: true }).click()
   await drawer.getByText('Nenhum envio registrado nesta ficha.').waitFor()
+  const documentsReady = () => page.waitForFunction(
+    () => !document.querySelector('[aria-label="Atualizar documentação"]').disabled,
+  )
+  const initialReads = calls.get('crm_kanban_documents')
+  await page.clock.fastForward(60000)
+  assert.equal(calls.get('crm_kanban_documents'), initialReads, 'No one-minute polling')
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/rpc/crm_kanban_documents')),
+    page.clock.fastForward(240000),
+  ])
+  await documentsReady()
+  assert.equal(calls.get('crm_kanban_documents'), initialReads + 1, 'Poll after five minutes')
+  await page.evaluate(() => {
+    window.__crmTestVisible = false
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.clock.fastForward(600000)
+  assert.equal(calls.get('crm_kanban_documents'), initialReads + 1, 'Hidden tabs do not poll')
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/rpc/crm_kanban_documents')),
+    page.evaluate(() => {
+      window.__crmTestVisible = true
+      document.dispatchEvent(new Event('visibilitychange'))
+      window.dispatchEvent(new Event('focus'))
+      window.dispatchEvent(new Event('focus'))
+    }),
+  ])
+  await documentsReady()
+  assert.equal(calls.get('crm_kanban_documents'), initialReads + 2, 'Focus and visibility share one overdue refresh')
+  await drawer.getByRole('button', { name: 'Atualizar documentação', exact: true }).click()
+  await documentsReady()
+  assert.equal(calls.get('crm_kanban_documents'), initialReads + 3, 'Manual refresh remains immediate')
+  const readsBeforeSave = calls.get('crm_kanban_documents')
+  const detailBeforeSave = calls.get('crm_kanban_detail')
   await drawer.getByRole('button', { name: 'Registrar envio', exact: true }).click()
   await drawer
     .getByLabel('Documentação encaminhada', { exact: true })
@@ -183,6 +243,8 @@ try {
   await drawer.getByRole('button', { name: 'Salvar documentação', exact: true }).click()
   await drawer.getByText('1 aguardando retorno · 0 retornos recebidos').waitFor()
   assert.equal(documents.length, 1)
+  assert.equal(calls.get('crm_kanban_documents'), readsBeforeSave + 1, 'A document write refreshes documents once')
+  assert.equal(calls.get('crm_kanban_detail'), detailBeforeSave + 1, 'A document write refreshes detail once')
   await drawer.getByRole('button', { name: 'Registrar recebimento', exact: true }).click()
   await drawer
     .getByLabel('Data e hora do retorno da análise', { exact: true })
@@ -217,6 +279,19 @@ try {
   await drawer.getByRole('button', { name: 'Histórico', exact: true }).click()
   await drawer.getByText('Envio cancelado', { exact: true }).waitFor()
   assert.equal(documents.length, 1)
+  const documentsAfterClosingTab = calls.get('crm_kanban_documents')
+  await page.clock.fastForward(300000)
+  assert.equal(calls.get('crm_kanban_documents'), documentsAfterClosingTab, 'Closing the documents tab removes its polling timer')
+  const detailBeforeActivity = calls.get('crm_kanban_detail')
+  await drawer.getByRole('button', { name: 'Atendimentos', exact: true }).click()
+  await drawer.getByLabel('Observação do atendimento', { exact: true }).fill('Contato realizado no teste de atualização')
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/rpc/crm_kanban_detail')),
+    drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click(),
+  ])
+  await drawer.locator('article').filter({ hasText: 'Contato realizado no teste de atualização' }).waitFor()
+  assert.equal(calls.get('crm_kanban_detail'), detailBeforeActivity + 1, 'Activity save has only one detail read')
+  assert.equal(calls.get('crm_kanban_contacts') ?? 0, 0, 'Activity does not reload the board')
   await page.goto('http://127.0.0.1:5194/?readonly=1')
   await page.getByRole('button', { name: 'Documentação', exact: true }).click()
   await page.getByText('Cancelado', { exact: true }).waitFor()
@@ -227,9 +302,13 @@ try {
   missing = true
   await page.getByRole('button', { name: 'Atualizar documentação', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: 'crm_kanban_documentacao.sql' }).waitFor()
+  missing = false
+  await page.getByRole('button', { name: 'Atualizar documentação', exact: true }).click()
+  await documentsReady()
+  assert.equal(await page.getByRole('alert').count(), 0, 'A failed refresh can be retried')
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: optional IES, document send/receipt/correct/cancel, history, read-only, missing migration, desktop/mobile screenshots; mocked RPC data only',
+    'PASS: five-minute visible polling, overdue focus deduplication, manual refresh, one read after document/activity writes, optional IES, send/receipt/correct/cancel, history, read-only, missing migration and desktop/mobile screenshots; mocked RPC data only',
   )
 } finally {
   await browser?.close()

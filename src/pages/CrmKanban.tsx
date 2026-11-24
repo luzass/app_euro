@@ -416,6 +416,13 @@ export function CrmKanbanView({
     }
   }, [load])
   const closeDrawer = useCallback(() => setSelected(null), [])
+  const updateContact = useCallback((updated: CrmContact) => {
+    setContacts((current) =>
+      current.map((row) =>
+        row.id === updated.id && updated.version >= row.version ? updated : row,
+      ),
+    )
+  }, [])
   const closeReasons = useCallback(() => setManagingReasons(false), [])
   useEffect(() => {
     if (!creating) return
@@ -972,13 +979,10 @@ export function CrmKanbanView({
           members={members}
           lossReasons={workspace?.loss_reasons ?? []}
           lossReady={workspace?.config.loss_version === 1}
-          onContactUpdated={(updated) =>
-            setContacts((current) => current.map((row) => (row.id === updated.id ? updated : row)))
-          }
+          onContactUpdated={updateContact}
           busy={busy}
           onClose={closeDrawer}
           onPatch={patch}
-          onChanged={load}
           notify={notify}
         />
       )}

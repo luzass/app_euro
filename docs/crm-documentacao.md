@@ -24,7 +24,9 @@ O script é reaplicável, não altera fontes de inscritos/leads/matriculados nem
 
 A duração é `retorno da análise - envio`, em horas corridas. Média e mediana usam apenas retornos concluídos de contatos reais e acessíveis ao perfil, excluindo cancelados e testes. A quantidade de retornos explicita o tamanho da amostra. Abertos não entram como zero na média: aparecem separadamente com maior espera. Abertos de fichas ocultas ficam fora da carteira atual, mas retornos históricos concluídos são preservados.
 
-Não há meta de SLA definida nem calendário de dias úteis. A referência observada permite estabelecer essa meta depois. A tabela é atualizada ao salvar e a cada minuto enquanto a aba estiver aberta; acompanha o responsável atual da ficha, não uma classificação de desempenho do vendedor original.
+Não há meta de SLA definida nem calendário de dias úteis. A referência observada permite estabelecer essa meta depois. A tabela é atualizada ao salvar e a cada cinco minutos enquanto a aba estiver aberta e a página visível. Ao voltar à página, atualiza se já passaram cinco minutos desde a última consulta; mudanças rápidas de foco não geram consultas extras. O botão de atualização continua disponível. Acompanha o responsável atual da ficha, não uma classificação de desempenho do vendedor original.
+
+A redução de consultas de 24/11/2026 exige apenas publicar o aplicativo, sem nova migração SQL. Registrar um atendimento ou retomar uma cadência atualiza o contato e a ficha sem recarregar todos os cards. Respostas de versões mais antigas não substituem versões mais recentes no quadro.
 
 ## Verificação
 

@@ -268,7 +268,6 @@ export function CrmContactDrawer({
   busy,
   onClose,
   onPatch,
-  onChanged,
   notify,
 }: {
   contact: CrmContact
@@ -281,7 +280,6 @@ export function CrmContactDrawer({
   busy: boolean
   onClose: () => void
   onPatch: (contact: CrmContact, patch: Record<string, unknown>) => Promise<CrmContact>
-  onChanged: () => Promise<void>
   notify: (text: string, error?: boolean) => void
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>('Dados')
@@ -315,17 +313,10 @@ export function CrmContactDrawer({
   const operationalEditable = editable && !contact.loss_data
   const owner = members.find((member) => member.id === contact.owner_id)
   const stage = crmStages.find((item) => item.id === contact.stage)!
-  const load = async () => {
-    try {
-      const data = await loadCrmDetail(contact.id)
-      setDetail(data)
-      setHistoryMore(data.events.length === 50)
-      setError('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível carregar a ficha.')
-    }
-  }
+  const retroactiveCadence = cadence && Date.parse(occurred) < Date.parse(cadence.anchor)
   useEffect(() => {
+    // A post-write detail response already contains the new contact version.
+    if (detail?.contact.id === contact.id && detail.contact.version >= contact.version) return
     let live = true
     void loadCrmDetail(contact.id)
       .then((data) => {
@@ -341,7 +332,7 @@ export function CrmContactDrawer({
     return () => {
       live = false
     }
-  }, [contact.id, contact.version])
+  }, [contact.id, contact.version, detail?.contact.id, detail?.contact.version])
   useEffect(() => {
     const active = document.activeElement as HTMLElement | null,
       old = document.body.style.overflow
@@ -692,13 +683,12 @@ export function CrmContactDrawer({
                   onPatch={patch}
                   notify={notify}
                   onResume={() => {
-                    void crmRpc('crm_kanban_resume_cadence', {
+                    void crmRpc<CrmContact>('crm_kanban_resume_cadence', {
                       p_id: contact.id,
                       p_version: contact.version,
                     })
-                      .then(async () => {
-                        await onChanged()
-                        await load()
+                      .then((updated) => {
+                        onContactUpdated(updated)
                         notify('Cadência retomada.')
                       })
                       .catch((e) => notify(e.message, true))
@@ -735,8 +725,13 @@ export function CrmContactDrawer({
                     setNote('')
                     setActivity(null)
                     setCadence(null)
-                    await onChanged()
-                    await load()
+                    const updated = await loadCrmDetail(contact.id)
+                    setDetail((current) =>
+                      current && current.contact.version > updated.contact.version ? current : updated,
+                    )
+                    setHistoryMore(updated.events.length === 50)
+                    setError('')
+                    onContactUpdated(updated.contact)
                     notify('Atendimento salvo.')
                   } catch (e) {
                     notify(e instanceof Error ? e.message : 'Erro ao salvar.', true)
@@ -755,6 +750,12 @@ export function CrmContactDrawer({
                       Desvincular cadência
                     </button>
                   </div>
+                )}
+                {retroactiveCadence && !contact.loss_data && (
+                  <p role="status" className="text-xs text-amber-800">
+                    Data anterior à entrada nesta fase. O atendimento será registrado no histórico,
+                    sem concluir a cadência atual.
+                  </p>
                 )}
                 <label className="block space-y-1 text-xs text-slate-500">
                   <span>Tipo de registro</span>

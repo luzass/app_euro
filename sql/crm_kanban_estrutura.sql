@@ -332,7 +332,7 @@ declare c public.crm_kanban_contacts; after_c public.crm_kanban_contacts; v_owne
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) then raise exception 'Contato indisponivel para este usuario' using errcode='42501'; end if;
-  if p_version is null or c.version<>p_version then raise exception 'Este contato foi atualizado. Atualize o quadro e tente novamente.' using errcode='40001'; end if;
+  if p_version is null or c.version<>p_version then raise exception 'Este contato foi atualizado. Atualize o quadro e tente novamente.' using errcode='PT409'; end if;
   if jsonb_typeof(p_patch)<>'object' then raise exception 'Alteracao invalida'; end if;
   for k in select jsonb_object_keys(p_patch) loop
     if k not in ('owner_id','stage','position','manual_data','next_action_at','archived','checklist') then raise exception 'Alteracao nao permitida: %',k; end if;
@@ -589,7 +589,7 @@ declare c public.crm_kanban_contacts; after_c public.crm_kanban_contacts; v_owne
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) then raise exception 'Contato indisponivel para este usuario' using errcode='42501'; end if;
-  if p_version is null or c.version<>p_version then raise exception 'Este contato foi atualizado. Atualize o quadro e tente novamente.' using errcode='40001'; end if;
+  if p_version is null or c.version<>p_version then raise exception 'Este contato foi atualizado. Atualize o quadro e tente novamente.' using errcode='PT409'; end if;
   if jsonb_typeof(p_patch)<>'object' then raise exception 'Alteracao invalida'; end if;
   for k in select jsonb_object_keys(p_patch) loop
     if k not in ('owner_id','stage','position','manual_data','next_action_at','archived','checklist') then raise exception 'Alteracao nao permitida: %',k; end if;
@@ -767,11 +767,14 @@ begin
     allowed_codes:=case c.stage when 'primeiro_contato' then array['C1'] when 'abordagem' then array['A1','A2','A3']
       when 'negociacao' then array['N1','N2','N3'] when 'fechamento' then array['F1'] when 'inscrito' then array['I1']
       when 'vestibular' then array['P1','P2','P3'] when 'aguardando_matricula' then array['V1','V2','V3'] else '{}'::text[] end;
-    if p_anchor is distinct from c.stage_entered_at or p_direction<>'outbound' or p_activity is not null or p_occurred<c.stage_entered_at or not(p_code=any(allowed_codes)) then
-      raise exception 'Cadencia desatualizada. Confira a fase atual do contato.' using errcode='40001'; end if;
-    task_key:='cadence:'||prefix||':'||p_code;
-    if c.checklist->>('cadence-paused:'||prefix)='true' then raise exception 'Cadencia pausada apos resposta do candidato'; end if;
-    if c.checklist->>task_key='true' then raise exception 'Esta cadencia ja foi registrada'; end if;
+    if p_anchor is distinct from c.stage_entered_at or p_direction<>'outbound' or p_activity is not null or not(p_code=any(allowed_codes)) then
+      raise exception 'Cadencia desatualizada. Confira a fase atual do contato.' using errcode='PT409'; end if;
+    -- Contato anterior a esta fase entra no historico, sem concluir a cadencia atual.
+    if p_occurred>=c.stage_entered_at then
+      task_key:='cadence:'||prefix||':'||p_code;
+      if c.checklist->>('cadence-paused:'||prefix)='true' then raise exception 'Cadencia pausada apos resposta do candidato'; end if;
+      if c.checklist->>task_key='true' then raise exception 'Esta cadencia ja foi registrada'; end if;
+    end if;
   end if;
   if p_activity is not null then
     select * into a from public.crm_kanban_activities where id=p_activity and contact_id=p_contact for update;
@@ -786,7 +789,9 @@ begin
       values(p_contact,auth.uid(),btrim(p_note),p_channel,p_occurred,p_direction) returning id into activity_id;
   end if;
   insert into public.crm_kanban_events(contact_id,event_type,actor_id,payload) values(p_contact,'activity',auth.uid(),
-    jsonb_build_object('activity_id',activity_id,'before',to_jsonb(a),'note',btrim(p_note),'channel',p_channel,'occurred_at',p_occurred,'direction',p_direction));
+    jsonb_build_object('activity_id',activity_id,'before',to_jsonb(a),'note',btrim(p_note),'channel',p_channel,'occurred_at',p_occurred,'direction',p_direction)
+      ||case when p_code is not null and p_occurred<c.stage_entered_at then
+        jsonb_build_object('retroactive_cadence',jsonb_build_object('code',p_code,'anchor',p_anchor,'reason','before_stage_entry')) else '{}'::jsonb end);
   update public.crm_kanban_contacts set version=version+1,updated_at=now(),
     next_action_at=case when p_direction='outbound' and next_action_at<=p_occurred then null else next_action_at end,
     checklist=case when task_key is not null then checklist||jsonb_build_object(task_key,true)
@@ -811,7 +816,7 @@ declare c public.crm_kanban_contacts; pause_key text;
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Atendimento nao permitido' using errcode='42501'; end if;
-  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha.' using errcode='40001'; end if;
+  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha.' using errcode='PT409'; end if;
   pause_key:='cadence-paused:'||c.stage||':'||floor(extract(epoch from c.stage_entered_at)*1000)::bigint::text;
   update public.crm_kanban_contacts set checklist=checklist-pause_key,version=version+1,updated_at=now() where id=p_id returning * into c;
   insert into public.crm_kanban_events(contact_id,event_type,actor_id,payload) values(p_id,'cadence_resumed',auth.uid(),jsonb_build_object('stage',c.stage));
@@ -889,7 +894,7 @@ begin
   else
     select * into old_r from public.crm_kanban_loss_reasons where id=p_id for update;
     if not found then raise exception 'Motivo nao encontrado'; end if;
-    if p_version is null or p_version<>old_r.version then raise exception 'Este motivo foi atualizado. Reabra a edicao.' using errcode='40001'; end if;
+    if p_version is null or p_version<>old_r.version then raise exception 'Este motivo foi atualizado. Reabra a edicao.' using errcode='PT409'; end if;
     if old_r.seed_key='other' and not coalesce(p_requires_note,false) then raise exception 'Outro sempre exige uma observacao'; end if;
     update public.crm_kanban_loss_reasons set name=btrim(p_name),active=p_active,requires_note=p_requires_note,version=version+1,updated_at=now() where id=p_id returning * into r;
   end if;
@@ -904,7 +909,7 @@ declare c public.crm_kanban_contacts; r public.crm_kanban_loss_reasons; loss jso
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Encerramento nao permitido' using errcode='42501'; end if;
-  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha antes de encerrar.' using errcode='40001'; end if;
+  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha antes de encerrar.' using errcode='PT409'; end if;
   if c.loss_data is not null or c.archived then raise exception 'Este atendimento ja esta encerrado ou arquivado'; end if;
   if c.official_enrollment or c.stage='matriculado' then raise exception 'Nao registre desistencia de um atendimento matriculado'; end if;
   if p_evidence is null or p_evidence not in ('candidate_reported','staff_inferred') then raise exception 'Informe se o motivo veio do candidato ou da percepcao do atendente'; end if;
@@ -927,7 +932,7 @@ declare c public.crm_kanban_contacts; previous jsonb;
 begin
   select * into c from public.crm_kanban_contacts where id=p_id for update;
   if not found or not public.crm_kanban_can_read(c.owner_id) or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Reabertura nao permitida' using errcode='42501'; end if;
-  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha.' using errcode='40001'; end if;
+  if p_version is null or p_version<>c.version then raise exception 'Contato atualizado. Reabra a ficha.' using errcode='PT409'; end if;
   if c.loss_data is null then raise exception 'Este contato nao tem desistencia ativa'; end if;
   if coalesce(length(btrim(p_note)),0) not between 3 and 2000 then raise exception 'Informe uma observacao de reabertura entre 3 e 2000 caracteres'; end if;
   previous:=c.loss_data;
@@ -1110,7 +1115,7 @@ begin
       if p_version is null and old_d.created_by<>auth.uid() then raise exception 'Identificador do envio ja utilizado'; end if;
       return jsonb_build_object('document',to_jsonb(old_d),'contact',to_jsonb(c));
     end if;
-    if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de salvar.' using errcode='40001'; end if;
+    if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de salvar.' using errcode='PT409'; end if;
     completion:=old_d.received_at is null and p_received is not null and old_d.course=p_course and old_d.description=p_description and old_d.sent_at=p_sent and old_d.note=p_note;
     if not completion and p_reason is null then raise exception 'Informe o motivo da correcao para preservar a auditoria'; end if;
     update public.crm_kanban_documents set course=p_course,description=p_description,sent_at=p_sent,received_at=p_received,note=p_note,receipt_note=p_receipt_note,updated_by=auth.uid(),updated_at=now(),version=version+1 where id=p_id returning * into d;
@@ -1128,7 +1133,7 @@ begin
   select * into c from public.crm_kanban_contacts where id=contact_id for update;
   if not found or auth.uid() is null or not coalesce(public.crm_kanban_manager() or c.owner_id=auth.uid(),false) then raise exception 'Cancelamento de documentacao nao permitido' using errcode='42501'; end if;
   select * into old_d from public.crm_kanban_documents where id=p_id for update;
-  if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de cancelar.' using errcode='40001'; end if;
+  if p_version is null or old_d.version<>p_version then raise exception 'Este envio foi atualizado. Recarregue antes de cancelar.' using errcode='PT409'; end if;
   if old_d.cancelled_at is not null then raise exception 'Envio ja cancelado'; end if;
   p_reason:=btrim(coalesce(p_reason,''));
   if length(p_reason) not between 1 and 2000 then raise exception 'Informe o motivo do cancelamento'; end if;

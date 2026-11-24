@@ -8,6 +8,10 @@
 
 Os SQLs não foram executados no Supabase real durante o desenvolvimento. A validação foi feita em PostgreSQL local isolado e com dados fictícios no navegador.
 
+### Correcao De Conflitos E Retentativas Internas
+
+Em instalacoes existentes, execute `sql/crm_kanban_corrigir_conflitos_rpc.sql` na fonte Database para substituir o SQLSTATE `40001` dos conflitos de negocio por `PT409` (HTTP 409). O codigo anterior pode causar retries internos infinitos no PostgREST 14. A correcao preserva validacao de versao, mensagens, permissoes e cadastros. Nao depende de publicar o frontend e nao encerra conexoes ja presas; veja `docs/crm-conflitos-rpc.md` para verificacao e recuperacao controlada. Os scripts de instalacao desta versao ja usam o codigo correto.
+
 ### Recorte De Entrada A Partir De 15/11/2026
 
 Para uma instalação existente, publique a versão atual do aplicativo e execute `sql/crm_kanban_recorte_20261115.sql` depois das migrações de funil/cadências e motivos. O script atualiza a configuração, sincroniza as fontes e retorna contagens de contatos visíveis e ocultos. Não precisa alterar o n8n nem criar outro agendamento.
