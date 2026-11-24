@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, SlidersHorizontal } from 'lucide-react'
+import { RefreshCw, SlidersHorizontal, X } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -15,13 +15,19 @@ import { EmptyState } from '../components/UI/EmptyState'
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
 import { MedicineToggle } from '../components/UI/MedicineToggle'
-import { isMedicine } from '../lib/campaignData'
+import { cpfKey, isMedicine } from '../lib/campaignData'
+import {
+  filterFunnelCohort,
+  linkFunnelLeads,
+  type FunnelChartKey as FunilChartKey,
+  type FunnelSelections as FunilChartSelections,
+  type FunnelRow as CombinedRow,
+} from '../lib/funnelCohort'
 import {
   fetchAllRows,
   getUniqueCpfCount,
   matchesStudentType,
   normalizeCampus,
-  normalizeCpf,
   normalizeIngresso,
   normalizeText,
   pickText,
@@ -38,19 +44,6 @@ interface FunilState {
   leads: GenericRow[]
   inscritos: GenericRow[]
   matriculados: GenericRow[]
-}
-
-type CombinedOrigin = 'Lead' | 'Inscrito' | 'Matriculado'
-type FunilChartKey = 'origin' | 'curso' | 'campus' | 'processo' | 'turno'
-type FunilChartSelections = Record<FunilChartKey, string[]>
-
-interface CombinedRow {
-  origin: CombinedOrigin
-  cpf: string
-  curso: string
-  campus: string
-  processo: string
-  turno: string
 }
 
 const initialState: FunilState = {
@@ -79,7 +72,7 @@ function buildCpfSet(rows: GenericRow[]) {
   const cpfs = new Set<string>()
 
   rows.forEach((row) => {
-    const cpf = normalizeCpf(row.cpf)
+    const cpf = cpfKey(row)
 
     if (cpf) {
       cpfs.add(cpf)
@@ -148,7 +141,7 @@ function countUniqueCpfBy(
 function mapLead(row: GenericRow): CombinedRow {
   return {
     origin: 'Lead',
-    cpf: normalizeCpf(row.cpf),
+    cpf: cpfKey(row),
     curso: titleize(pickText(row, ['curso', 'Curso'])),
     campus: normalizeCampus(pickText(row, ['campus', 'Campus'])),
     turno: titleize(pickText(row, ['turno', 'Turno', 'TURNO'])),
@@ -166,7 +159,7 @@ function mapLead(row: GenericRow): CombinedRow {
 function mapInscrito(row: GenericRow): CombinedRow {
   return {
     origin: 'Inscrito',
-    cpf: normalizeCpf(row.cpf),
+    cpf: cpfKey(row),
     curso: titleize(pickText(row, ['curso'])),
     campus: normalizeCampus(pickText(row, ['campus'])),
     turno: titleize(pickText(row, ['turno'])),
@@ -177,7 +170,7 @@ function mapInscrito(row: GenericRow): CombinedRow {
 function mapMatriculado(row: GenericRow): CombinedRow {
   return {
     origin: 'Matriculado',
-    cpf: normalizeCpf(row.cpf),
+    cpf: cpfKey(row),
     curso: titleize(pickText(row, ['curso'])),
     campus: normalizeCampus(pickText(row, ['filial', 'campus'])),
     turno: titleize(pickText(row, ['turno'])),
@@ -224,6 +217,7 @@ function ChartCard({
               <Tooltip formatter={(value) => formatNumberBR(Number(value))} />
               <Bar
                 dataKey="value"
+                isAnimationActive={false}
                 radius={[0, 10, 10, 0]}
                 cursor="pointer"
                 onClick={(payload, _index, event) => {
@@ -327,7 +321,7 @@ export function DashboardFunil() {
     const matriculadosCpfSet = buildCpfSet(matriculados)
     const activePeriodCpfSet = buildMergedCpfSet(inscritosCpfSet, matriculadosCpfSet)
     const periodFilteredLeads = leads.filter((row) => {
-      const cpf = normalizeCpf(row.cpf)
+      const cpf = cpfKey(row)
 
       return matchesActiveFunnelPeriod(row) || Boolean(cpf && activePeriodCpfSet.has(cpf))
     })
@@ -342,31 +336,18 @@ export function DashboardFunil() {
       matchesStudentType(row, studentTypeFilter),
     )
     const filteredInscritos = onlyTraffic
-      ? typeFilteredInscritos.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
+      ? typeFilteredInscritos.filter((row) => leadCpfSet.has(cpfKey(row)))
       : typeFilteredInscritos
     const filteredMatriculados = onlyTraffic
-      ? typeFilteredMatriculados.filter((row) => leadCpfSet.has(normalizeCpf(row.cpf)))
+      ? typeFilteredMatriculados.filter((row) => leadCpfSet.has(cpfKey(row)))
       : typeFilteredMatriculados
 
-    const combinedRowsBase = [
+    const combinedRowsBase = linkFunnelLeads([
       ...typeFilteredLeads.map(mapLead),
       ...filteredInscritos.map(mapInscrito),
       ...filteredMatriculados.map(mapMatriculado),
-    ]
-    const combinedRows = combinedRowsBase.filter((row) => {
-      const values: Record<FunilChartKey, string> = {
-        origin: row.origin,
-        curso: row.curso,
-        campus: row.campus,
-        processo: row.processo,
-        turno: row.turno,
-      }
-
-      return (Object.keys(chartSelections) as FunilChartKey[]).every((key) => {
-        const selectedValues = chartSelections[key]
-        return selectedValues.length === 0 || selectedValues.includes(values[key])
-      })
-    })
+    ])
+    const combinedRows = filterFunnelCohort(combinedRowsBase, chartSelections)
 
     return {
       leadsCount: getUniqueCpfCount(
@@ -513,10 +494,34 @@ export function DashboardFunil() {
         </div>
       </section>
 
+      <div className="flex min-h-8 items-center gap-2 text-sm text-slate-600" role="status">
+        <span>Grupo: {chartSelections.origin.length
+          ? chartSelections.origin.map(origin => ({ Lead: 'Leads', Inscrito: 'Inscritos', Matriculado: 'Matriculados' })[origin as 'Lead' | 'Inscrito' | 'Matriculado']).join(' + ')
+          : 'Geral'}</span>
+        {chartSelections.origin.length > 0 && (
+          <button type="button" title="Limpar grupo acompanhado" aria-label="Limpar grupo acompanhado"
+            className="rounded p-1 hover:bg-slate-100"
+            onClick={() => setChartSelections(current => ({ ...current, origin: [] }))}>
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
       <section className="grid gap-4 md:grid-cols-3">
-        <KpiCard title="Leads" value={formatNumberBR(analysis.leadsCount)} helperText="" emphasis="primary" />
-        <KpiCard title="Inscritos" value={formatNumberBR(analysis.inscritosCount)} helperText="" />
-        <KpiCard title="Matriculados" value={formatNumberBR(analysis.matriculadosCount)} helperText="" />
+        {([
+          { origin: 'Lead', title: 'Leads', value: analysis.leadsCount },
+          { origin: 'Inscrito', title: 'Inscritos', value: analysis.inscritosCount },
+          { origin: 'Matriculado', title: 'Matriculados', value: analysis.matriculadosCount },
+        ] as const).map(item => (
+          <button key={item.origin} type="button" aria-label={'Acompanhar ' + item.title.toLowerCase()}
+            aria-pressed={chartSelections.origin.includes(item.origin)}
+            title={'Acompanhar ' + item.title.toLowerCase()}
+            onClick={event => handleChartSelect('origin', item.origin, event)}
+            className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600">
+            <KpiCard title={item.title} value={formatNumberBR(item.value)} helperText=""
+              emphasis={chartSelections.origin.includes(item.origin) || !chartSelections.origin.length && item.origin === 'Lead' ? 'primary' : 'neutral'} />
+          </button>
+        ))}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
