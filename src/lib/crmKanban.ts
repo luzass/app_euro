@@ -166,8 +166,9 @@ export interface CrmContact {
   owner_id: string | null
   stage: CrmStage
   position: number
-  source_data: CrmData
-  manual_data: CrmData
+  // Raw copies are omitted from board reads, but retained in full detail responses.
+  source_data?: CrmData
+  manual_data?: CrmData
   current_data: CrmData
   has_inscription: boolean
   official_enrollment: boolean

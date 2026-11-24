@@ -37,8 +37,8 @@ try {
   const calls = Number((await db.query('select count(*) as n from public.audit_import_calls')).rows[0].n)
   assert.equal(second.updated, 0)
   assert.equal(second.unchanged, 30)
-  assert.equal(calls, 30)
-  console.log(`CONFIRMED: unchanged sync invokes import ${calls} times for 30 eligible rows; source contains 30 additional old leads.`)
+  assert.equal(calls, 0)
+  console.log(`CONFIRMED: optimized unchanged sync invokes import ${calls} times for 30 eligible rows (30 before optimization); source contains 30 additional old leads.`)
 
   const before = (await db.query("select version,current_data from public.crm_kanban_contacts where cpf='11100000001'")).rows[0]
   const eventsBefore = Number((await db.query('select count(*) n from public.crm_kanban_events')).rows[0].n)

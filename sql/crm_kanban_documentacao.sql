@@ -97,15 +97,23 @@ end $$;
 
 create or replace function public.crm_kanban_documents(p_contact uuid) returns jsonb
 language plpgsql stable security definer set search_path='' as $$
-declare person public.crm_kanban_contacts; courses jsonb; extra jsonb; source_table text;
+declare person public.crm_kanban_contacts; courses jsonb; extra jsonb; source_table text; course_columns text; viewer uuid:=auth.uid(); manager boolean;
 begin
   select * into person from public.crm_kanban_contacts where id=p_contact;
-  if not found or auth.uid() is null or not public.crm_kanban_can_read(person.owner_id) then raise exception 'Ficha indisponivel' using errcode='42501'; end if;
+  if not found or viewer is null or not public.crm_kanban_can_read(person.owner_id) then raise exception 'Ficha indisponivel' using errcode='42501'; end if;
+  manager:=public.crm_kanban_manager();
   select coalesce(jsonb_agg(distinct current_data->>'curso'),'[]') into courses from public.crm_kanban_contacts;
   foreach source_table in array array['leads_cursos','inscritos_20271','matriculados_20271'] loop
     if to_regclass('public.'||source_table) is not null then
-      execute format('select coalesce(jsonb_agg(distinct public.crm_kanban_pick(to_jsonb(t),''curso'')),''[]'') from public.%I t',source_table) into extra;
-      courses:=courses||extra;
+      -- Preserva os aliases de curso e sua precedencia, sem carregar CPF/contatos.
+      select string_agg(format('to_jsonb(t.%I) as %I',a.attname,a.attname),',' order by a.attnum)
+      into course_columns from pg_attribute a
+      where a.attrelid=to_regclass('public.'||source_table) and a.attnum>0 and not a.attisdropped
+        and public.crm_kanban_key(a.attname)='curso';
+      if course_columns is not null then
+        execute format('select coalesce(jsonb_agg(distinct public.crm_kanban_pick(to_jsonb(course_row),''curso'')),''[]'') from (select distinct %s from public.%I t) course_row',course_columns,source_table) into extra;
+        courses:=courses||extra;
+      end if;
     end if;
   end loop;
   select coalesce(jsonb_agg(label order by label),'[]') into courses from (
@@ -121,7 +129,7 @@ begin
         percentile_cont(.5) within group(order by extract(epoch from(d.received_at-d.sent_at))/3600) filter(where d.received_at is not null) median_hours,
         max(greatest(0,extract(epoch from(now()-d.sent_at))/3600)) filter(where d.received_at is null and c.intake_visible) oldest_hours
       from public.crm_kanban_documents d join public.crm_kanban_contacts c on c.id=d.contact_id
-      where d.cancelled_at is null and not c.test_only and public.crm_kanban_can_read(c.owner_id)
+      where d.cancelled_at is null and not c.test_only and (manager or c.owner_id=viewer or c.owner_id is null)
       group by public.crm_kanban_key(d.course)
     ) s)
   );

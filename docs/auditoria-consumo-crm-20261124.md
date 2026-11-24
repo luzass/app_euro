@@ -188,3 +188,27 @@ duplicada de detalhe. O quadro rejeita respostas com versao inferior a atual.
 Isso reduz a frequencia e a repeticao, mas nao altera as consultas SQL globais,
 a sincronizacao, o catalogo de cursos ou o BI identificados acima. Nao houve
 migracao, exclusao, upgrade, commit ou publicacao automatica nesta etapa.
+
+## Segunda etapa preparada depois da primeira publicacao
+
+Foi preparada a migracao `sql/crm_kanban_otimizar_sincronizacao.sql`. Ela compara
+os snapshots antes da importacao por CPF e limita o bloqueio de visibilidade a
+candidatos a mudanca, com revalidacao depois do bloqueio. No teste local de 30
+origens identicas, as chamadas de importacao passaram de 30 para zero. As leituras
+das fontes e a comparacao de payloads continuam existindo.
+
+Foram preparados tambem uma consulta de conferencia e um SQL de reversao apenas
+desta etapa. Nao foram aplicados no Supabase pelo assistente. A documentacao de
+instalacao, limites e verificacoes fica em `docs/crm-sincronizacao-otimizada.md`.
+
+## Terceira etapa preparada
+
+A listagem do quadro passou a solicitar colunas explicitas, sem as copias brutas
+`source_data` e `manual_data`, e aplica `intake_visible=true` no servidor. Dados de
+perfil em `current_data` e a ficha completa continuam disponiveis.
+
+Foi preparada `sql/crm_kanban_otimizar_documentacao.sql`, que le somente as colunas
+de curso, deduplica antes de extrair aliases e evita helpers de perfil por documento
+na agregacao de SLA. Mantem o contrato da RPC e nao altera dados. Continua havendo
+leitura das fontes e agregacao dos documentos; nao e uma solucao comprovada para
+os 1,5 GB de comprometimento. Ver `docs/crm-carregamento-enxuto.md`.

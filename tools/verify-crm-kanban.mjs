@@ -93,7 +93,13 @@ try {
     const seller = new URL(page.url()).searchParams.has('seller')
     calls.push({ name, data })
     let result
-    if (name === 'crm_kanban_contacts')
+    if (name === 'crm_kanban_contacts') {
+      const columns = url.searchParams.get('select').split(',')
+      assert.ok(!columns.includes('*'))
+      assert.ok(!columns.includes('source_data'))
+      assert.ok(!columns.includes('manual_data'))
+      assert.ok(columns.includes('current_data'))
+      assert.equal(url.searchParams.get('intake_visible'), 'eq.true')
       result = [
         ...rows.filter((row) => !seller || row.owner_id === 'seller-1' || !row.owner_id),
         {
@@ -102,8 +108,9 @@ try {
           current_data: { ...rows[0].current_data, nome: 'Contato fora do recorte' },
           intake_visible: false,
         },
-      ]
-    else if (name === 'crm_kanban_workspace')
+      ].filter((row) => row.intake_visible !== false)
+        .map((row) => Object.fromEntries(columns.map((key) => [key, row[key]])))
+    } else if (name === 'crm_kanban_workspace')
       result = {
         members,
         loss_reasons: reasons,

@@ -14,6 +14,10 @@ Em instalacoes existentes, execute `sql/crm_kanban_corrigir_conflitos_rpc.sql` n
 
 ### Recorte De Entrada A Partir De 15/11/2026
 
+Depois do recorte, a otimizacao de sincronizacao de 24/11 pode ser aplicada separadamente
+com `sql/crm_kanban_otimizar_sincronizacao.sql`. Nao cria novo agendamento nem exige
+deploy do aplicativo. Veja `docs/crm-sincronizacao-otimizada.md` para conferencia e reversao.
+
 Para uma instalação existente, publique a versão atual do aplicativo e execute `sql/crm_kanban_recorte_20261115.sql` depois das migrações de funil/cadências e motivos. O script atualiza a configuração, sincroniza as fontes e retorna contagens de contatos visíveis e ocultos. Não precisa alterar o n8n nem criar outro agendamento.
 
 - Todas as inscrições de `inscritos_20271`, sem corte de data. Continua a exclusão de Medicina combinada para o CRM.

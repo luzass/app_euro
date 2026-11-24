@@ -59,7 +59,10 @@ export async function loadCrmContacts(): Promise<CrmContact[]> {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('crm_kanban_contacts')
-      .select('*')
+      .select(
+        'id,cpf,owner_id,stage,position,current_data,has_inscription,official_enrollment,test_only,archived,intake_visible,loss_data,checklist,next_action_at,last_outreach_at,last_response_at,last_interaction_at,stage_entered_at,version,created_at,updated_at',
+      )
+      .eq('intake_visible', true)
       .order('id')
       .range(from, from + 999)
     if (error)

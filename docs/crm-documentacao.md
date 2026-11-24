@@ -22,6 +22,8 @@ O script é reaplicável, não altera fontes de inscritos/leads/matriculados nem
 
 ## Prazo Observado
 
+A consulta pode ser otimizada em bases existentes com `sql/crm_kanban_otimizar_documentacao.sql`, sem novo deploy. Ela passa a ler apenas colunas de curso nas fontes, preservando aliases e o SLA por perfil. Veja `docs/crm-carregamento-enxuto.md` para conferencia e reversao.
+
 A duração é `retorno da análise - envio`, em horas corridas. Média e mediana usam apenas retornos concluídos de contatos reais e acessíveis ao perfil, excluindo cancelados e testes. A quantidade de retornos explicita o tamanho da amostra. Abertos não entram como zero na média: aparecem separadamente com maior espera. Abertos de fichas ocultas ficam fora da carteira atual, mas retornos históricos concluídos são preservados.
 
 Não há meta de SLA definida nem calendário de dias úteis. A referência observada permite estabelecer essa meta depois. A tabela é atualizada ao salvar e a cada cinco minutos enquanto a aba estiver aberta e a página visível. Ao voltar à página, atualiza se já passaram cinco minutos desde a última consulta; mudanças rápidas de foco não geram consultas extras. O botão de atualização continua disponível. Acompanha o responsável atual da ficha, não uma classificação de desempenho do vendedor original.
