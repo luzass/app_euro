@@ -57,8 +57,8 @@ try {
     from public.crm_kanban_contacts c cross join generate_series(1,3) n`)
   const dates = (await db.query("select (now() at time zone 'America/Sao_Paulo')::date::text as today, ((now() at time zone 'America/Sao_Paulo')::date-1)::text as yesterday")).rows[0]
   const snapshot = (await db.query('select public.crm_kanban_bi_snapshot($1::date,$2::date,false) as result', [dates.yesterday, dates.today])).rows[0].result
-  assert.equal(snapshot.events.filter(e => e.type === 'stage' && e.day < dates.yesterday).length, 90)
-  console.log('CONFIRMED: a one-day BI range returns all 90 synthetic stage events from 100 days earlier (client-side filtering).')
+  assert.equal(snapshot.events.filter(e => e.type === 'stage' && e.day < dates.yesterday).length, 0)
+  console.log('CONFIRMED: optimized BI omits all 90 synthetic stage events from 100 days earlier for a one-day range; historical references remain separately preserved.')
   console.log('PASS: local synthetic functional evidence only; no Supabase access, production timings or RAM measurements.')
 } finally {
   await db.close()

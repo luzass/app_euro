@@ -40,7 +40,12 @@ O cache e somente em memoria, separado por usuario/perfil, periodo e inclusao de
 
 ## Verificacao local
 
+A etapa de reducao da resposta historica, compativel com o aplicativo atual, esta
+documentada em [BI otimizado](crm-bi-otimizado.md). Em instalacoes existentes, aplicar
+`sql/crm_kanban_otimizar_bi.sql` e atualizar os indicadores para ignorar o cache anterior.
+
 - `node tools/test-crm-management.mjs`
+- `node tools/test-crm-bi-optimization.mjs <caminho-do-pglite>`
 - `node tools/test-crm-refresh-cache.mjs`
 - `node tools/test-crm-management-sql.mjs <caminho-do-pglite>`
 - `node tools/verify-crm-management.mjs <pasta-de-pacotes-com-playwright>`

@@ -245,6 +245,21 @@ export interface CrmDetail {
   events: CrmEvent[]
   visited_stages: CrmStage[]
 }
+export interface CrmDetailItems {
+  contact: never
+  activities: CrmActivity
+  events: CrmEvent
+  sources: CrmSource
+}
+export type CrmDetailSection = keyof CrmDetailItems
+export type CrmDetailCursor = Record<string, string | number>
+export interface CrmDetailPage<K extends CrmDetailSection> {
+  contact: CrmContact
+  section: K
+  items: CrmDetailItems[K][]
+  next_cursor: CrmDetailCursor | null
+  visited_stages: CrmStage[]
+}
 export interface CrmPersonaRows {
   rows: GenericRow[]
   missing: string[]

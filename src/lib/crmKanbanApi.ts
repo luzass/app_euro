@@ -2,6 +2,9 @@ import { supabase } from './supabase'
 import type {
   CrmContact,
   CrmDetail,
+  CrmDetailCursor,
+  CrmDetailPage,
+  CrmDetailSection,
   CrmPersonaRows,
   CrmSyncResult,
   CrmWorkspace,
@@ -25,6 +28,8 @@ export async function crmRpc<T>(name: string, parameters?: Record<string, unknow
       'A consulta da Gestão do CRM ainda precisa ser instalada no Supabase: crm_kanban_gestao_bi.sql.',
     )
   if (error) {
+    if (name === 'crm_kanban_detail_section' && ['PGRST202', '42883'].includes(error.code))
+      throw new Error('Instale a atualização da ficha no Supabase: crm_kanban_ficha_por_aba.sql.')
     if (
       ['crm_kanban_reason_save', 'crm_kanban_close_loss', 'crm_kanban_reopen_loss'].includes(
         name,
@@ -79,6 +84,16 @@ export async function loadCrmContacts(): Promise<CrmContact[]> {
 export const loadCrmWorkspace = () => crmRpc<CrmWorkspace>('crm_kanban_workspace')
 export const loadCrmDetail = (id: string, before?: number) =>
   crmRpc<CrmDetail>('crm_kanban_detail', { p_id: id, p_before: before ?? null })
+export const loadCrmDetailSection = <K extends CrmDetailSection>(
+  id: string,
+  section: K,
+  cursor: CrmDetailCursor | null = null,
+) =>
+  crmRpc<CrmDetailPage<K>>('crm_kanban_detail_section', {
+    p_id: id,
+    p_section: section,
+    p_cursor: cursor,
+  })
 export const saveCrmContact = (contact: CrmContact, patch: Record<string, unknown>) =>
   crmRpc<CrmContact>('crm_kanban_save', {
     p_id: contact.id,

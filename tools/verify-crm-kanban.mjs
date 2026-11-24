@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { detailPageFixture } from './crm-detail-page-fixture.mjs'
 import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -223,7 +224,7 @@ try {
             : old.stage_entered_at,
       }
       result = rows[index]
-    } else if (name === 'crm_kanban_detail')
+    } else if (name === 'crm_kanban_detail_section') {
       result = {
         contact: rows.find((row) => row.id === data.p_id),
         activities: activities.filter((activity) => activity.contact_id === data.p_id),
@@ -259,7 +260,8 @@ try {
           },
         ],
       }
-    else if (name === 'crm_kanban_create') {
+      result = detailPageFixture(result, data)
+    } else if (name === 'crm_kanban_create') {
       const prior = rows.find((row) => row.cpf === data.p_cpf)
       if (prior) {
         prior.current_data = {
@@ -537,7 +539,7 @@ try {
   const activityWrite = activityCalls.findIndex((call) => call.name === 'crm_kanban_activity_v2')
   assert.ok(activityWrite >= 0)
   assert.equal(
-    activityCalls.slice(activityWrite + 1).filter((call) => call.name === 'crm_kanban_detail').length,
+    activityCalls.slice(activityWrite + 1).filter((call) => call.name === 'crm_kanban_detail_section' && call.data.p_section === 'contact').length,
     1,
     'Saving an activity must refresh detail only once (excluding reads before the write)',
   )
@@ -546,7 +548,7 @@ try {
   await drawer.getByRole('status').filter({ hasText: 'sem concluir a cadência atual' }).waitFor()
   await drawer.getByLabel('Observação do atendimento', { exact: true }).fill('Contato retroativo de teste')
   await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith('/rpc/crm_kanban_detail')),
+    page.waitForResponse((response) => response.url().endsWith('/rpc/crm_kanban_detail_section') && response.request().postDataJSON()?.p_section === 'contact'),
     drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click(),
   ])
   await drawer.locator('article').filter({ hasText: 'Contato retroativo de teste' }).waitFor()
@@ -568,17 +570,16 @@ try {
     .scrollIntoViewIfNeeded()
   await drawer.screenshot({ path: resolve(output, 'crm-cadencias-desktop.png') })
   const beforeResumeReads = reads()
-  const beforeResumeDetail = calls.filter((call) => call.name === 'crm_kanban_detail').length
+  const beforeResumeDetail = calls.filter((call) => call.name === 'crm_kanban_detail_section').length
   await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith('/rpc/crm_kanban_detail')),
     drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).click(),
   ])
   await drawer.getByRole('button', { name: 'Retomar cadência', exact: true }).waitFor({ state: 'hidden' })
   assert.equal(reads(), beforeResumeReads, 'Resuming cadence must not reload all cards')
   assert.equal(
-    calls.filter((call) => call.name === 'crm_kanban_detail').length,
-    beforeResumeDetail + 1,
-    'Resuming cadence must refresh detail only once',
+    calls.filter((call) => call.name === 'crm_kanban_detail_section').length,
+    beforeResumeDetail,
+    'Resuming cadence already returns the current contact and must not reread inactive sections',
   )
   await drawer.getByRole('button', { name: 'Registrar contato N2', exact: true }).waitFor()
   await drawer.getByRole('button', { name: 'Persona', exact: true }).click()

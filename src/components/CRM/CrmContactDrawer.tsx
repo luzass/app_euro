@@ -28,7 +28,8 @@ import {
   type CrmLossReason,
   type CrmPersonaRows,
 } from '../../lib/crmKanban'
-import { crmRpc, loadCrmDetail, loadCrmPersona } from '../../lib/crmKanbanApi'
+import { crmRpc, loadCrmDetailSection, loadCrmPersona } from '../../lib/crmKanbanApi'
+import { useCrmDetailSection } from '../../hooks/useCrmDetailSection'
 import { CrmContactForm, crmButton, crmInput } from './CrmContactForm'
 import { todayInBrazil } from '../../lib/historyDateScope'
 import { activityDirections, crmAcademicProgress } from '../../lib/crmWorkflow'
@@ -72,6 +73,28 @@ const labels: Record<string, string> = {
   data_matricula: 'Data da matrícula',
 }
 const tabs = ['Dados', 'Atendimentos', 'Documentação', 'Histórico', 'Persona', 'Origens'] as const
+
+function SectionStatus({ loading, error, retry }: {
+  loading: boolean
+  error: string
+  retry: () => void
+}) {
+  return (
+    <>
+      {loading && (
+        <p role="status" className="py-3 text-sm text-slate-500">Carregando registros…</p>
+      )}
+      {error && (
+        <div className="space-y-2 py-3">
+          <p role="alert" className="text-sm text-red-700">{error}</p>
+          <button type="button" className={crmButton} onClick={retry} disabled={loading}>
+            <RefreshCw size={15} /> Tentar novamente
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
 
 function EventContent({
   event,
@@ -283,9 +306,17 @@ export function CrmContactDrawer({
   notify: (text: string, error?: boolean) => void
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>('Dados')
-  const [detail, setDetail] = useState<CrmDetail | null>(null)
-  const [historyMore, setHistoryMore] = useState(false)
   const [error, setError] = useState('')
+  const [contactAttempt, setContactAttempt] = useState(0)
+  const activitySection = useCrmDetailSection(
+    contact, 'activities', tab === 'Atendimentos', onContactUpdated,
+  )
+  const historySection = useCrmDetailSection(
+    contact, 'events', tab === 'Histórico', onContactUpdated,
+  )
+  const sourceSection = useCrmDetailSection(
+    contact, 'sources', tab === 'Origens', onContactUpdated,
+  )
   const [editing, setEditing] = useState<CrmContact | null>(null)
   const [personaBase, setPersonaBase] = useState<{
     course: string
@@ -315,14 +346,11 @@ export function CrmContactDrawer({
   const stage = crmStages.find((item) => item.id === contact.stage)!
   const retroactiveCadence = cadence && Date.parse(occurred) < Date.parse(cadence.anchor)
   useEffect(() => {
-    // A post-write detail response already contains the new contact version.
-    if (detail?.contact.id === contact.id && detail.contact.version >= contact.version) return
     let live = true
-    void loadCrmDetail(contact.id)
+    void loadCrmDetailSection(contact.id, 'contact')
       .then((data) => {
         if (live) {
-          setDetail(data)
-          setHistoryMore(data.events.length === 50)
+          onContactUpdated(data.contact)
           setError('')
         }
       })
@@ -332,7 +360,7 @@ export function CrmContactDrawer({
     return () => {
       live = false
     }
-  }, [contact.id, contact.version, detail?.contact.id, detail?.contact.version])
+  }, [contact.id, contactAttempt, onContactUpdated])
   useEffect(() => {
     const active = document.activeElement as HTMLElement | null,
       old = document.body.style.overflow
@@ -507,9 +535,12 @@ export function CrmContactDrawer({
         </nav>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
           {error && (
-            <p role="alert" className="mb-4 text-sm text-red-700">
-              {error}
-            </p>
+            <div className="mb-4 space-y-2">
+              <p role="alert" className="text-sm text-red-700">{error}</p>
+              <button type="button" className={crmButton} onClick={() => setContactAttempt(value => value + 1)}>
+                <RefreshCw size={15} /> Atualizar ficha
+              </button>
+            </div>
           )}
           {tab === 'Dados' &&
             (editing ? (
@@ -725,11 +756,7 @@ export function CrmContactDrawer({
                     setNote('')
                     setActivity(null)
                     setCadence(null)
-                    const updated = await loadCrmDetail(contact.id)
-                    setDetail((current) =>
-                      current && current.contact.version > updated.contact.version ? current : updated,
-                    )
-                    setHistoryMore(updated.events.length === 50)
+                    const updated = await loadCrmDetailSection(contact.id, 'contact')
                     setError('')
                     onContactUpdated(updated.contact)
                     notify('Atendimento salvo.')
@@ -837,7 +864,7 @@ export function CrmContactDrawer({
                 </div>
               </form>
               <div className="divide-y divide-slate-100">
-                {detail?.activities.map((item) => (
+                {activitySection.page?.items.map((item) => (
                   <article key={item.id} className="py-4">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs text-slate-500">
@@ -874,10 +901,17 @@ export function CrmContactDrawer({
                     </p>
                   </article>
                 ))}
-                {detail && !detail.activities.length && (
+                {activitySection.page && !activitySection.page.items.length && (
                   <p className="py-5 text-sm text-slate-500">Nenhum atendimento registrado.</p>
                 )}
               </div>
+              <SectionStatus {...activitySection} />
+              {activitySection.page?.next_cursor && (
+                <button type="button" className={crmButton}
+                  disabled={activitySection.loading} onClick={activitySection.more}>
+                  <Plus size={15} /> Carregar mais atendimentos
+                </button>
+              )}
             </div>
           )}
           {tab === 'Documentação' && (
@@ -900,12 +934,12 @@ export function CrmContactDrawer({
                     key={item.id}
                     className={
                       'flex items-center gap-2 text-xs ' +
-                      ((detail?.visited_stages ?? [contact.stage]).includes(item.id)
+                      ((historySection.page?.visited_stages ?? [contact.stage]).includes(item.id)
                         ? 'font-medium text-slate-800'
                         : 'text-slate-400')
                     }
                   >
-                    {(detail?.visited_stages ?? [contact.stage]).includes(item.id) ? (
+                    {(historySection.page?.visited_stages ?? [contact.stage]).includes(item.id) ? (
                       <Check size={13} style={{ color: item.color }} />
                     ) : (
                       <Circle size={13} className="text-slate-300" />
@@ -915,7 +949,7 @@ export function CrmContactDrawer({
                   </li>
                 ))}
               </ol>
-              {detail?.events.map((event) => (
+              {historySection.page?.items.map((event) => (
                 <article key={event.id} className="border-l-2 border-slate-200 pl-4">
                   <p className="mb-1 text-xs text-slate-500">
                     {stamp(event.created_at)} ·{' '}
@@ -927,20 +961,15 @@ export function CrmContactDrawer({
                   </div>
                 </article>
               ))}
-              {detail && historyMore && (
+              <SectionStatus {...historySection} />
+              {historySection.page?.next_cursor && (
                 <button
                   className={crmButton}
                   type="button"
-                  onClick={async () => {
-                    try {
-                      const more = await loadCrmDetail(contact.id, detail.events.at(-1)?.id)
-                      setDetail({ ...detail, events: [...detail.events, ...more.events] })
-                      setHistoryMore(more.events.length === 50)
-                    } catch (e) {
-                      notify(e instanceof Error ? e.message : 'Falha ao carregar.', true)
-                    }
-                  }}
+                  disabled={historySection.loading}
+                  onClick={historySection.more}
                 >
+                  <Plus size={15} />
                   Carregar anteriores
                 </button>
               )}
@@ -1027,7 +1056,7 @@ export function CrmContactDrawer({
           )}
           {tab === 'Origens' && (
             <div className="space-y-5">
-              {detail?.sources.map((source) => (
+              {sourceSection.page?.items.map((source) => (
                 <section
                   key={source.source + source.source_key}
                   className="border-b border-slate-200 pb-5"
@@ -1061,10 +1090,17 @@ export function CrmContactDrawer({
                   </dl>
                 </section>
               ))}
-              {detail && !detail.sources.length && (
+              {sourceSection.page && !sourceSection.page.items.length && (
                 <p className="text-sm text-slate-500">
                   Cadastro manual, sem registros externos vinculados.
                 </p>
+              )}
+              <SectionStatus {...sourceSection} />
+              {sourceSection.page?.next_cursor && (
+                <button type="button" className={crmButton}
+                  disabled={sourceSection.loading} onClick={sourceSection.more}>
+                  <Plus size={15} /> Carregar mais origens
+                </button>
               )}
             </div>
           )}

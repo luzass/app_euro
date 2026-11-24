@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { detailPageFixture } from './crm-detail-page-fixture.mjs'
 import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -91,14 +92,14 @@ try {
     calls.set(name, (calls.get(name) ?? 0) + 1)
     const p = route.request().postDataJSON() ?? {}
     let result
-    if (name === 'crm_kanban_detail')
-      result = {
+    if (name === 'crm_kanban_detail_section')
+      result = detailPageFixture({
         contact,
         events: events.toReversed(),
         activities,
         sources: [],
         visited_stages: ['inscrito'],
-      }
+      }, p)
     else if (name === 'crm_kanban_activity_v2') {
       const activity = {
         id: 'activity-' + (activities.length + 1),
@@ -234,7 +235,7 @@ try {
   await documentsReady()
   assert.equal(calls.get('crm_kanban_documents'), initialReads + 3, 'Manual refresh remains immediate')
   const readsBeforeSave = calls.get('crm_kanban_documents')
-  const detailBeforeSave = calls.get('crm_kanban_detail')
+  const detailBeforeSave = calls.get('crm_kanban_detail_section')
   await drawer.getByRole('button', { name: 'Registrar envio', exact: true }).click()
   await drawer
     .getByLabel('Documentação encaminhada', { exact: true })
@@ -244,7 +245,7 @@ try {
   await drawer.getByText('1 aguardando retorno · 0 retornos recebidos').waitFor()
   assert.equal(documents.length, 1)
   assert.equal(calls.get('crm_kanban_documents'), readsBeforeSave + 1, 'A document write refreshes documents once')
-  assert.equal(calls.get('crm_kanban_detail'), detailBeforeSave + 1, 'A document write refreshes detail once')
+  assert.equal(calls.get('crm_kanban_detail_section'), detailBeforeSave, 'A document write already returns the contact; inactive sections are not fetched')
   await drawer.getByRole('button', { name: 'Registrar recebimento', exact: true }).click()
   await drawer
     .getByLabel('Data e hora do retorno da análise', { exact: true })
@@ -282,15 +283,16 @@ try {
   const documentsAfterClosingTab = calls.get('crm_kanban_documents')
   await page.clock.fastForward(300000)
   assert.equal(calls.get('crm_kanban_documents'), documentsAfterClosingTab, 'Closing the documents tab removes its polling timer')
-  const detailBeforeActivity = calls.get('crm_kanban_detail')
   await drawer.getByRole('button', { name: 'Atendimentos', exact: true }).click()
+  await drawer.getByText('Nenhum atendimento registrado.', { exact: true }).waitFor()
+  const detailBeforeActivity = calls.get('crm_kanban_detail_section')
   await drawer.getByLabel('Observação do atendimento', { exact: true }).fill('Contato realizado no teste de atualização')
   await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith('/rpc/crm_kanban_detail')),
+    page.waitForResponse((r) => r.url().endsWith('/rpc/crm_kanban_detail_section') && r.request().postDataJSON()?.p_section === 'contact'),
     drawer.getByRole('button', { name: 'Salvar atendimento', exact: true }).click(),
   ])
   await drawer.locator('article').filter({ hasText: 'Contato realizado no teste de atualização' }).waitFor()
-  assert.equal(calls.get('crm_kanban_detail'), detailBeforeActivity + 1, 'Activity save has only one detail read')
+  assert.equal(calls.get('crm_kanban_detail_section'), detailBeforeActivity + 2, 'Activity save reads contact metadata and the visible activities page only')
   assert.equal(calls.get('crm_kanban_contacts') ?? 0, 0, 'Activity does not reload the board')
   await page.goto('http://127.0.0.1:5194/?readonly=1')
   await page.getByRole('button', { name: 'Documentação', exact: true }).click()
@@ -308,7 +310,7 @@ try {
   assert.equal(await page.getByRole('alert').count(), 0, 'A failed refresh can be retried')
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: five-minute visible polling, overdue focus deduplication, manual refresh, one read after document/activity writes, optional IES, send/receipt/correct/cancel, history, read-only, missing migration and desktop/mobile screenshots; mocked RPC data only',
+    'PASS: five-minute visible polling, overdue focus deduplication, manual refresh, section-limited reads after writes, optional IES, send/receipt/correct/cancel, history, read-only, missing migration and desktop/mobile screenshots; mocked RPC data only',
   )
 } finally {
   await browser?.close()

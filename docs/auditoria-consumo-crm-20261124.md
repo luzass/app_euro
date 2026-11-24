@@ -212,3 +212,31 @@ de curso, deduplica antes de extrair aliases e evita helpers de perfil por docum
 na agregacao de SLA. Mantem o contrato da RPC e nao altera dados. Continua havendo
 leitura das fontes e agregacao dos documentos; nao e uma solucao comprovada para
 os 1,5 GB de comprometimento. Ver `docs/crm-carregamento-enxuto.md`.
+
+## Quarta etapa preparada
+
+Foi preparada `sql/crm_kanban_otimizar_bi.sql`, sem alteracao de dados ou permissoes.
+A consulta deixa de materializar todas as colunas do contato e limita os movimentos
+e atendimentos retornados ao periodo, preservando referencias anteriores necessarias
+ao primeiro contato, atribuicao, filtros de perdas e contratos no corte.
+
+Passaram 320 comparacoes do modelo completo contra a funcao anterior. No cenario
+ficticio, eventos retornados passaram de 409 para 8 e atendimentos de 411 para 8.
+Isso nao mede RAM de producao. Ainda existem leituras e agregacoes historicas no
+banco; nao se atribui a esta etapa a resolucao do alerta de comprometimento.
+
+Instalacao, cache de 24 horas e reversao estao em `docs/crm-bi-otimizado.md`. O
+assistente nao aplicou a migracao no Supabase nem publicou esta etapa.
+
+## Quinta etapa preparada
+
+A ficha passou a usar `crm_kanban_detail_section`, mantendo a RPC antiga intacta.
+Cadastro, atendimentos, historico e origens sao consultados separadamente; listas
+usam cursores de 50/50/10 registros. As abas reutilizam resultados da mesma versao
+durante a abertura da ficha e invalidam respostas antigas ou paginas de outra revisao.
+
+O SQL novo deve ser instalado antes da publicacao do frontend. Nao apaga registros,
+nao altera permissoes de negocio e nao cria rotinas automaticas. Testes de banco e
+navegador conferem paginacao, concorrencia de leituras, fluxos comerciais e acesso.
+Ver `docs/crm-ficha-por-aba.md`. Nao foi aplicada migracao nem feita publicacao pelo
+assistente nesta etapa; nao ha medicao de memoria de producao atribuida a ela.

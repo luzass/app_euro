@@ -95,13 +95,13 @@ try {
           last_sync_result: {},
         },
       }
-    else if (name === 'crm_kanban_detail')
+    else if (name === 'crm_kanban_detail_section')
       result = {
         contact: rows.find((c) => c.id === data.p_id),
-        sources: [],
-        events: [],
-        activities: [],
-        has_more_events: false,
+        section: data.p_section,
+        items: [],
+        next_cursor: null,
+        visited_stages: [],
       }
     else if (name === 'crm_kanban_persona_course') result = { rows: [], missing: [] }
     else throw new Error('Unexpected request ' + name)
