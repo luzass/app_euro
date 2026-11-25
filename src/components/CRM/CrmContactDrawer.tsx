@@ -293,6 +293,7 @@ export function CrmContactDrawer({
   onClose,
   onPatch,
   notify,
+  initialTab = 'Dados',
 }: {
   contact: CrmContact
   now: number
@@ -305,8 +306,9 @@ export function CrmContactDrawer({
   onClose: () => void
   onPatch: (contact: CrmContact, patch: Record<string, unknown>) => Promise<CrmContact>
   notify: (text: string, error?: boolean) => void
+  initialTab?: 'Dados' | 'Atendimentos'
 }) {
-  const [tab, setTab] = useState<(typeof tabs)[number]>('Dados')
+  const [tab, setTab] = useState<(typeof tabs)[number]>(initialTab)
   const [error, setError] = useState('')
   const [contactAttempt, setContactAttempt] = useState(0)
   const activitySection = useCrmDetailSection(

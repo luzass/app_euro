@@ -30,9 +30,11 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   CalendarClock,
+  Columns3,
   Check,
   GripVertical,
   LoaderCircle,
+  ListTodo,
   Phone,
   Plus,
   RefreshCw,
@@ -67,7 +69,7 @@ import {
 } from '../lib/crmKanbanApi'
 import { CrmContactForm, crmButton, crmInput } from '../components/CRM/CrmContactForm'
 import { CrmContactDrawer } from '../components/CRM/CrmContactDrawer'
-import { CrmAgenda } from '../components/CRM/CrmAgenda'
+import { CrmActionList } from '../components/CRM/CrmActionList'
 import { crmAcademicProgress, crmReminders } from '../lib/crmWorkflow'
 import { matchesCrmArchiveView, type CrmArchiveView } from '../lib/crmLoss'
 import { CrmLossReasonManager } from '../components/CRM/CrmLossReasonManager'
@@ -328,6 +330,8 @@ export function CrmKanbanView({
     [campus, setCampus] = useState(''),
     [shift, setShift] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [view, setView] = useState<'board' | 'actions'>('board')
+  const [drawerTab, setDrawerTab] = useState<'Dados' | 'Atendimentos'>('Dados')
   const [archiveView, setArchiveView] = useState<CrmArchiveView>('active')
   const [managingReasons, setManagingReasons] = useState(false)
   const [selectedId, setSelected] = useState<string | null>(initialContactId),
@@ -368,7 +372,7 @@ export function CrmKanbanView({
       observer.disconnect()
       window.removeEventListener('resize', resize)
     }
-  }, [loading, showFilters, feedback, workspace, loadError])
+  }, [loading, showFilters, feedback, workspace, loadError, view])
   const notify = useCallback((text: string, error = false) => setFeedback({ text, error }), [])
   useEffect(() => {
     if (!feedback) return
@@ -416,7 +420,7 @@ export function CrmKanbanView({
       window.removeEventListener('focus', focus)
     }
   }, [load])
-  const closeDrawer = useCallback(() => setSelected(null), [])
+  const closeDrawer = useCallback(() => { setSelected(null); setDrawerTab('Dados') }, [])
   const updateContact = useCallback((updated: CrmContact) => {
     setContacts((current) =>
       current.map((row) =>
@@ -870,6 +874,37 @@ export function CrmKanbanView({
           </div>
         </div>
       )}
+      <div role="tablist" aria-label="Visualização do CRM" className="flex gap-5 border-b border-slate-200">
+        {([
+          ['board', 'Kanban', Columns3],
+          ['actions', 'Lista de Ações', ListTodo],
+        ] as const).map(([value, label, Icon]) => (
+          <button key={value} id={`crm-view-${value}`} type="button" role="tab"
+            aria-selected={view === value} aria-controls={`crm-panel-${value}`} tabIndex={view === value ? 0 : -1}
+            className={`inline-flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium ${view === value ? 'border-sky-600 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            onClick={() => setView(value)}
+            onKeyDown={event => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+              event.preventDefault()
+              const next = event.key === 'Home' ? 'board' : event.key === 'End' ? 'actions' : view === 'board' ? 'actions' : 'board'
+              setView(next)
+              document.getElementById(`crm-view-${next}`)?.focus()
+            }}
+          ><Icon size={16} />{label}</button>
+        ))}
+      </div>
+      {view === 'actions' ? (
+        <div role="tabpanel" id="crm-panel-actions" aria-labelledby="crm-view-actions">
+          <CrmActionList contacts={visible} members={members} now={now}
+            ownerId={manager ? undefined : profile.id}
+            onOpen={action => {
+              setDrawerTab(action.kind === 'cadence' ? 'Dados' : 'Atendimentos')
+              setSelected(action.contact.id)
+            }}
+          />
+        </div>
+      ) : (
+      <div role="tabpanel" id="crm-panel-board" aria-labelledby="crm-view-board" className="space-y-4">
       <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
         <span>
           {busy ? (
@@ -904,7 +939,6 @@ export function CrmKanbanView({
           ))}
         </select>
       </div>
-      <CrmAgenda contacts={visible} now={now} onOpen={setSelected} />
       <DndContext
         sensors={sensors}
         collisionDetection={collision}
@@ -971,12 +1005,15 @@ export function CrmKanbanView({
           )}
         </DragOverlay>
       </DndContext>
+      </div>
+      )}
       {selected && (
         <CrmContactDrawer
           key={selected.id}
           contact={selected}
           now={now}
           profile={profile}
+          initialTab={drawerTab}
           members={members}
           lossReasons={workspace?.loss_reasons ?? []}
           lossReady={workspace?.config.loss_version === 1}
