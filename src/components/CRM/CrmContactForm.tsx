@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Save } from 'lucide-react'
-import type { CrmData, CrmMember } from '../../lib/crmKanban'
+import { crmAssignableMembers, type CrmData, type CrmMember } from '../../lib/crmKanban'
 
 export const crmInput =
   'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100 disabled:bg-slate-50 disabled:text-slate-500'
@@ -49,6 +49,8 @@ export function CrmContactForm({
   )
   const [document, setDocument] = useState(cpf ?? '')
   const [selectedOwner, setOwner] = useState(owner ?? '')
+  const sellers = crmAssignableMembers(members)
+  const legacyOwner = selectedOwner && !sellers.some((member) => member.id === selectedOwner)
   const [error, setError] = useState('')
   return (
     <form
@@ -157,15 +159,16 @@ export function CrmContactForm({
             onChange={(event) => setOwner(event.target.value)}
           >
             <option value="">Sem responsável</option>
-            {members
-              .filter((member) =>
-                ['captacao', 'funcionario', 'captacao_gerente'].includes(member.role),
-              )
-              .map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.nome}
-                </option>
-              ))}
+            {legacyOwner && (
+              <option value={selectedOwner} disabled>
+                {members.find((member) => member.id === selectedOwner)?.nome || 'Responsável anterior'} (atual)
+              </option>
+            )}
+            {sellers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.nome}
+              </option>
+            ))}
           </select>
         </label>
       )}

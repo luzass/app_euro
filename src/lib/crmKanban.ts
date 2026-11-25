@@ -191,6 +191,9 @@ export interface CrmMember {
   nome: string
   role: Role
 }
+export const crmAssignableMembers = (members: CrmMember[]) =>
+  members.filter((member) => member.role === 'captacao')
+
 export interface CrmSyncResult {
   updated?: number
   unchanged?: number

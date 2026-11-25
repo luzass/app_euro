@@ -80,6 +80,9 @@ try {
     { id: 'seller-1', nome: 'William', role: 'captacao' },
     { id: 'seller-2', nome: 'Jordana', role: 'funcionario' },
     { id: 'manager-1', nome: 'Gestor', role: 'captacao_gerente' },
+    { id: 'seller-3', nome: 'Agestone', role: 'captacao' },
+    { id: 'admin-1', nome: 'Administrador', role: 'admin' },
+    { id: 'rector-1', nome: 'Reitoria', role: 'reitoria' },
   ]
   await page.route('**/src/main.tsx', (route) =>
     route.fulfill({
@@ -372,6 +375,28 @@ try {
   await page.goto('http://127.0.0.1:5191', { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.getByRole('heading', { name: 'CRM · Captação' }).waitFor()
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).waitFor()
+  const selectableOwners = async (select) => {
+    await select.waitFor()
+    return select.locator('option:not([disabled])').evaluateAll(options => options.map(option => option.value))
+  }
+  await page.getByRole('button', { name: 'Filtros do quadro', exact: true }).click()
+  assert.deepEqual(await selectableOwners(page.getByLabel('Filtrar responsável', { exact: true })), ['', 'seller-1', 'seller-3'])
+  await page.getByRole('button', { name: 'Filtros do quadro', exact: true }).click()
+  await page.getByRole('button', { name: 'Abrir ficha de Carla Pereira', exact: true }).click()
+  const legacyDrawer = page.getByRole('dialog', { name: 'Carla Pereira', exact: true })
+  const legacySelect = legacyDrawer.getByLabel('Responsável do contato', { exact: true })
+  assert.equal(await legacySelect.inputValue(), 'seller-2')
+  assert.equal(await legacySelect.locator('option:checked').textContent(), 'Jordana (atual)')
+  assert.deepEqual(await selectableOwners(legacySelect), ['', 'seller-1', 'seller-3'])
+  await legacyDrawer.getByRole('button', { name: 'Editar dados', exact: true }).click()
+  const legacyForm = legacyDrawer.getByLabel('Responsável no cadastro', { exact: true })
+  assert.equal(await legacyForm.inputValue(), 'seller-2')
+  assert.deepEqual(await selectableOwners(legacyForm), ['', 'seller-1', 'seller-3'])
+  await legacyDrawer.getByRole('textbox', { name: 'Nome completo', exact: true }).fill('Carla Pereira')
+  await legacyDrawer.getByRole('button', { name: 'Salvar', exact: true }).click()
+  await legacyDrawer.getByRole('button', { name: 'Editar dados', exact: true }).waitFor()
+  assert.equal(calls.findLast(call => call.name === 'crm_kanban_save').data.p_patch.owner_id, undefined, 'Editing data preserves a historical owner without attempting reassignment')
+  await legacyDrawer.getByRole('button', { name: 'Fechar ficha', exact: true }).click()
   const reads = () => calls.filter((call) => call.name === 'crm_kanban_contacts').length
   const baselineReads = reads()
   await page.clock.fastForward(4 * 60000)
@@ -491,6 +516,7 @@ try {
   })
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).click()
   let drawer = page.getByRole('dialog', { name: 'Ana Oliveira', exact: true })
+  assert.deepEqual(await selectableOwners(drawer.getByLabel('Responsável do contato', { exact: true })), ['', 'seller-1', 'seller-3'])
   await drawer.getByRole('button', { name: 'Editar dados', exact: true }).click()
   await drawer
     .getByRole('textbox', { name: 'Nome completo', exact: true })
@@ -601,6 +627,7 @@ try {
   await drawer.getByRole('button', { name: 'Fechar ficha', exact: true }).click()
   await page.getByRole('button', { name: 'Novo contato', exact: true }).click()
   const create = page.getByRole('dialog', { name: 'Novo contato', exact: true })
+  assert.deepEqual(await selectableOwners(create.getByLabel('Responsável no cadastro', { exact: true })), ['', 'seller-1', 'seller-3'])
   await create.getByRole('textbox', { name: 'CPF', exact: true }).fill('00000000001')
   await create
     .getByRole('textbox', { name: 'Nome completo', exact: true })

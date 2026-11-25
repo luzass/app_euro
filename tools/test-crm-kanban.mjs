@@ -6,6 +6,7 @@ import {
   crmWhatsapp,
   formatCrmPhone,
   crmStages,
+  crmAssignableMembers,
 } from '../src/lib/crmKanban.ts'
 
 const profile = {
@@ -57,6 +58,11 @@ export function crmFixture() {
   }))
 }
 const rows = crmFixture()
+const team = ['captacao', 'funcionario', 'captacao_gerente', 'admin', 'reitoria', 'coordenador', 'spike']
+  .map((role, index) => ({ id: String(index), nome: role, role }))
+assert.deepEqual(crmAssignableMembers(team), [team[0]])
+assert.equal(team.length, 7, 'Keep every member available for historical names and access checks')
+assert.deepEqual(crmAssignableMembers([]), [])
 const moved = crmMovePreview(rows, 'c1', 'stage:negociacao', false)
 assert.equal(moved.find((row) => row.id === 'c1').stage, 'negociacao')
 assert.equal(rows[0].stage, 'primeiro_contato')

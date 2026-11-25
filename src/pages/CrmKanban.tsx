@@ -47,6 +47,7 @@ import { useSearchParams } from 'react-router-dom'
 import type { Profile } from '../lib/types'
 import {
   canEditCrm,
+  crmAssignableMembers,
   crmMovePreview,
   crmSearchKey,
   crmStageLabel,
@@ -231,7 +232,7 @@ function SortableCard({
       {(!contact.owner_id || whatsapp) && (
         <div className="flex items-center justify-end gap-2 px-3 pb-2">
           {!contact.owner_id &&
-            !isCrmManager(profile) &&
+            profile.role === 'captacao' &&
             !contact.archived &&
             !contact.loss_data && (
               <button
@@ -827,7 +828,7 @@ export function CrmKanbanView({
                 onChange={(event) => setOwnerFilter(event.target.value)}
               >
                 <option value="">Todos</option>
-                {members.map((member) => (
+                {crmAssignableMembers(members).map((member) => (
                   <option key={member.id} value={member.id}>
                     {member.nome}
                   </option>

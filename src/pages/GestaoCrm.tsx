@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { useProfile } from '../hooks/useProfile'
 import type { Profile } from '../lib/types'
-import { isCrmManager } from '../lib/crmKanban'
+import { crmAssignableMembers, isCrmManager } from '../lib/crmKanban'
 import {
   biDefaultFrom,
   biDuration,
@@ -417,7 +417,7 @@ export function CrmManagementView({ profile }: { profile: Profile }) {
                 onChange={(e) => change({ responsavel: e.target.value })}
               >
                 <option value="">Todos</option>
-                {usable.members.map((m) => (
+                {crmAssignableMembers(usable.members).map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.nome}
                   </option>

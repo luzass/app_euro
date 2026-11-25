@@ -44,6 +44,12 @@ try {
     }),
   )
   const fixture = managementFixture()
+  fixture.members.push(
+    { id: 'legacy-worker', nome: 'Funcionário', role: 'funcionario' },
+    { id: 'manager', nome: 'Diego', role: 'captacao_gerente' },
+    { id: 'admin', nome: 'Administrador', role: 'admin' },
+    { id: 'rector', nome: 'Reitoria', role: 'reitoria' },
+  )
   fixture.contacts.find((c) => c.id === 'lead-converted').intake_visible = false
   let missing = false
   await page.route('**/rest/v1/**', async (r) => {
@@ -109,6 +115,12 @@ try {
   })
   await page.goto('http://127.0.0.1:5192/app/gestao-crm?de=2026-11-13&ate=2026-11-17')
   await page.getByRole('heading', { name: 'Carteira atual', exact: true }).waitFor()
+  assert.deepEqual(
+    await page.getByLabel('Responsável', { exact: true }).locator('option')
+      .evaluateAll(options => options.map(option => option.value)),
+    ['', 'seller-a', 'seller-b', 'unassigned'],
+    'Management owner filter offers sellers only, preserving unassigned and general views',
+  )
   const biCalls = () => calls.filter((c) => c.name === 'crm_kanban_bi_snapshot').length
   const waitForBiCalls = async (expected) => {
     for (let n = 0; n < 80 && biCalls() < expected; n++) await page.waitForTimeout(50)

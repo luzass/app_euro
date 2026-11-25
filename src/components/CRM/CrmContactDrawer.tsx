@@ -14,6 +14,7 @@ import {
 import type { Profile } from '../../lib/types'
 import {
   canEditCrm,
+  crmAssignableMembers,
   crmPersona,
   crmSourceLabel,
   crmStageLabel,
@@ -486,20 +487,21 @@ export function CrmContactDrawer({
                   onChange={(event) => void patch({ owner_id: event.target.value || null })}
                 >
                   <option value="">Sem responsável</option>
-                  {members
-                    .filter((member) =>
-                      ['captacao', 'funcionario', 'captacao_gerente'].includes(member.role),
-                    )
-                    .map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.nome}
-                      </option>
-                    ))}
+                  {contact.owner_id && owner?.role !== 'captacao' && (
+                    <option value={contact.owner_id} disabled>
+                      {owner?.nome || 'Responsável anterior'} (atual)
+                    </option>
+                  )}
+                  {crmAssignableMembers(members).map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.nome}
+                    </option>
+                  ))}
                 </select>
               ) : (
                 <div className="flex min-h-10 items-center justify-between gap-2 text-sm font-medium text-slate-800">
                   {owner?.nome || 'Sem responsável'}
-                  {!contact.owner_id && (
+                  {!contact.owner_id && profile.role === 'captacao' && (
                     <button
                       type="button"
                       className={crmButton}
@@ -555,7 +557,7 @@ export function CrmContactDrawer({
                 onSave={async (data, _cpf, ownerId) => {
                   await onPatch(editing, {
                     manual_data: data,
-                    ...(manager ? { owner_id: ownerId } : {}),
+                    ...(manager && ownerId !== editing.owner_id ? { owner_id: ownerId } : {}),
                   })
                   setEditing(null)
                 }}
