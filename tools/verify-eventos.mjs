@@ -15,7 +15,7 @@ try {
     create function auth.uid() returns uuid language sql stable as $$select '00000000-0000-0000-0000-000000000001'::uuid$$;
     create table inscritos_20271(cpf text,email text,contato_2 text,ano_semestre text,curso text);
     create table matriculados_20271(cpf text,email text,periodo_letivo text,curso text,tipo_aluno text,contrato text);
-    insert into auth.users values('00000000-0000-0000-0000-000000000001','lucasdtbritto@gmail.com');
+    insert into auth.users values('00000000-0000-0000-0000-000000000001','lucasctdebritto@gmail.com');
     insert into inscritos_20271 values('11111111111','a@example.test','61911112222','2027.1','DIREITO'),('22222222222','b@example.test','61955556666','2027.1','PSICOLOGIA');
     insert into matriculados_20271 values('11111111111','a@example.test','2027.1','DIREITO','CALOURO','ATIVO');`)
   await db.exec(await readFile(new URL('../sql/eventos_captacao.sql',import.meta.url),'utf8'))

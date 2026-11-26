@@ -1,6 +1,6 @@
 import type { Profile } from './types'
 
-export const eventAccessEmails = ['lucasdtbritto@gmail.com', 'diego.eger@unieuro.edu.br']
+export const eventAccessEmails = ['lucasctdebritto@gmail.com', 'diego.eger@unieuro.edu.br']
 export const canAccessEvents = (profile?: Pick<Profile, 'email'> | null) =>
   Boolean(profile && eventAccessEmails.includes(profile.email.trim().toLowerCase()))
 export const eventColumns = [

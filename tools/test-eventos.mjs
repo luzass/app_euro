@@ -4,11 +4,13 @@ import { readSheet } from 'read-excel-file/node'
 import { canAccessEvents, eventColumns, eventEmail, eventFileKey, eventPhone, parseEventRows } from '../src/lib/eventos.ts'
 import { canAccessPath, getAllowedNavItems } from '../src/lib/navigation.ts'
 
-for (const email of ['lucasdtbritto@gmail.com','diego.eger@unieuro.edu.br']) {
+for (const email of ['lucasctdebritto@gmail.com','diego.eger@unieuro.edu.br']) {
   assert.equal(canAccessEvents({email}),true)
   assert.ok(getAllowedNavItems(email.startsWith('lucas') ? 'admin' : 'captacao_gerente',email).some(item => item.path==='/app/eventos'))
 }
 assert.equal(canAccessEvents({email:'outro@example.test'}),false)
+assert.equal(canAccessEvents({email:'lucasdtbritto@gmail.com'}),false)
+assert.equal(canAccessPath('/app/eventos','admin','lucasdtbritto@gmail.com'),false)
 assert.equal(canAccessEvents(null),false)
 assert.equal(canAccessPath('/app/eventos','admin','outro@example.test'),false)
 assert.equal(canAccessPath('/app/eventos','reitoria','outro@example.test'),false)

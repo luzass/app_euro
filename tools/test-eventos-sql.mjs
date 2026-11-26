@@ -21,12 +21,18 @@ try {
     create table public.profiles(id uuid primary key,email text,role text);
     create table public.inscritos_20271(cpf text,email text,contato_2 text,ano_semestre text,curso text,processo_seletivo text,codcoligada text,codigo_do_processo text);
     create table public.matriculados_20271(cpf text,email text,periodo_letivo text,curso text,contrato text,tipo_aluno text);`)
-  for (const [n, email] of [[1,'lucasdtbritto@gmail.com'],[2,'diego.eger@unieuro.edu.br'],[3,'outro@example.test']]) {
+  for (const [n, email] of [[1,'lucasctdebritto@gmail.com'],[2,'diego.eger@unieuro.edu.br'],[3,'outro@example.test'],[4,'lucasdtbritto@gmail.com']]) {
     await db.query('insert into auth.users values($1,$2)', [uid(n), email])
-    await db.query('insert into profiles values($1,$2,$3)', [uid(n), n===3 ? 'lucasdtbritto@gmail.com' : email, 'admin'])
+    await db.query('insert into profiles values($1,$2,$3)', [uid(n), n===3 ? 'lucasctdebritto@gmail.com' : email, 'admin'])
   }
   const migration = await readFile(new URL('../sql/eventos_captacao.sql', import.meta.url), 'utf8')
   await db.exec(migration); await db.exec(migration)
+  await db.exec("create or replace function public.eventos_can_access() returns boolean language sql stable security definer set search_path='' as $$select exists(select 1 from auth.users u where u.id=auth.uid() and lower(u.email) in ('lucasdtbritto@gmail.com','diego.eger@unieuro.edu.br'))$$")
+  const accessFix = await readFile(new URL('../sql/eventos_corrigir_acesso_lucas.sql', import.meta.url), 'utf8')
+  await db.exec(accessFix); await db.exec(accessFix)
+  await actor(4)
+  await assert.rejects(() => dashboard(), e => e.code === '42501')
+  await db.exec('reset role')
   for (const [cpf,email,phone,course] of [
     ['11111111111','a@example.test','61911112222','DIREITO'],
     ['22222222222','b@example.test','61922223333','MEDICINA'],

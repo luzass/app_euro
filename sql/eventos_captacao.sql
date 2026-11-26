@@ -24,7 +24,7 @@ $$;
 create or replace function public.eventos_can_access() returns boolean
 language sql stable security definer set search_path='' as $$
   select exists(select 1 from auth.users u where u.id=auth.uid()
-    and lower(u.email) in ('lucasdtbritto@gmail.com','diego.eger@unieuro.edu.br'))
+    and lower(u.email) in ('lucasctdebritto@gmail.com','diego.eger@unieuro.edu.br'))
 $$;
 
 create table if not exists public.eventos_importacoes (
