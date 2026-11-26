@@ -294,6 +294,7 @@ export function CrmContactDrawer({
   onPatch,
   notify,
   initialTab = 'Dados',
+  initialLossOpen = false,
 }: {
   contact: CrmContact
   now: number
@@ -307,6 +308,7 @@ export function CrmContactDrawer({
   onPatch: (contact: CrmContact, patch: Record<string, unknown>) => Promise<CrmContact>
   notify: (text: string, error?: boolean) => void
   initialTab?: 'Dados' | 'Atendimentos'
+  initialLossOpen?: boolean
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>(initialTab)
   const [error, setError] = useState('')
@@ -368,7 +370,7 @@ export function CrmContactDrawer({
     const active = document.activeElement as HTMLElement | null,
       old = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    closeRef.current?.focus()
+    closeRef.current?.focus({ preventScroll: initialLossOpen })
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
       if (event.key === 'Tab') {
@@ -393,7 +395,7 @@ export function CrmContactDrawer({
       window.removeEventListener('keydown', key)
       active?.focus()
     }
-  }, [onClose])
+  }, [onClose, initialLossOpen])
   useEffect(() => {
     if (tab !== 'Persona' || !personaCourse) return
     let live = true
@@ -609,6 +611,7 @@ export function CrmContactDrawer({
                   </div>
                 </div>
                 <CrmLossPanel
+                  defaultOpen={initialLossOpen}
                   contact={contact}
                   reasons={lossReasons}
                   ready={lossReady}

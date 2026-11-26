@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { RotateCcw, UserRoundX, X } from 'lucide-react'
 import type { CrmContact, CrmLossReason } from '../../lib/crmKanban'
 import { crmStageLabel } from '../../lib/crmKanban'
@@ -14,6 +14,7 @@ export function CrmLossPanel({
   busy,
   onSaved,
   notify,
+  defaultOpen = false,
 }: {
   contact: CrmContact
   reasons: CrmLossReason[]
@@ -22,8 +23,16 @@ export function CrmLossPanel({
   busy: boolean
   onSaved: (contact: CrmContact) => void
   notify: (text: string, error?: boolean) => void
+  defaultOpen?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen && editable && ready && !contact.loss_data && !contact.archived && !contact.official_enrollment && contact.stage !== 'matriculado')
+  const form = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    if (open) {
+      form.current?.scrollIntoView({ block: 'nearest' })
+      form.current?.querySelector<HTMLElement>('select,textarea')?.focus({ preventScroll: true })
+    }
+  }, [open])
   const [reasonId, setReasonId] = useState('')
   const [evidence, setEvidence] = useState('')
   const [note, setNote] = useState('')
@@ -137,7 +146,7 @@ export function CrmLossPanel({
         </div>
       )}
       {open && (
-        <form className="space-y-3" onSubmit={(e) => void submit(e)}>
+        <form ref={form} className="space-y-3" onSubmit={(e) => void submit(e)}>
           {!loss && (
             <>
               <label className="block space-y-1 text-xs text-slate-600">

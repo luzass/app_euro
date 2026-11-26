@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { crmFixture } from './test-crm-kanban.mjs'
 import { crmMovePreview } from '../src/lib/crmKanban.ts'
-import { matchesCrmArchiveView } from '../src/lib/crmLoss.ts'
+import { crmContactColumn, crmLossColumn, isCrmLossTarget, matchesCrmArchiveView } from '../src/lib/crmLoss.ts'
 import { crmReminders } from '../src/lib/crmWorkflow.ts'
 const c = {
   ...crmFixture()[0],
@@ -34,6 +34,15 @@ const lost = {
 assert.equal(matchesCrmArchiveView(lost, 'active'), false)
 assert.equal(matchesCrmArchiveView(lost, 'lost'), true)
 assert.equal(matchesCrmArchiveView(lost, 'archived'), false)
+assert.equal(matchesCrmArchiveView(lost, 'board'), true)
+assert.equal(matchesCrmArchiveView(c, 'board'), true)
+assert.equal(matchesCrmArchiveView({ ...c, archived: true }, 'board'), false)
+assert.equal(crmContactColumn(lost), crmLossColumn.id)
+assert.equal(crmContactColumn(c), c.stage)
+assert.equal(isCrmLossTarget('stage:desistencia', [c]), true)
+assert.equal(isCrmLossTarget(lost.id, [lost]), true)
+assert.equal(isCrmLossTarget('stage:negociacao', [lost]), false)
+assert.equal(crmMovePreview([c], c.id, 'stage:desistencia', true)[0].stage, c.stage, 'Loss is not an academic/commercial phase: require the loss RPC and a reason')
 assert.equal(matchesCrmArchiveView({ ...c, archived: true }, 'archived'), true)
 assert.equal(crmReminders([lost], Date.parse('2026-12-01T12:00:00Z')).length, 0)
 assert.equal(

@@ -72,7 +72,7 @@ import { CrmContactDrawer } from '../components/CRM/CrmContactDrawer'
 import { CrmActionList } from '../components/CRM/CrmActionList'
 import { CrmReminderSummary } from '../components/CRM/CrmReminderSummary'
 import { crmAcademicProgress, crmReminders } from '../lib/crmWorkflow'
-import { matchesCrmArchiveView, type CrmArchiveView } from '../lib/crmLoss'
+import { crmContactColumn, crmLossColumn, isCrmLossTarget, matchesCrmArchiveView, type CrmArchiveView } from '../lib/crmLoss'
 import { CrmLossReasonManager } from '../components/CRM/CrmLossReasonManager'
 import { Loading } from '../components/UI/Loading'
 import { EmptyState } from '../components/UI/EmptyState'
@@ -217,7 +217,7 @@ function SortableCard({
         {...listeners}
         type="button"
         disabled={!editable}
-        title={editable ? 'Mover cartão' : 'Assuma o contato para movimentar'}
+        title={editable ? 'Mover cartão' : contact.loss_data ? 'Reabra o atendimento para movimentar' : 'Assuma o contato para movimentar'}
         aria-label={'Mover ' + (contact.current_data.nome || 'contato')}
         className="absolute right-1.5 top-2 z-10 rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-25"
         style={{ touchAction: 'none' }}
@@ -269,7 +269,7 @@ function Column({
   contacts,
   children,
 }: {
-  stage: (typeof crmStages)[number]
+  stage: { id: string; label: string; color: string }
   contacts: CrmContact[]
   children: React.ReactNode
 }) {
@@ -333,7 +333,8 @@ export function CrmKanbanView({
   const [showFilters, setShowFilters] = useState(false)
   const [view, setView] = useState<'board' | 'actions'>('board')
   const [drawerTab, setDrawerTab] = useState<'Dados' | 'Atendimentos'>('Dados')
-  const [archiveView, setArchiveView] = useState<CrmArchiveView>('active')
+  const [archiveView, setArchiveView] = useState<CrmArchiveView>('board')
+  const [openingLoss, setOpeningLoss] = useState(false)
   const [managingReasons, setManagingReasons] = useState(false)
   const [selectedId, setSelected] = useState<string | null>(initialContactId),
     [creating, setCreating] = useState(false)
@@ -421,7 +422,7 @@ export function CrmKanbanView({
       window.removeEventListener('focus', focus)
     }
   }, [load])
-  const closeDrawer = useCallback(() => { setSelected(null); setDrawerTab('Dados') }, [])
+  const closeDrawer = useCallback(() => { setSelected(null); setDrawerTab('Dados'); setOpeningLoss(false) }, [])
   const updateContact = useCallback((updated: CrmContact) => {
     setContacts((current) =>
       current.map((row) =>
@@ -489,6 +490,11 @@ export function CrmKanbanView({
   )
   const moveOver = (event: DragOverEvent) => {
     if (!event.over) return
+    if (isCrmLossTarget(String(event.over.id), contactsRef.current)) {
+      contactsRef.current = snapshot.current
+      setContacts(snapshot.current)
+      return
+    }
     const translated = event.active.rect.current.translated
     const active = contactsRef.current.find((contact) => contact.id === String(event.active.id))
     const target = contactsRef.current.find((contact) => contact.id === String(event.over?.id))
@@ -518,6 +524,22 @@ export function CrmKanbanView({
     setDragId(null)
     if (!event.over || !before || !current) {
       setContacts(snapshot.current)
+      return
+    }
+    if (isCrmLossTarget(String(event.over.id), contactsRef.current)) {
+      contactsRef.current = snapshot.current
+      setContacts(snapshot.current)
+      if (!canEditCrm(before, profile) || before.archived || before.loss_data || before.official_enrollment || before.stage === 'matriculado') {
+        notify('Este contato não pode ser encerrado por desistência.', true)
+        return
+      }
+      if (workspace?.config.loss_version !== 1) {
+        notify('A configuração dos motivos de desistência ainda não está disponível.', true)
+        return
+      }
+      setDrawerTab('Dados')
+      setOpeningLoss(true)
+      setSelected(before.id)
       return
     }
     if (before.stage === current.stage && before.position === current.position) return
@@ -574,6 +596,9 @@ export function CrmKanbanView({
     [scoped, query, kind, ownerFilter, course, campus, shift],
   )
   const selected = contacts.find((contact) => contact.id === selectedId)
+  const lostCount = visible.filter((contact) => Boolean(contact.loss_data)).length
+  const boardColumns = archiveView === 'lost' ? [crmLossColumn]
+    : archiveView === 'board' ? [...crmStages, crmLossColumn] : crmStages
   const draggingContact = contacts.find((contact) => contact.id === dragId)
   const options = (field: string) =>
     [
@@ -605,17 +630,18 @@ export function CrmKanbanView({
           <p className="mt-1 text-xs text-slate-500">
             {countLabel(visible.length)} contatos ·{' '}
             {countLabel(
-              visible.filter((contact) => !contact.has_inscription && !contact.official_enrollment)
+              visible.filter((contact) => !contact.loss_data && !contact.has_inscription && !contact.official_enrollment)
                 .length,
             )}{' '}
             leads ·{' '}
             {countLabel(
-              visible.filter((contact) => contact.has_inscription && !contact.official_enrollment)
+              visible.filter((contact) => !contact.loss_data && contact.has_inscription && !contact.official_enrollment)
                 .length,
             )}{' '}
             inscritos ·{' '}
-            {countLabel(visible.filter((contact) => contact.official_enrollment).length)}{' '}
+            {countLabel(visible.filter((contact) => !contact.loss_data && contact.official_enrollment).length)}{' '}
             matriculados
+            {' · '}{countLabel(lostCount)} {lostCount === 1 ? 'desistência' : 'desistências'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -850,7 +876,8 @@ export function CrmKanbanView({
                 value={archiveView}
                 onChange={(e) => setArchiveView(e.target.value as CrmArchiveView)}
               >
-                <option value="active">Ativos</option>
+                <option value="board">Ativos e desistências</option>
+                <option value="active">Somente ativos</option>
                 <option value="lost">Desistências</option>
                 <option value="archived">Arquivados sem desistência</option>
               </select>
@@ -867,7 +894,7 @@ export function CrmKanbanView({
                 setOwnerFilter('')
                 setKind('all')
                 setQuery('')
-                setArchiveView('active')
+                setArchiveView('board')
               }}
             >
               <X size={15} />
@@ -934,7 +961,7 @@ export function CrmKanbanView({
           <option value="" disabled>
             Ir para fase
           </option>
-          {crmStages.map((stage) => (
+          {boardColumns.map((stage) => (
             <option key={stage.id} value={stage.id}>
               {stage.label}
             </option>
@@ -971,8 +998,8 @@ export function CrmKanbanView({
           className="crm-board flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain pb-3"
           style={{ height: 'var(--crm-board-height, 520px)', scrollbarGutter: 'stable' }}
         >
-          {crmStages.map((stage) => {
-            const rows = visible.filter((contact) => contact.stage === stage.id)
+          {boardColumns.map((stage) => {
+            const rows = visible.filter((contact) => crmContactColumn(contact) === stage.id)
             return (
               <Column key={stage.id} stage={stage} contacts={rows}>
                 {rows.map((contact) => (
@@ -1016,6 +1043,7 @@ export function CrmKanbanView({
           now={now}
           profile={profile}
           initialTab={drawerTab}
+          initialLossOpen={openingLoss}
           members={members}
           lossReasons={workspace?.loss_reasons ?? []}
           lossReady={workspace?.config.loss_version === 1}
