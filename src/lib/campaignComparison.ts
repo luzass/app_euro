@@ -1,10 +1,10 @@
 import type { GenericRow } from './dashboardHelpers'
-import { activePeople, dateDay, matriculasForPeriod, matriculaDateFields, personEvents, registrationsForPeriod, shiftedDay, type CampaignData, type ForecastConfig } from './campaignForecast.ts'
+import { activeCalouroRows } from './campaignData.ts'
+import { dateDay, matriculasForPeriod, matriculaDateFields, personEvents, registrationsForPeriod, shiftedDay, type CampaignData, type ForecastConfig } from './campaignForecast.ts'
 
 export function comparisonRows(data: CampaignData[], period: string, kind: 'inscritos' | 'calouros'): GenericRow[] {
   if (kind === 'inscritos') return registrationsForPeriod(data, period)
-  return [...activePeople(matriculasForPeriod(data, period)).values()]
-    .filter((person) => person.type === 'calouro').flatMap((person) => person.rows)
+  return activeCalouroRows(matriculasForPeriod(data, period))
 }
 
 export function buildCampaignComparison(data: CampaignData[], config: ForecastConfig, kind: 'inscritos' | 'calouros') {

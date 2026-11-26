@@ -9,7 +9,7 @@ import { PaceForecastPanel } from './PaceForecastPanel'
 import { CampaignPlanningPanel } from './CampaignPlanningPanel'
 
 const calendarKey = 'unieuro.executivo.calendario.20271.v1'
-const defaultCalendar = { start: '2026-09-29', end: '2027-03-31', matriculaDate: 'payment' as 'payment' | 'enrollment' }
+const defaultCalendar = { start: '2026-09-29', end: '2027-03-31', matriculaDate: 'enrollment' as const }
 const fieldClass = 'h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800'
 const show = (value: number | null | undefined) => value === null || value === undefined ? '—' : formatNumberBR(value)
 const dateLabel = (value: number | null) => value === null ? '—' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(value * 86400000))
@@ -17,7 +17,7 @@ const dateLabel = (value: number | null) => value === null ? '—' : new Intl.Da
 function loadCalendar() {
   try {
     const saved = JSON.parse(localStorage.getItem(calendarKey) ?? 'null')
-    if (typeof saved?.start === 'string' && typeof saved?.end === 'string') return { start: saved.start as string, end: saved.end as string, matriculaDate: saved.matriculaDate === 'enrollment' ? 'enrollment' as const : 'payment' as const }
+    if (typeof saved?.start === 'string' && typeof saved?.end === 'string') return { start: saved.start as string, end: saved.end as string, matriculaDate: 'enrollment' as const }
   } catch { /* The default calendar also works without browser storage. */ }
   return defaultCalendar
 }
@@ -58,7 +58,7 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
         <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Data-alvo da projeção<input type="date" aria-label="Data-alvo da projeção" value={calendar.end} className={fieldClass} onChange={(event) => setCalendar((current) => ({ ...current, end: event.target.value }))} /></label>
         <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Data de corte<input type="date" aria-label="Data de corte" value={asOf} readOnly className={fieldClass + ' bg-slate-50'} /></label>
         <CheckboxFilter label="Referências históricas" options={history.map((period) => ({ value: period, label: period }))} selected={references} onChange={setReferences} />
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Data das matrículas<select aria-label="Data das matrículas" className={fieldClass} value={calendar.matriculaDate} onChange={(event) => setCalendar((current) => ({ ...current, matriculaDate: event.target.value as 'payment' | 'enrollment' }))}><option value="payment">Baixa do pagamento</option><option value="enrollment">Data de matrícula</option></select></label>
+        <div className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600"><span>Data das matrículas</span><p className="py-2.5 text-sm text-slate-900">Data da matrícula · contrato ativo</p></div>
       </div>
       <p className="text-xs leading-5 text-slate-500">Início informado: 29/09/2026. A data-alvo inicial de 31/03/2027 representa o encerramento previsto em março e pode ser ajustada. O calendário é salvo neste navegador.</p>
     </section>

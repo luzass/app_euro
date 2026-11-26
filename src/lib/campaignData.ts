@@ -11,7 +11,7 @@ export interface ForecastScenario {
 export interface ActivePerson { cpf: string; type: 'calouro' | 'veterano' | null; rows: GenericRow[] }
 
 export function matriculaDateFields(config: Pick<ForecastConfig, 'matriculaDate'>) {
-  return config.matriculaDate === 'payment' ? ['data_baixa_do_pagamento'] : config.matriculaDate === 'enrollment' ? ['data_de_matricula'] : ['data_de_matricula', 'data_baixa_do_pagamento']
+  return config.matriculaDate === 'payment' ? ['data_baixa_do_pagamento'] : ['data_de_matricula']
 }
 export function dateDay(value: unknown): number | null {
   const text = String(value ?? '').trim(), iso = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(text), br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:$|\s)/.exec(text)
@@ -38,6 +38,10 @@ export function activePeople(rows: GenericRow[]) {
     people.set(cpf, { cpf, rows: entries, type })
   }
   return people
+}
+export function activeCalouroRows(rows: GenericRow[]) {
+  return [...activePeople(rows).values()]
+    .filter((person) => person.type === 'calouro').flatMap((person) => person.rows)
 }
 export function matriculasForPeriod(data: CampaignData[], period: string) {
   return data.flatMap((item) => item.matriculados).filter((row) => academicPeriod(profileField(row, 'periodo_letivo', 'PERIODO LETIVO')) === period)

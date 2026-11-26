@@ -44,9 +44,9 @@ try {
   entry = 'historical-preview-entry.tsx'
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('http://127.0.0.1:5188/?historico=1')
-  await page.getByRole('heading', { name: 'Comparativo de inscritos e matriculados', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Comparativo de inscritos e calouros', exact: true }).waitFor()
   const temporal = page.getByLabel('Recorte temporal do histórico')
-  const enrollmentKpi = page.locator('article').filter({ has: page.getByText('Matriculados', { exact: true }) })
+  const enrollmentKpi = page.locator('article').filter({ has: page.getByText('Calouros', { exact: true }) })
   await enrollmentKpi.getByText('1.875', { exact: true }).waitFor()
   await temporal.getByRole('button', { name: 'Até a data atual', exact: true }).click()
   await enrollmentKpi.getByText('79', { exact: true }).waitFor()

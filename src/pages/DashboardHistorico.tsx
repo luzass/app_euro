@@ -18,23 +18,20 @@ import { EmptyState } from '../components/UI/EmptyState'
 import { KpiCard } from '../components/UI/KpiCard'
 import { Loading } from '../components/UI/Loading'
 import { MedicineToggle } from '../components/UI/MedicineToggle'
-import { isMedicine } from '../lib/campaignData'
+import { cpfKey, isMedicine } from '../lib/campaignData'
 import {
   fetchAllRows,
   getUniqueCpfCount,
-  matchesStudentType,
   normalizeCampus,
   normalizeIngresso,
   periodTables,
   pickText,
   titleize,
   type GenericRow,
-  type StudentTypeFilter,
 } from '../lib/dashboardHelpers'
 import { formatNumberBR } from '../lib/formatters'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
 import { scopeHistoryByDate, todayInBrazil, type HistoryDateMode } from '../lib/historyDateScope'
-import { normalizedText, profileField } from '../lib/studentProfile'
 
 type SemesterFilter = '1' | '2'
 type HistoricoChartKey = 'campus' | 'curso' | 'ingresso' | 'turno'
@@ -104,7 +101,7 @@ function groupByPeriodLabel(
         periodTotals?.set(period.label, new Set<string>())
       }
 
-      const cpf = String(row.cpf ?? '').replace(/\D/g, '')
+      const cpf = source === 'matriculados' ? cpfKey(row) : String(row.cpf ?? '').replace(/\D/g, '')
       periodTotals?.get(period.label)?.add(cpf || `${period.label}-${label}-${index}`)
     })
   })
@@ -274,10 +271,8 @@ export function DashboardHistorico() {
   const [state, setState] = useState<HistoricoState>(initialState)
   const [semester, setSemester] = useState<SemesterFilter>('1')
   const [dateMode, setDateMode] = useState<HistoryDateMode>('full')
-  const [onlyActiveContracts, setOnlyActiveContracts] = useState(true)
   const [includeMedicine, setIncludeMedicine] = useState(true)
   const [asOf, setAsOf] = useState(todayInBrazil)
-  const [studentTypeFilter, setStudentTypeFilter] = useState<StudentTypeFilter>('all')
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([])
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(getSemesterPeriodLabels('1'))
   const [chartSelections, setChartSelections] =
@@ -345,21 +340,23 @@ export function DashboardHistorico() {
       })),
       dateMode,
       asOf,
+      (row) => {
+        const values: Record<HistoricoChartKey, string> = {
+          campus: getMatriculadoCampus(row), curso: getCourse(row),
+          ingresso: getMatriculadoIngresso(row), turno: getTurno(row),
+        }
+        return (!selectedProcesses.length || selectedProcesses.includes(values.ingresso))
+          && (Object.keys(chartSelections) as HistoricoChartKey[]).every((key) =>
+            !chartSelections[key].length || chartSelections[key].includes(values[key]))
+      },
     ),
-    [state.periods, dateMode, asOf, includeMedicine],
+    [state.periods, dateMode, asOf, includeMedicine, selectedProcesses, chartSelections],
   )
 
   const analysis = useMemo(() => {
     const basePeriods = dateScope.periods
       .filter((period) => period.semester === semester)
       .filter((period) => selectedPeriods.includes(period.label))
-      .map((period) => ({
-        ...period,
-        inscritos: period.inscritos.filter((row) => matchesStudentType(row, studentTypeFilter)),
-        matriculados: period.matriculados.filter((row) =>
-          matchesStudentType(row, studentTypeFilter) && (!onlyActiveContracts || ['ATIVO', 'CONTRATO ATIVO'].includes(normalizedText(profileField(row, 'contrato')))),
-        ),
-      }))
 
     const processOptions = buildProcessOptions(basePeriods)
     const processFilteredPeriods = basePeriods.map((period) => ({
@@ -368,12 +365,7 @@ export function DashboardHistorico() {
         selectedProcesses.length === 0
           ? period.inscritos
           : period.inscritos.filter((row) => selectedProcesses.includes(getInscritoIngresso(row))),
-      matriculados:
-        selectedProcesses.length === 0
-          ? period.matriculados
-          : period.matriculados.filter((row) =>
-              selectedProcesses.includes(getMatriculadoIngresso(row)),
-            ),
+      matriculados: period.matriculados,
     }))
     const filteredPeriods = processFilteredPeriods.map((period) => ({
       ...period,
@@ -390,25 +382,13 @@ export function DashboardHistorico() {
           return selectedValues.length === 0 || selectedValues.includes(values[key])
         })
       }),
-      matriculados: period.matriculados.filter((row) => {
-        const values: Record<HistoricoChartKey, string> = {
-          campus: getMatriculadoCampus(row),
-          curso: getCourse(row),
-          ingresso: getMatriculadoIngresso(row),
-          turno: getTurno(row),
-        }
-
-        return (Object.keys(chartSelections) as HistoricoChartKey[]).every((key) => {
-          const selectedValues = chartSelections[key]
-          return selectedValues.length === 0 || selectedValues.includes(values[key])
-        })
-      }),
+      matriculados: period.matriculados,
     }))
 
     const timeline = filteredPeriods.map((period) => ({
       periodo: period.label,
       inscritos: getUniqueCpfCount(period.inscritos),
-      matriculados: getUniqueCpfCount(period.matriculados),
+      matriculados: new Set(period.matriculados.map(cpfKey)).size,
     }))
 
     const totalInscritos = filteredPeriods.reduce(
@@ -416,7 +396,7 @@ export function DashboardHistorico() {
       0,
     )
     const totalMatriculados = filteredPeriods.reduce(
-      (total, period) => total + getUniqueCpfCount(period.matriculados),
+      (total, period) => total + new Set(period.matriculados.map(cpfKey)).size,
       0,
     )
 
@@ -453,8 +433,6 @@ export function DashboardHistorico() {
     selectedProcesses,
     semester,
     dateScope,
-    onlyActiveContracts,
-    studentTypeFilter,
   ])
 
   const handleProcessToggle = (process: string) => {
@@ -541,7 +519,7 @@ export function DashboardHistorico() {
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
               <span className="block">Comparativo de inscritos</span>
-              <span className="block">e matriculados</span>
+              <span className="block">e calouros</span>
             </h1>
           </div>
 
@@ -558,24 +536,6 @@ export function DashboardHistorico() {
                 }
               }}
             />
-            {[
-              { id: 'all', label: 'Todos' },
-              { id: 'calouro', label: 'Calouros' },
-              { id: 'veterano', label: 'Veteranos' },
-            ].map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setStudentTypeFilter(option.id as StudentTypeFilter)}
-                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                  studentTypeFilter === option.id
-                    ? 'border-slate-950 bg-slate-950 text-white'
-                    : 'border-slate-200 bg-white text-slate-700'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
             <button
               type="button"
               onClick={() => handleSemesterChange('1')}
@@ -664,9 +624,9 @@ export function DashboardHistorico() {
       </section>
 
       <section aria-label="Recorte temporal do histórico" className="space-y-3 border-y border-slate-200 py-4">
-        <label className="inline-flex flex-wrap items-center gap-2 text-sm text-slate-600">Contratos das matrículas<select aria-label="Contratos das matrículas no histórico" value={onlyActiveContracts ? 'active' : 'all'} onChange={(event) => setOnlyActiveContracts(event.target.value === 'active')} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value="active">Somente ativos</option><option value="all">Todos os contratos</option></select></label>
+        <p className="text-sm text-slate-600">Calouros com contrato ativo · CPF único · data da matrícula</p>
         <div className="flex flex-wrap items-center gap-2"><button type="button" aria-pressed={dateMode === 'full'} onClick={() => setDateMode('full')} className={'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ' + (dateMode === 'full' ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-700')}><Layers size={16} />Visão geral</button><button type="button" aria-pressed={dateMode === 'sameDate'} onClick={() => setDateMode('sameDate')} className={'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ' + (dateMode === 'sameDate' ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-700')}><CalendarDays size={16} />Até a data atual</button><span className="text-xs text-slate-500">Referência: {new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(asOf + 'T00:00:00Z'))}</span></div>
-        {dateMode === 'full' ? <p className="text-sm text-slate-500">Todos os dados carregados dos processos selecionados, sem corte por data.</p> : <><p className="text-sm text-slate-600">Mesmo dia e mês no ano equivalente de cada campanha. Inscritos pela data de inscrição; matrículas pela baixa do pagamento.</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">{dateScope.cutoffs.filter((item) => selectedPeriods.includes(item.period)).map((item) => <span key={item.period}>{item.period}: {item.day === null ? 'sem corte válido' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(item.day * 86400000))}</span>)}</div><p className="text-xs text-slate-500">Veteranos só entram com baixa na janela do respectivo PS; a matrícula original não comprova a data de renovação. Este recorte não representa uma fotografia histórica dos contratos. Sem data válida: {dateScope.invalidRegistrationDates} inscrições e {dateScope.invalidEnrollmentDates} matrículas; {dateScope.unplacedVeterans} veteranos com baixa antiga não foram posicionados no tempo.</p></>}
+        {dateMode === 'full' ? <p className="text-sm text-slate-500">Todos os inscritos e calouros ativos dos processos selecionados, sem corte por data.</p> : <><p className="text-sm text-slate-600">Mesmo dia e mês no ano equivalente de cada campanha. Inscritos pela data de inscrição; calouros pela data da matrícula, sem usar a baixa do pagamento.</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">{dateScope.cutoffs.filter((item) => selectedPeriods.includes(item.period)).map((item) => <span key={item.period}>{item.period}: {item.day === null ? 'sem corte válido' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(item.day * 86400000))}</span>)}</div><p className="text-xs text-slate-500">Este recorte considera o contrato ativo na carga disponível, não uma fotografia histórica dos contratos. Sem data válida: {dateScope.invalidRegistrationDates} inscrições e {dateScope.invalidEnrollmentDates} matrículas.</p></>}
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -722,7 +682,7 @@ export function DashboardHistorico() {
         />
         <KpiCard title="Inscritos" value={formatNumberBR(analysis.totalInscritos)} helperText="" />
         <KpiCard
-          title="Matriculados"
+          title="Calouros"
           value={formatNumberBR(analysis.totalMatriculados)}
           helperText=""
         />
@@ -765,7 +725,7 @@ export function DashboardHistorico() {
               <Line
                 type="monotone"
                 dataKey="matriculados"
-                name="Matriculados"
+                name="Calouros"
                 stroke="#10b981"
                 strokeWidth={3}
               >
@@ -793,7 +753,7 @@ export function DashboardHistorico() {
           onSelect={handleChartSelect}
         />
         <PeriodComparisonChart
-          title="Matriculados por campus"
+          title="Calouros por campus"
           data={analysis.campusMatriculadosData}
           periods={selectedPeriods}
           chartKey="campus"
@@ -809,7 +769,7 @@ export function DashboardHistorico() {
           onSelect={handleChartSelect}
         />
         <PeriodComparisonChart
-          title="Matriculados por curso"
+          title="Calouros por curso"
           data={analysis.cursoMatriculadosData}
           periods={selectedPeriods}
           chartKey="curso"
@@ -825,7 +785,7 @@ export function DashboardHistorico() {
           onSelect={handleChartSelect}
         />
         <PeriodComparisonChart
-          title="Matriculados por processo seletivo"
+          title="Calouros por processo seletivo"
           data={analysis.ingressoMatriculadosData}
           periods={selectedPeriods}
           chartKey="ingresso"
@@ -841,7 +801,7 @@ export function DashboardHistorico() {
           onSelect={handleChartSelect}
         />
         <PeriodComparisonChart
-          title="Matriculados por turno"
+          title="Calouros por turno"
           data={analysis.turnoMatriculadosData}
           periods={selectedPeriods}
           chartKey="turno"

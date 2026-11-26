@@ -35,7 +35,7 @@ try {
         { cpf: '11111111111', curso: 'MEDICINA', campus: 'Asa Sul', turno: 'INTEGRAL', forma_de_ingresso: 'PROUNI', data_inscricao: `${year}-11-12`, data_baixa_do_pagamento: `${year}-11-12` },
         { cpf: '22222222222', curso: 'DIREITO', campus: 'Águas Claras', turno: 'NOTURNO', forma_de_ingresso: 'Vestibular', data_inscricao: `${year}-11-10`, data_baixa_do_pagamento: `${year}-11-10` },
         { cpf: '44444444444', curso: ' Medicina ', campus: 'Asa Sul', turno: 'INTEGRAL', forma_de_ingresso: 'PROUNI', data_inscricao: `${year}-11-20`, data_baixa_do_pagamento: `${year}-11-20` },
-      ].map((row) => ({ ...row, ano_semestre: period, periodo_letivo: period, filial: row.campus, tipo_de_ingresso: row.forma_de_ingresso, tipo_aluno: 'CALOURO', contrato: 'ATIVO', nivel_de_ensino: 'GRADUAÇÃO' }))
+      ].map((row) => ({ ...row, data_de_matricula: row.data_baixa_do_pagamento, ano_semestre: period, periodo_letivo: period, filial: row.campus, tipo_de_ingresso: row.forma_de_ingresso, tipo_aluno: 'CALOURO', contrato: 'ATIVO', nivel_de_ensino: 'GRADUAÇÃO' }))
     } else if (table === 'leads_cursos') rows = [
       { cpf: '11111111111', curso: 'Medicina', campus: 'Asa Sul', ano_semestre: '2027.1', created_at: '2026-11-15T03:00:00Z' },
       { cpf: '22222222222', curso: 'Direito', campus: 'Águas Claras', ano_semestre: '2027.1', created_at: '2026-11-15T03:00:00Z' },
@@ -83,18 +83,18 @@ try {
   await toggle().screenshot({ path: 'outputs/dashboard-medicine-check/funil-toggle-mobile.png' })
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('http://127.0.0.1:5193/?historico=1')
-  await total('Inscritos', 12); await total('Matriculados', 12)
+  await total('Inscritos', 12); await total('Calouros', 12)
   await toggle().click()
-  await total('Inscritos', 4); await total('Matriculados', 4)
+  await total('Inscritos', 4); await total('Calouros', 4)
   await page.waitForFunction(() => ![...document.querySelectorAll('.recharts-cartesian-axis-tick-value')].some((node) => node.textContent === 'Medicina'))
   await page.getByRole('button', { name: 'Até a data atual', exact: true }).click()
-  await total('Inscritos', 4); await total('Matriculados', 4)
+  await total('Inscritos', 4); await total('Calouros', 4)
   await toggle().click()
-  await total('Inscritos', 8); await total('Matriculados', 8)
+  await total('Inscritos', 8); await total('Calouros', 8)
   await toggle().click()
   await page.getByRole('button', { name: 'PS - 2º Semestre', exact: true }).click()
   await page.getByRole('button', { name: 'Visão geral', exact: true }).click()
-  await total('Inscritos', 4); await total('Matriculados', 4)
+  await total('Inscritos', 4); await total('Calouros', 4)
   await page.waitForTimeout(1800)
   await page.screenshot({ path: 'outputs/dashboard-medicine-check/historico-desktop.png', fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })

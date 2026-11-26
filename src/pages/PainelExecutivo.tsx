@@ -7,6 +7,8 @@ import { PersonaPanel } from '../components/Executive/PersonaPanel'
 import { CheckboxFilter } from '../components/UI/CheckboxFilter'
 import { EmptyState } from '../components/UI/EmptyState'
 import { Loading } from '../components/UI/Loading'
+import { MedicineToggle } from '../components/UI/MedicineToggle'
+import { isMedicine } from '../lib/campaignData'
 import { ExecutiveDataContext } from '../lib/ExecutiveDataContext'
 import { fetchAllRows, normalizeCampus, normalizeIngresso, periodTables, titleize, type GenericRow } from '../lib/dashboardHelpers'
 import { matchesFilter, type FilterSelection } from '../lib/profileFilters'
@@ -57,6 +59,7 @@ export function PainelExecutivo() {
   const requestedView = params.get('visao')
   const view = sections.find((section) => section.key === requestedView)?.key ?? 'resumo'
   const [filters, setFilters] = useState(emptyFilters)
+  const [includeMedicine, setIncludeMedicine] = useState(true)
   const [refresh, setRefresh] = useState(0)
   const historyCache = useRef(new Map<string, CampaignData>())
   const cepCache = useRef<Awaited<ReturnType<typeof readTable>> | null>(null)
@@ -117,15 +120,19 @@ export function PainelExecutivo() {
   }), [state])
 
   const analysis = useMemo(() => {
-    const all = state.data.flatMap((item) => [...item.inscritos.map((row) => academicFields(row, false)), ...item.matriculados.map((row) => academicFields(row, true))])
+    const scoped = state.data.map((item) => ({ ...item,
+      inscritos: item.inscritos.filter((row) => includeMedicine || !isMedicine(row)),
+      matriculados: item.matriculados.filter((row) => includeMedicine || !isMedicine(row)),
+    }))
+    const all = scoped.flatMap((item) => [...item.inscritos.map((row) => academicFields(row, false)), ...item.matriculados.map((row) => academicFields(row, true))])
     const options = Object.fromEntries(filterLabels.map(({ key }) => [key, [...new Set(all.map((row) => row[key]))].sort((a, b) => a.localeCompare(b, 'pt-BR'))])) as Record<FilterKey, string[]>
     const matches = (row: GenericRow, matricula: boolean) => {
       const fields = academicFields(row, matricula)
       return filterLabels.every(({ key }) => matchesFilter(filters[key], fields[key]))
     }
-    const data = state.data.map((item) => ({ ...item, inscritos: item.inscritos.filter((row) => matches(row, false)), matriculados: item.matriculados.filter((row) => matches(row, true)) }))
+    const data = scoped.map((item) => ({ ...item, inscritos: item.inscritos.filter((row) => matches(row, false)), matriculados: item.matriculados.filter((row) => matches(row, true)) }))
     return { options, data }
-  }, [state.data, filters])
+  }, [state.data, filters, includeMedicine])
 
   if (state.loading) return <Loading message="Carregando o painel executivo..." />
   if (state.error) return <EmptyState title="Não foi possível carregar o painel executivo" description={state.error} action={<button className={controlClass} onClick={() => setRefresh((value) => value + 1)}>Tentar novamente</button>} />
@@ -134,7 +141,13 @@ export function PainelExecutivo() {
   return <ExecutiveDataContext.Provider value={shared}><div className="space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="text-2xl font-semibold text-slate-950">Painel executivo</h1><p className="mt-1 text-sm text-slate-500">Processo seletivo atual: {currentPeriod} · consulta em {state.readAt}</p><p role="status" className="mt-1 text-xs text-slate-500">{state.refreshing ? 'Consultando novas cargas...' : 'Dados atuais consultados a cada 5 minutos enquanto o painel estiver aberto.'}</p></div>
-      <div className="flex gap-2">{showFilters && <button type="button" className={controlClass} onClick={() => setFilters(emptyFilters)}><Eraser size={16} />Limpar filtros</button>}<button type="button" className={controlClass} disabled={state.refreshing} onClick={reload}><RefreshCw size={16} className={state.refreshing ? 'animate-spin' : ''} />Atualizar</button></div>
+      <div className="flex flex-wrap gap-2">{showFilters && <><MedicineToggle checked={includeMedicine} onChange={(checked) => {
+        setIncludeMedicine(checked)
+        if (!checked) setFilters((current) => {
+          const courses = current.curso?.filter((curso) => !isMedicine({ curso }))
+          return { ...current, curso: courses?.length ? courses : null }
+        })
+      }} /><button type="button" className={controlClass} onClick={() => setFilters(emptyFilters)}><Eraser size={16} />Limpar filtros</button></>}<button type="button" className={controlClass} disabled={state.refreshing} onClick={reload}><RefreshCw size={16} className={state.refreshing ? 'animate-spin' : ''} />Atualizar</button></div>
     </header>
     <div role="tablist" aria-label="Seções do painel executivo" className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2">
       {sections.map((section, index) => <button key={section.key} id={'exec-tab-' + section.key} type="button" role="tab" aria-selected={view === section.key} aria-controls={'exec-panel-' + section.key} tabIndex={view === section.key ? 0 : -1} className={'shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium ' + (view === section.key ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100')} onClick={() => setParams({ visao: section.key })} onKeyDown={(event) => {

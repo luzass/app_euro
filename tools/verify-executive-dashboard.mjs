@@ -81,7 +81,8 @@ try {
   await courseScope.getByRole('button', { name: 'Selecionar todos', exact: true }).click()
   await page.keyboard.press('Escape')
   await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
-  assert.equal(await page.getByLabel('Data das matrículas', { exact: true }).inputValue(), 'payment')
+  assert.equal(await page.getByLabel('Data das matrículas', { exact: true }).count(), 0, 'Payment date is no longer selectable')
+  await page.getByText('Data da matrícula · contrato ativo', { exact: true }).waitFor()
   const planning = page.getByLabel('Planejamento da campanha', { exact: true })
   await planning.getByRole('heading', { name: 'Direção da campanha', exact: true }).waitFor()
   assert.equal(await planning.getByText(/Meta 01 mensal soma 306/).count(), 0)
@@ -238,7 +239,7 @@ try {
   await card('Total de matriculados').getByText('248', { exact: true }).waitFor()
   await planning.getByText('Base atual indisponível', { exact: true }).first().waitFor()
   failInscritos = false
-  data.at(-1).matriculados[0].data_baixa_do_pagamento = '28/09/2026'
+  data.at(-1).matriculados[0].data_de_matricula = '28/09/2026'
   await page.getByRole('button', { name: 'Atualizar', exact: true }).click()
   await card('Calouros').getByText('20', { exact: true }).waitFor()
   await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
@@ -254,7 +255,7 @@ try {
   await page.getByRole('button', { name: 'Atualizar', exact: true }).click()
   await card('Calouros').getByText('Projeção linear', { exact: true }).waitFor()
   await card('Calouros').getByText('25', { exact: true }).waitFor()
-  await comparison.getByText('1 CPF sem baixa do pagamento válida', { exact: true }).first().waitFor()
+  await comparison.getByText('1 CPF sem data de matrícula válida', { exact: true }).first().waitFor()
   await card('Calouros').screenshot({ path: resolve(output, 'forecast-history-fallback.png') })
   assert.deepEqual(errors, [])
   console.log('Executivo: navegação consolidada, fontes compartilhadas, quatro projeções, calendário, bloqueios, permissões e desktop/mobile verificados com dados fictícios.')
