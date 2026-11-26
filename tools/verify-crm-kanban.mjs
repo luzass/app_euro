@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawn } from 'node:child_process'
 import { crmFixture } from './test-crm-kanban.mjs'
+import { buildCrmActions, summarizeCrmActions } from '../src/lib/crmActions.ts'
 
 const { chromium } = await import(
   pathToFileURL(resolve(process.argv[2], 'playwright/index.mjs')).href
@@ -375,6 +376,11 @@ try {
   await page.goto('http://127.0.0.1:5191', { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.getByRole('heading', { name: 'CRM · Captação' }).waitFor()
   await page.getByRole('button', { name: 'Abrir ficha de Ana Oliveira', exact: true }).waitFor()
+  const summary = page.getByRole('region', { name: 'Resumo de ações do Kanban', exact: true })
+  const summaryValues = async () => summary.locator('strong').allTextContents()
+  const expectedSummary = () => Object.values(summarizeCrmActions(buildCrmActions(rows, Date.now()), Date.now())).map(String)
+  await summary.waitFor()
+  assert.deepEqual(await summaryValues(), expectedSummary())
   const selectableOwners = async (select) => {
     await select.waitFor()
     return select.locator('option:not([disabled])').evaluateAll(options => options.map(option => option.value))
@@ -421,6 +427,8 @@ try {
   await actionList.getByLabel('Tipo de ação', { exact: true }).selectOption('all')
   await page.getByRole('tab', { name: 'Lista de Ações', exact: true }).press('ArrowLeft')
   await page.getByLabel('Quadro Kanban', { exact: true }).waitFor()
+  await summary.waitFor()
+  assert.deepEqual(await summaryValues(), expectedSummary(), 'Returning from the action list keeps board reminder counters')
   const reads = () => calls.filter((call) => call.name === 'crm_kanban_contacts').length
   const baselineReads = reads()
   await page.clock.fastForward(4 * 60000)
@@ -670,6 +678,9 @@ try {
   await page.screenshot({ path: resolve(output, 'crm-lista-acoes-mobile.png'), fullPage: true })
   await page.setViewportSize({ width: 1440, height: 1050 })
   await page.getByRole('tab', { name: 'Kanban', exact: true }).click()
+  await summary.waitFor()
+  const sellerCounts = summarizeCrmActions(buildCrmActions(rows.filter(row => row.owner_id === 'seller-1'), Date.now()), Date.now())
+  assert.deepEqual(await summaryValues(), Object.values(sellerCounts).map(String), 'Board counters follow the seller portfolio')
   await page.getByRole('button', { name: /Sem responsável/ }).click()
   await page.getByRole('button', { name: 'Assumir', exact: true }).click()
   await page.getByRole('button', { name: /^Meus/ }).click()
@@ -685,10 +696,12 @@ try {
   await page.setViewportSize({ width: 390, height: 844 })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
   await page.screenshot({ path: resolve(output, 'kanban-mobile.png'), fullPage: true })
+  await summary.screenshot({ path: resolve(output, 'kanban-lembretes-mobile.png') })
   const mobileColumn = page.getByLabel('Contatos em Primeiro contato', { exact: true })
   await mobileColumn.evaluate((element) => {
     element.scrollTop = 0
   })
+  await mobileColumn.scrollIntoViewIfNeeded()
   const touchRect = await mobileColumn.boundingBox(),
     cdp = await context.newCDPSession(page)
   const touchX = touchRect.x + 90,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildCrmActions, crmActionDay, crmActionDescription, crmActionInWindow } from '../src/lib/crmActions.ts'
+import { buildCrmActions, crmActionDay, crmActionDescription, crmActionInWindow, summarizeCrmActions } from '../src/lib/crmActions.ts'
 import { crmCadenceKey, crmPauseKey } from '../src/lib/crmWorkflow.ts'
 import { crmFixture } from './test-crm-kanban.mjs'
 
@@ -50,4 +50,7 @@ assert.deepEqual(new Set(idle.map(action => action.kind)), new Set(['cadence', '
 assert.equal(new Set(idle.map(action => action.id)).size, idle.length)
 assert.deepEqual(buildCrmActions([manual('future', '2026-11-28T12:00:00Z', { last_interaction_at: '2026-11-16T12:00:00Z' })], now).map(action => action.kind), ['manual'], 'Scheduled return keeps existing suppression of automatic inactivity alerts')
 assert.match(crmActionDescription(own[0]), /retorno agendado/)
+assert.deepEqual(summarizeCrmActions(own, now), { overdue: 2, today: 2, idle: 0, response: 0 })
+assert.deepEqual(summarizeCrmActions(idle, now), { overdue: 1, today: 0, idle: 1, response: 1 }, 'Inactivity and missing response are separate contact counts, not extra scheduled overdue actions')
+assert.deepEqual(summarizeCrmActions([], now), { overdue: 0, today: 0, idle: 0, response: 0 })
 console.log('CRM actions: chronological priority, seller scope, managers, BRT midnight/today/future, inactive contacts, pending cadence, pause, callbacks, inactivity and immutable inputs passed.')

@@ -19,6 +19,15 @@ export function buildCrmActions(contacts: CrmContact[], now: number, ownerId?: s
     .filter(action => Number.isFinite(action.due))
     .sort((a, b) => a.due - b.due || a.id.localeCompare(b.id))
 }
+export function summarizeCrmActions(actions: CrmReminder[], now: number) {
+  const scheduled = actions.filter(action => action.kind === 'cadence' || action.kind === 'manual')
+  return {
+    overdue: scheduled.filter(action => action.due < now).length,
+    today: scheduled.filter(action => crmActionDay(action.due) === crmActionDay(now)).length,
+    idle: new Set(actions.filter(action => action.kind === 'idle').map(action => action.contact.id)).size,
+    response: new Set(actions.filter(action => action.kind === 'response').map(action => action.contact.id)).size,
+  }
+}
 export function crmActionDescription(action: CrmReminder) {
   if (action.kind === 'manual') return 'Realizar o retorno agendado com o candidato.'
   if (action.kind === 'idle') return 'Entrar em contato e registrar o atendimento.'

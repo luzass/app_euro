@@ -70,6 +70,7 @@ import {
 import { CrmContactForm, crmButton, crmInput } from '../components/CRM/CrmContactForm'
 import { CrmContactDrawer } from '../components/CRM/CrmContactDrawer'
 import { CrmActionList } from '../components/CRM/CrmActionList'
+import { CrmReminderSummary } from '../components/CRM/CrmReminderSummary'
 import { crmAcademicProgress, crmReminders } from '../lib/crmWorkflow'
 import { matchesCrmArchiveView, type CrmArchiveView } from '../lib/crmLoss'
 import { CrmLossReasonManager } from '../components/CRM/CrmLossReasonManager'
@@ -905,6 +906,7 @@ export function CrmKanbanView({
         </div>
       ) : (
       <div role="tabpanel" id="crm-panel-board" aria-labelledby="crm-view-board" className="space-y-4">
+      <CrmReminderSummary contacts={visible} now={now} />
       <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
         <span>
           {busy ? (
