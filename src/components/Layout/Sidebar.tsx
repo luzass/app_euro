@@ -22,7 +22,7 @@ export function Sidebar({
   const navigate = useNavigate()
   const { signOut } = useAuth()
   const { profile } = useProfile()
-  const menuItems = getAllowedNavItems(profile?.role)
+  const menuItems = getAllowedNavItems(profile?.role, profile?.email)
 
   const handleSignOut = async () => {
     await signOut()

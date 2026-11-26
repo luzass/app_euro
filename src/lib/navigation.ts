@@ -8,14 +8,17 @@ import {
   Gauge,
   Kanban,
   ChartNoAxesCombined,
+  CalendarRange,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
+import { eventAccessEmails } from './eventos.ts'
 
 export interface NavItem {
   title: string
   path: string
   icon: LucideIcon
   allowedRoles: Role[]
+  allowedEmails?: string[]
 }
 
 export const navItems: NavItem[] = [
@@ -76,6 +79,13 @@ export const navItems: NavItem[] = [
     allowedRoles: ['admin', 'reitoria', 'captacao_gerente'],
   },
   {
+    title: 'Eventos de Captação',
+    path: '/app/eventos',
+    icon: CalendarRange,
+    allowedRoles: ['admin', 'captacao_gerente'],
+    allowedEmails: eventAccessEmails,
+  },
+  {
     title: 'Adicionar colaboradores',
     path: '/app/criar-usuario',
     icon: UserRoundPlus,
@@ -100,21 +110,23 @@ export function getDefaultRouteForProfile(profile?: Profile | null) {
   return getDefaultRoute(profile?.role)
 }
 
-export function getAllowedNavItems(role?: Role | null) {
+export function getAllowedNavItems(role?: Role | null, email?: string | null) {
   if (!role) {
     return []
   }
 
-  return navItems.filter((item) => item.allowedRoles.includes(role))
+  return navItems.filter((item) => item.allowedRoles.includes(role)
+    && (!item.allowedEmails || item.allowedEmails.includes(email?.trim().toLowerCase() ?? '')))
 }
 
-export function canAccessPath(pathname: string, role?: Role | null) {
+export function canAccessPath(pathname: string, role?: Role | null, email?: string | null) {
   if (!role) {
     return false
   }
 
   const matchingRoute = navItems.find((item) => pathname.startsWith(item.path))
-  return matchingRoute ? matchingRoute.allowedRoles.includes(role) : true
+  return matchingRoute ? matchingRoute.allowedRoles.includes(role)
+    && (!matchingRoute.allowedEmails || matchingRoute.allowedEmails.includes(email?.trim().toLowerCase() ?? '')) : true
 }
 
 export function getPageTitle(pathname: string) {

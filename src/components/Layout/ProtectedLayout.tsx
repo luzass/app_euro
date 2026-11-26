@@ -39,7 +39,7 @@ export function ProtectedLayout() {
     return <Navigate to="/login" replace />
   }
 
-  if (profile && !canAccessPath(location.pathname, profile.role)) {
+  if (profile && !canAccessPath(location.pathname, profile.role, profile.email)) {
     return <Navigate to={getDefaultRouteForProfile(profile)} replace />
   }
 

@@ -16,6 +16,7 @@ import { NotFound } from '../pages/NotFound'
 import { PainelCaptacao } from '../pages/PainelCaptacao'
 import { PainelExecutivo } from '../pages/PainelExecutivo'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
+import { EventosCaptacao } from '../pages/EventosCaptacao'
 
 function RootRedirect() {
   const { user, loading: authLoading } = useAuth()
@@ -147,6 +148,10 @@ export function AppRoutes() {
                 <GestaoCrm />
               </RequireRole>
             }
+          />
+          <Route
+            path="eventos"
+            element={<EventosCaptacao />}
           />
           <Route
             path="criar-usuario"
