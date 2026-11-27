@@ -48,7 +48,7 @@ export function Sidebar({
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex flex-col bg-[#004181] text-white shadow-xl transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:shadow-none',
+          'fixed inset-y-0 left-0 z-40 flex h-dvh min-h-0 flex-col overflow-hidden bg-[#004181] text-white shadow-xl transition-transform duration-300 lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           desktopCollapsed ? 'w-[88px]' : 'w-[292px]',
         )}
@@ -57,7 +57,7 @@ export function Sidebar({
 
         <div
           className={cn(
-            'flex items-center border-b border-white/10 px-5 py-5',
+            'flex shrink-0 items-center border-b border-white/10 px-5 py-5',
             desktopCollapsed ? 'justify-center lg:px-3' : 'justify-between',
           )}
         >
@@ -95,7 +95,7 @@ export function Sidebar({
           </div>
         </div>
 
-        <nav className={cn('flex-1 space-y-2 py-5', desktopCollapsed ? 'px-3' : 'px-4')}>
+        <nav aria-label="Menu principal" className={cn('min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain py-5', desktopCollapsed ? 'px-3' : 'px-4')}>
           {menuItems.map((item) => {
             const Icon = item.icon
 
@@ -124,7 +124,7 @@ export function Sidebar({
 
         <div
           className={cn(
-            'border-t border-white/10 bg-[#02162d] py-5',
+            'shrink-0 border-t border-white/10 bg-[#02162d] py-5',
             desktopCollapsed ? 'px-3' : 'px-4',
           )}
         >

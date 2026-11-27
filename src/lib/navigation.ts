@@ -9,9 +9,11 @@ import {
   Kanban,
   ChartNoAxesCombined,
   CalendarRange,
+  BrainCircuit,
 } from 'lucide-react'
 import type { Profile, Role } from './types'
 import { eventAccessEmails } from './eventos.ts'
+import { weeklyOwnerEmail } from '../../supabase/functions/_shared/weeklyAccess.ts'
 
 export interface NavItem {
   title: string
@@ -84,6 +86,13 @@ export const navItems: NavItem[] = [
     icon: CalendarRange,
     allowedRoles: ['admin', 'captacao_gerente'],
     allowedEmails: eventAccessEmails,
+  },
+  {
+    title: 'Inteligência Semanal',
+    path: '/app/inteligencia-semanal',
+    icon: BrainCircuit,
+    allowedRoles: ['admin'],
+    allowedEmails: [weeklyOwnerEmail],
   },
   {
     title: 'Adicionar colaboradores',

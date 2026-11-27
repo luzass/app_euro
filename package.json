@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:weekly-edge && tsc -b && vite build",
+    "build:weekly-edge": "node tools/build-weekly-edge.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

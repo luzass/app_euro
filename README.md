@@ -237,3 +237,56 @@ As configuracoes padrao do Vite ja sao compativeis com a Vercel.
 - Tabela detalhada
 - Dashboard - Euro com abas e comparativos
 - Pagina Criar Usuario integrada a Edge Function segura
+
+## 11. Inteligencia comercial semanal (privada)
+
+A rota `/app/inteligencia-semanal` e exclusiva de `lucasctdebritto@gmail.com`.
+O SQL valida a identidade em `auth.users`, nao apenas o e-mail editavel do perfil.
+
+1. Execute `sql/captacao_inteligencia_semanal.sql` no SQL Editor do projeto.
+   Ele depende da estrutura atual do CRM, mas nao altera os contatos nem os dados academicos.
+2. Nos **Edge Function Secrets** do Supabase, configure `OPENAI_API_KEY`, `OPENAI_MODEL`
+   (um modelo disponivel na conta, compativel com Responses e Structured Outputs) e
+   `WEEKLY_ALLOWED_ORIGINS=https://app.vestibulareuro.com.br`.
+   A chave da OpenAI nunca deve ter prefixo `VITE_`, aparecer no navegador ou entrar no Git.
+3. A partir da raiz deste repositorio, com a CLI autenticada e vinculada ao projeto, publique:
+
+```bash
+npm run build:weekly-edge
+supabase functions deploy weekly-intelligence
+```
+
+O empacotamento reutiliza os calculos de campanha e cadencia em `src/lib` e gera `handler.bundle.js` dentro da
+pasta da funcao. Assim a publicacao nao depende de imports fora da pasta de Edge Functions.
+Nao basta colar apenas `index.ts` no editor on-line. Nenhuma credencial administrativa e usada pela funcao;
+ela valida a sessao e chama os RPCs com a identidade do usuario. Mantenha a verificacao de JWT habilitada.
+
+4. Publique o frontend. Capture uma fotografia, confira o conteudo e autorize a geracao.
+   Capturar nao chama a OpenAI. Nao ha polling, cron, envio de WhatsApp ou chamada de IA automatica.
+
+Uma fotografia preserva indicadores, cobertura e amostra redigida dos resumos. Fases do CRM refletem a
+captura atual; interacoes usam a data informada no atendimento. Historicos academicos sao cargas preservadas,
+nao fotografias dos contratos antigos. Calouros usam contrato ativo e data da matricula, nunca baixa do pagamento.
+Resumos ficam fora do envio por padrao. O envio inclui no maximo 40 resumos de 600 caracteres e ate 30 compromissos dos ultimos 28 dias.
+A remocao automatica de identificadores em texto livre e parcial:
+e obrigatorio revisar o conteudo antes de enviar. Nomes conhecidos, telefones, CPFs, e-mails e links sao redigidos;
+outros dados pessoais ou sensiveis precisam ser removidos na origem antes de capturar novamente.
+
+O envio usa a Responses API com `store: false` e JSON Schema. Isso nao equivale a uma garantia de retencao zero
+do provedor; confira as politicas da conta. Uma fotografia so recebe um diagnostico concluido, e o banco limita
+a dez tentativas em 24 horas. Falhas nao geram relatorios ficticios nem repeticoes pagas automaticas.
+Sugestoes precisam de evidencias existentes e aprovacao antes de virar compromissos. As revisoes do plano
+preservam a base numerica original e um historico de alteracoes; variacoes nao comprovam causalidade.
+
+Documentacao oficial: [Responses](https://developers.openai.com/api/reference/resources/responses/methods/create),
+[Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
+[secrets de Edge Functions](https://supabase.com/docs/guides/functions/secrets).
+
+Testes locais, sem chamadas pagas:
+
+```bash
+node tools/test-weekly-intelligence.mjs
+node tools/test-weekly-handler.mjs
+node tools/test-weekly-sql.mjs CAMINHO_DO_PGLITE
+node tools/verify-weekly-intelligence.mjs DIRETORIO_DOS_PACOTES_PLAYWRIGHT
+```

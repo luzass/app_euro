@@ -17,6 +17,7 @@ import { PainelCaptacao } from '../pages/PainelCaptacao'
 import { PainelExecutivo } from '../pages/PainelExecutivo'
 import { TrafegoPagoSpike } from '../pages/TrafegoPagoSpike'
 import { EventosCaptacao } from '../pages/EventosCaptacao'
+import { InteligenciaSemanal } from '../pages/InteligenciaSemanal'
 
 function RootRedirect() {
   const { user, loading: authLoading } = useAuth()
@@ -153,6 +154,7 @@ export function AppRoutes() {
             path="eventos"
             element={<EventosCaptacao />}
           />
+          <Route path="inteligencia-semanal" element={<InteligenciaSemanal />} />
           <Route
             path="criar-usuario"
             element={
