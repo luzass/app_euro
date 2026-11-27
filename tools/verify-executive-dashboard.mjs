@@ -239,12 +239,26 @@ try {
   await card('Total de matriculados').getByText('248', { exact: true }).waitFor()
   await planning.getByText('Base atual indisponível', { exact: true }).first().waitFor()
   failInscritos = false
+  data.at(-1).inscritos[0].data_inscricao = '28/09/2026'
   data.at(-1).matriculados[0].data_de_matricula = '28/09/2026'
   await page.getByRole('button', { name: 'Atualizar', exact: true }).click()
   await card('Calouros').getByText('20', { exact: true }).waitFor()
   await card('Total de matriculados').getByText('240', { exact: true }).waitFor()
   await card('Calouros').getByText(/Base do ritmo: 5 no recorte/).waitFor()
   await card('Calouros').screenshot({ path: resolve(output, 'forecast-outside-window.png') })
+  const paceAudit = page.getByLabel('Projeções por ritmo diário', { exact: true })
+  if (!await paceAudit.isVisible()) await page.getByText('Comparações e auditoria dos cenários', { exact: true }).click()
+  await paceAudit.waitFor({ state: 'visible' })
+  const benchmarkRows = paceAudit.locator('tbody').first().locator('tr')
+  assert.equal(await benchmarkRows.nth(0).locator('td').first().innerText(), '61', 'Registrations before start remain in known stock')
+  assert.equal(await benchmarkRows.nth(1).locator('td').first().innerText(), '6', 'Enrollment before start must not blank the benchmark')
+  assert.notEqual(await benchmarkRows.nth(1).locator('td').nth(2).innerText(), '-')
+  assert.equal(await paceAudit.getByText('Há registros atuais fora da janela ou após o corte', { exact: true }).count(), 0)
+  await paceAudit.getByText('1 anteriores ao início incluídos no realizado, sem extrapolar seu ritmo; 0 posteriores ao corte excluídos dos cálculos.', { exact: true }).first().waitFor()
+  await paceAudit.getByRole('columnheader', { name: 'Inscritos até o corte', exact: true }).waitFor()
+  await paceAudit.screenshot({ path: resolve(output, 'pace-stock-mobile.png') })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await paceAudit.screenshot({ path: resolve(output, 'pace-stock-desktop.png') })
   for (const historical of data.filter((source) => ['2024.1', '2025.1', '2026.1'].includes(source.period))) {
     const cpf = historical.matriculados[0].cpf
     for (const row of historical.matriculados.filter((row) => row.cpf === cpf)) {

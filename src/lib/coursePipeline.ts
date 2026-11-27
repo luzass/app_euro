@@ -13,7 +13,7 @@ export function coursePipelineGaps(data: CampaignData[], config: ForecastConfig)
   for (const row of registrationsForPeriod(data, config.currentPeriod)) {
     const cpf = cpfKey(row), label = profileField(row, 'curso')
     const course = normalizedText(label).replace(/\s+/g, ' '), day = dateDay(profileField(row, 'data_inscricao'))
-    if (!cpf || !course || ['NAO INFORMADO', 'SEM CURSO', '-'].includes(course) || day === null || day < start || day > cut) continue
+    if (!cpf || !course || ['NAO INFORMADO', 'SEM CURSO', '-'].includes(course) || day === null || day > cut) continue
     const key = `${cpf}|${course}`, previous = registrations.get(key)
     if (!previous || day < previous.day) registrations.set(key, { course, label, day })
   }

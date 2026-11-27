@@ -32,8 +32,12 @@ function sample(data: CampaignData[], period: string, config: ForecastConfig, ki
     }
   }
   const events = personEvents(rows, kind === 'inscritos' ? ['data_inscricao'] : matriculaDateFields(config))
-  const dates = [...events.people.values()].filter((day): day is number => day !== null && day >= start && day <= end).sort((a, b) => a - b)
-  const atCut = dates.filter((day) => day <= cutoff).length
+  const dated = [...events.people.values()].filter((day): day is number => day !== null).sort((a, b) => a - b)
+  const dates = dated.filter(day => day >= start && day <= end)
+  const beforeStart = dated.filter(day => day < start).length
+  const inWindow = dates.filter(day => day <= cutoff).length
+  const atCut = beforeStart + inWindow
+  const afterCut = dated.filter(day => day > cutoff).length
   const recentStart = Math.max(start, cutoff - 13), previousStart = Math.max(start, cutoff - 27)
   const observedDays = cutoff - recentStart + 1
   const previousDays = Math.max(0, recentStart - previousStart)
@@ -47,11 +51,11 @@ function sample(data: CampaignData[], period: string, config: ForecastConfig, ki
     : ambiguous ? 'Classificação de aluno ou ingresso conflitante'
       : activeInvalid || missingPeriod || missingContract || events.invalidCpf ? 'CPF, contrato ou período letivo inválido'
         : events.missingDates ? 'Há CPFs sem data válida' : ''
-  return { period, start, end, cutoff, atCut, total: dates.length, base: events.people.size,
+  return { period, start, end, cutoff, atCut, inWindow, beforeStart, afterCut, total: beforeStart + dates.length, base: events.people.size,
     recent, previous, observedDays, remaining, dailyRecent: recent / observedDays,
     dailyPrevious: previousDays ? previous / previousDays : null, fullWindows: cutoff - start >= 27,
-    dailyRemaining: remaining ? (dates.length - atCut) / remaining : 0,
-    lastEvent: dates.filter((day) => day <= cutoff).at(-1) ?? null, reason }
+    dailyRemaining: remaining ? (dates.length - inWindow) / remaining : 0,
+    lastEvent: dated.filter((day) => day <= cutoff).at(-1) ?? null, reason }
 }
 
 export function buildForecastBenchmarks(data: CampaignData[], config: ForecastConfig, kind: PaceKind) {
@@ -59,7 +63,7 @@ export function buildForecastBenchmarks(data: CampaignData[], config: ForecastCo
   const history = [...new Set(config.references)].filter((period) => period < config.currentPeriod && period.endsWith(config.currentPeriod.slice(-2)))
     .sort().map((period) => sample(data, period, config, kind)).filter((item): item is NonNullable<typeof item> => item !== null)
   const usable = history.filter((item) => !item.reason && item.total > 0)
-  const currentReason = !current ? 'Confira o calendário' : current.reason || (current.base !== current.atCut ? 'Há registros atuais fora da janela ou após o corte' : '')
+  const currentReason = !current ? 'Confira o calendário' : current.reason
   const recentReason = currentReason || (current && current.observedDays < 7 ? 'São necessários ao menos sete dias de campanha' : '')
   const historicalReason = currentReason || (usable.length < 2 ? 'São necessárias duas referências históricas utilizáveis' : '')
   const recentProjection = !recentReason && current ? Math.round(current.atCut + current.dailyRecent * current.remaining) : null
