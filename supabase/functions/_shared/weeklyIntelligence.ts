@@ -147,30 +147,85 @@ export function buildWeeklySnapshot(source: WeeklySource, cutoff: string): Weekl
 }
 
 export function weeklyAIInput(snapshot: WeeklySnapshot, actions: WeeklyAction[], includeNotes: boolean) {
+  const references = new Map(weeklyEvidenceCatalog(snapshot).map(item=>[item.key,item.id]))
   const input = {
     period: snapshot.period, cutoff: snapshot.cutoff, captured_at: snapshot.captured_at, window_start: snapshot.window_start,
-    facts: snapshot.facts, warnings: snapshot.warnings,
+    evidence_protocol: 'Use evidence_id (F0001, F0002...) nos campos evidence e metric_key da resposta. Nao use a chave longa nem o rotulo como referencia.',
+    facts: snapshot.facts.map(fact=>({...fact,evidence_id:references.get(fact.key) ?? null})), warnings: snapshot.warnings,
     notes: includeNotes ? snapshot.notes.slice(0,40).map(note=>({...note,text:note.text.slice(0,600)})) : [], notes_total_available: snapshot.notes_total, notes_limit: 40,
-    previous_actions: actions.slice(0, 30).map((action, index) => ({ reference: `Compromisso ${index+1}`, week: action.week_start, title: redactWeeklyText(action.title).slice(0,200), status: action.status, metric_key: action.metric_key, baseline: action.baseline, target: action.target,
+    previous_actions: actions.slice(0, 30).map((action, index) => ({ reference: `Compromisso ${index+1}`, week: action.week_start, title: redactWeeklyText(action.title).slice(0,200), status: action.status, metric_key: action.metric_key, metric_evidence_id: references.get(action.metric_key) ?? null, baseline: action.baseline, target: action.target,
       observed_now: snapshot.facts.find(fact => fact.key === action.metric_key)?.value ?? null,
       outcome: action.outcome, execution: includeNotes ? redactWeeklyText(action.execution).slice(0,600) : '', review: includeNotes ? redactWeeklyText(action.review).slice(0,600) : '' })),
   }
   if (JSON.stringify(input).length > 180000) throw new Error('Fotografia grande demais para uma única análise.')
   return input
 }
-const string = { type: 'string' }
-const evidence = { type: 'array', items: string }
 const object = (properties: Record<string, unknown>) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false })
-export const weeklyDiagnosisSchema = object({ summary: string, findings: { type: 'array', items: object({ title: string, detail: string, evidence }) },
-  suggestions: { type: 'array', items: object({ title: string, hypothesis: string, audience: string, action: string, metric_key: string, evidence, priority: { type: 'string', enum: ['alta','media','baixa'] } }) }, limitations: { type: 'array', items: string } })
+export function weeklyEvidenceCatalog(snapshot: WeeklySnapshot) {
+  return snapshot.facts.map((fact,index)=>({id:`F${String(index+1).padStart(4,'0')}`,key:fact.key,value:fact.value}))
+    .filter(fact=>typeof fact.value==='number' && Number.isFinite(fact.value))
+}
+export function weeklyDiagnosisSchema(snapshot: WeeklySnapshot) {
+  const ids=weeklyEvidenceCatalog(snapshot).map(fact=>fact.id)
+  if(!ids.length || ids.length>990) throw new Error('A fotografia precisa de 1 a 990 indicadores numéricos utilizáveis para gerar o diagnóstico.')
+  const text=(maxLength:number)=>({type:'string',minLength:1,maxLength})
+  const reference={$ref:'#/$defs/factReference'}
+  const evidence={type:'array',minItems:1,maxItems:10,items:reference}
+  return {...object({summary:text(4000),findings:{type:'array',maxItems:8,items:object({title:text(200),detail:text(3000),evidence})},
+    suggestions:{type:'array',maxItems:5,items:object({title:text(200),hypothesis:text(2000),audience:text(1000),action:text(2000),metric_key:reference,evidence,priority:{type:'string',enum:['alta','media','baixa']}})},
+    limitations:{type:'array',maxItems:12,items:text(2000)}}),$defs:{factReference:{type:'string',enum:ids}}}
+}
+export class WeeklyDiagnosisValidationError extends Error {
+  path:string
+  reason:string
+  constructor(path:string, reason:string) {
+    super(`Resposta da IA rejeitada em ${path}: ${reason}.`)
+    this.name='WeeklyDiagnosisValidationError'
+    this.path=path
+    this.reason=reason
+  }
+}
+export function resolveWeeklyDiagnosis(value: unknown, snapshot: WeeklySnapshot): WeeklyDiagnosis {
+  if(!value || typeof value!=='object' || Array.isArray(value)) throw new WeeklyDiagnosisValidationError('diagnóstico','estrutura inválida')
+  const references=new Map(weeklyEvidenceCatalog(snapshot).map(item=>[item.id,item.key]))
+  const wire=value as Record<string,unknown>
+  const resolve=(id:unknown,path:string)=>{
+    const key=typeof id==='string' ? references.get(id) : undefined
+    if(!key) throw new WeeklyDiagnosisValidationError(path,'a referência não pertence aos indicadores disponíveis nesta fotografia')
+    return key
+  }
+  const evidence=(values:unknown,path:string)=>{
+    if(!Array.isArray(values) || values.length<1 || values.length>10) throw new WeeklyDiagnosisValidationError(path,'informe de uma a dez referências verificáveis')
+    return values.map((id,index)=>resolve(id,`${path}[${index+1}]`))
+  }
+  if(!Array.isArray(wire.findings) || !Array.isArray(wire.suggestions)) throw new WeeklyDiagnosisValidationError('diagnóstico','listas de achados e sugestões ausentes')
+  const report={...wire,
+    findings:wire.findings.map((item,index)=>{
+      if(!item || typeof item!=='object') throw new WeeklyDiagnosisValidationError(`achado ${index+1}`,'estrutura inválida')
+      return {...item,evidence:evidence(item.evidence,`achado ${index+1} · evidências`)}
+    }),
+    suggestions:wire.suggestions.map((item,index)=>{
+      if(!item || typeof item!=='object') throw new WeeklyDiagnosisValidationError(`sugestão ${index+1}`,'estrutura inválida')
+      return {...item,metric_key:resolve(item.metric_key,`sugestão ${index+1} · indicador`),evidence:evidence(item.evidence,`sugestão ${index+1} · evidências`)}
+    }),
+  }
+  return validateWeeklyDiagnosis(report,snapshot)
+}
 export function validateWeeklyDiagnosis(value: unknown, snapshot: WeeklySnapshot): WeeklyDiagnosis {
   if (!value || typeof value !== 'object') throw new Error('Diagnóstico inválido.')
   const report = value as WeeklyDiagnosis
-  const keys = new Set(snapshot.facts.filter(fact => fact.value !== null).map(fact => fact.key))
+  const keys = new Set(weeklyEvidenceCatalog(snapshot).map(fact=>fact.key))
   const validText = (value: unknown, limit: number) => typeof value === 'string' && value.trim().length > 0 && value.length <= limit
   const validEvidence = (values: unknown) => Array.isArray(values) && values.length > 0 && values.length <= 10 && values.every(key => typeof key === 'string' && keys.has(key))
   if (!validText(report.summary,4000) || !Array.isArray(report.findings) || report.findings.length > 8 || !Array.isArray(report.suggestions) || report.suggestions.length > 5 || !Array.isArray(report.limitations) || report.limitations.length > 12 || report.limitations.some(text => !validText(text,2000))) throw new Error('Estrutura do diagnóstico inválida.')
-  for (const item of report.findings) if (!validText(item.title,200) || !validText(item.detail,3000) || !validEvidence(item.evidence)) throw new Error('Diagnóstico sem evidência verificável.')
-  for (const item of report.suggestions) if (!validText(item.title,200) || !validText(item.hypothesis,2000) || !validText(item.audience,1000) || !validText(item.action,2000) || !keys.has(item.metric_key) || !validEvidence(item.evidence) || !['alta','media','baixa'].includes(item.priority)) throw new Error('Sugestão sem indicador ou evidência verificável.')
+  for (const [index,item] of report.findings.entries()) {
+    if (!validText(item.title,200) || !validText(item.detail,3000)) throw new WeeklyDiagnosisValidationError(`achado ${index+1}`,'título ou texto vazio ou acima do limite')
+    if (!validEvidence(item.evidence)) throw new WeeklyDiagnosisValidationError(`achado ${index+1} · evidências`,'referência ausente ou não verificável')
+  }
+  for (const [index,item] of report.suggestions.entries()) {
+    if (!validText(item.title,200) || !validText(item.hypothesis,2000) || !validText(item.audience,1000) || !validText(item.action,2000)) throw new WeeklyDiagnosisValidationError(`sugestão ${index+1}`,'texto vazio ou acima do limite')
+    if (!keys.has(item.metric_key) || !validEvidence(item.evidence)) throw new WeeklyDiagnosisValidationError(`sugestão ${index+1} · evidências`,'indicador ou referência não verificável')
+    if (!['alta','media','baixa'].includes(item.priority)) throw new WeeklyDiagnosisValidationError(`sugestão ${index+1}`,'prioridade inválida')
+  }
   return report
 }

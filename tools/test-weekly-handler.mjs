@@ -18,7 +18,13 @@ const deps={client:()=>client,env:key=>env[key],fetch:async(url,options)=>{
  assert.equal(url,'https://api.openai.com/v1/responses');providerCalls++;sent=JSON.parse(options.body)
  assert.equal(options.headers.Authorization,'Bearer server-test-secret')
  if(providerMode==='429')return new Response('{}',{status:429})
- const output=providerMode==='invalid' ? {...diagnosis(),suggestions:[{...diagnosis().suggestions[0],metric_key:'inventado'}]} : diagnosis()
+ const facts=JSON.parse(sent.input).facts
+ const reference=key=>facts.find(fact=>fact.key===key)?.evidence_id
+ const output=diagnosis()
+ for(const finding of output.findings)finding.evidence=finding.evidence.map(reference)
+ for(const suggestion of output.suggestions){suggestion.evidence=suggestion.evidence.map(reference);suggestion.metric_key=reference(suggestion.metric_key)}
+ assert.equal(sent.text.format.schema.$defs.factReference.enum.includes(output.findings[0].evidence[0]),true)
+ if(providerMode==='invalid')output.suggestions[0].metric_key='F9999'
  return new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(output)}]}]}),{status:200})
 }}
 const request=(body,origin='http://localhost:5195')=>new Request('https://example.test/functions/v1/weekly-intelligence',{method:'POST',headers:{Authorization:'Bearer user-token',Origin:origin},body:JSON.stringify(body)})
@@ -43,6 +49,8 @@ assert.equal(providerCalls,1,'Existing analysis must not trigger another paid ca
 stored={...stored,analysis:null};providerMode='invalid'
 assert.equal((await call({action:'generate',id:reportId,include_notes:true,reviewed:true})).status,400)
 assert.equal(stored.analysis,null)
+assert.ok(stored.last_error.includes('sugestão 1'))
+assert.ok(stored.last_error.includes('pode ter cobrança'))
 assert.equal(inProgress,false)
 assert.equal(sent.input.includes('ana@example.test'),false)
 providerMode='429'

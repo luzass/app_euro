@@ -48,6 +48,7 @@ try{
  assert.equal(preview.includes('Lucas Britto'),false)
  await page.getByRole('checkbox',{name:/Revisei o conteúdo/}).check()
  failure=true;await generate.click();await page.getByRole('alert').getByText('Configure OPENAI_API_KEY e OPENAI_MODEL.',{exact:true}).waitFor()
+ assert.equal(await page.getByText('Fotografia preservada. Nenhum dado foi enviado à OpenAI.',{exact:true}).count(),0,'Capture-only notice must disappear when generation starts, including failures')
  failure=false;await generate.click()
  await page.getByLabel('Diagnóstico da IA',{exact:true}).waitFor()
  await page.getByRole('button',{name:'Revisar e levar ao plano',exact:true}).click()

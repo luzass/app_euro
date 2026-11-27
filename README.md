@@ -277,6 +277,11 @@ do provedor; confira as politicas da conta. Uma fotografia so recebe um diagnost
 a dez tentativas em 24 horas. Falhas nao geram relatorios ficticios nem repeticoes pagas automaticas.
 Sugestoes precisam de evidencias existentes e aprovacao antes de virar compromissos. As revisoes do plano
 preservam a base numerica original e um historico de alteracoes; variacoes nao comprovam causalidade.
+O contrato da IA usa referencias curtas enumeradas por fotografia, incluindo apenas indicadores numericos
+disponiveis. O servidor converte essas referencias de volta para as chaves originais antes de salvar, sem
+modificar fotografias ou compromissos existentes. Textos acima do limite e referencias invalidas continuam
+rejeitados, com a posicao do problema informada. Erros depois de iniciar a chamada alertam sobre possivel
+cobranca; nao ha reparo ou nova chamada automatica.
 
 Documentacao oficial: [Responses](https://developers.openai.com/api/reference/resources/responses/methods/create),
 [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
@@ -286,6 +291,7 @@ Testes locais, sem chamadas pagas:
 
 ```bash
 node tools/test-weekly-intelligence.mjs
+node tools/test-weekly-evidence.mjs
 node tools/test-weekly-handler.mjs
 node tools/test-weekly-sql.mjs CAMINHO_DO_PGLITE
 node tools/verify-weekly-intelligence.mjs DIRETORIO_DOS_PACOTES_PLAYWRIGHT
