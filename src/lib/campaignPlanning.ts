@@ -72,7 +72,7 @@ export function planningBuckets(start: number, end: number, grain: PlanningGrain
   return result
 }
 
-export function buildCampaignPlanning(data: CampaignData[], config: ForecastConfig, dimension: PlanningDimension, metric: PlanningMetric, resolver: GroupResolver = planningGroupLabel, withProjection = true) {
+export function buildCampaignPlanning(data: CampaignData[], config: ForecastConfig, dimension: PlanningDimension, metric: PlanningMetric, resolver: GroupResolver = planningGroupLabel, withProjection = true, seedLabels?: { values: string[]; restrict?: boolean }) {
   const start = dateDay(config.start), end = dateDay(config.end), cut = dateDay(config.asOf)
   if (start === null || end === null || cut === null || end <= start || cut < start || end - start > 730) return null
   const cutoff = Math.min(cut, end), elapsed = cutoff - start + 1, remaining = end - cutoff
@@ -84,8 +84,8 @@ export function buildCampaignPlanning(data: CampaignData[], config: ForecastConf
       matriculas: groupEvents(rowsFor(data, period, 'matriculas'), 'matriculas', dimension, config, resolver),
       inscritosAvailable: Boolean(source && !source.inscritosError), matriculasAvailable: Boolean(source && !source.matriculadosError) }]
   }))
-  const labels = new Set<string>(dimension === 'geral' ? ['GERAL'] : [])
-  for (const snapshot of snapshots.values()) for (const label of [...snapshot.inscritos.keys(), ...snapshot.matriculas.keys()]) labels.add(label)
+  const labels = new Set<string>(seedLabels?.values ?? (dimension === 'geral' ? ['GERAL'] : []))
+  if (!seedLabels?.restrict) for (const snapshot of snapshots.values()) for (const label of [...snapshot.inscritos.keys(), ...snapshot.matriculas.keys()]) labels.add(label)
   const current = snapshots.get(config.currentPeriod)!
   const groups = [...labels].map((label) => {
     const registrations = observation(current.inscritos.get(label), start, end, cutoff, current.inscritosAvailable)

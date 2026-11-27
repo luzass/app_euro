@@ -15,6 +15,7 @@ import { matchesFilter, type FilterSelection } from '../lib/profileFilters'
 import { profileField } from '../lib/studentProfile'
 import { isSupabaseConfigured, normalizeSupabaseError } from '../lib/supabase'
 import type { CampaignData } from '../lib/campaignForecast'
+import { courseOfferingsForPeriod, filterCourseOfferings, offeringCourseLabel, offeringCourseKey } from '../lib/courseOfferings'
 import { PerfilMatriculado } from './PerfilMatriculado'
 import { RenovacaoMatriculas } from './RenovacaoMatriculas'
 
@@ -33,7 +34,7 @@ const controlClass = 'inline-flex items-center gap-2 rounded-lg border border-sl
 
 function academicFields(row: GenericRow, matricula: boolean) {
   return {
-    curso: titleize(profileField(row, 'curso')),
+    curso: titleize(offeringCourseLabel(profileField(row, 'curso'))),
     campus: normalizeCampus(profileField(row, ...(matricula ? ['filial', 'campus'] : ['campus', 'filial']))),
     turno: titleize(profileField(row, 'turno')),
     ingresso: normalizeIngresso(profileField(row, ...(matricula ? ['tipo_de_ingresso'] : ['forma_de_ingresso', 'tipo_de_ingresso']))),
@@ -125,13 +126,15 @@ export function PainelExecutivo() {
       matriculados: item.matriculados.filter((row) => includeMedicine || !isMedicine(row)),
     }))
     const all = scoped.flatMap((item) => [...item.inscritos.map((row) => academicFields(row, false)), ...item.matriculados.map((row) => academicFields(row, true))])
-    const options = Object.fromEntries(filterLabels.map(({ key }) => [key, [...new Set(all.map((row) => row[key]))].sort((a, b) => a.localeCompare(b, 'pt-BR'))])) as Record<FilterKey, string[]>
+    const catalog = courseOfferingsForPeriod(currentPeriod)
+    const offeredFields = (catalog ?? []).filter(offer => includeMedicine || offeringCourseKey(offer.curso) !== 'MEDICINA').map(offer => academicFields({ ...offer }, false))
+    const options = Object.fromEntries(filterLabels.map(({ key }) => [key, [...new Set([...all.map((row) => row[key]), ...(key === 'ingresso' ? [] : offeredFields.map(row => row[key]))])].sort((a, b) => a.localeCompare(b, 'pt-BR'))])) as Record<FilterKey, string[]>
     const matches = (row: GenericRow, matricula: boolean) => {
       const fields = academicFields(row, matricula)
       return filterLabels.every(({ key }) => matchesFilter(filters[key], fields[key]))
     }
     const data = scoped.map((item) => ({ ...item, inscritos: item.inscritos.filter((row) => matches(row, false)), matriculados: item.matriculados.filter((row) => matches(row, true)) }))
-    return { options, data }
+    return { options, data, offerings: catalog && filterCourseOfferings(catalog, filters, includeMedicine) }
   }, [state.data, filters, includeMedicine])
 
   if (state.loading) return <Loading message="Carregando o painel executivo..." />
@@ -159,8 +162,8 @@ export function PainelExecutivo() {
     {showFilters && unavailableInscritos.length > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">Bases de inscritos indisponíveis em {unavailableInscritos.join(', ')}. Os indicadores de matrículas continuam disponíveis quando suas bases estiverem acessíveis.</p>}
     <div id={'exec-panel-' + view} role="tabpanel" aria-labelledby={'exec-tab-' + view}>
       {view === 'resumo' && <ExecutiveSummary data={analysis.data} institutionData={state.data} currentPeriod={currentPeriod} courseFilter={{ options: analysis.options.curso, selected: filters.curso, onChange: (selected) => setFilters((current) => ({ ...current, curso: selected })) }} />}
-      {view === 'projecao' && <ForecastPanel data={analysis.data} goalData={state.data} currentPeriod={currentPeriod} asOf={state.asOf} onSelectCourse={(course, additive) => {
-        const value = titleize(course)
+      {view === 'projecao' && <ForecastPanel data={analysis.data} goalData={state.data} currentPeriod={currentPeriod} asOf={state.asOf} offerings={analysis.offerings} onSelectCourse={(course, additive) => {
+        const value = titleize(offeringCourseLabel(course))
         setFilters((current) => ({ ...current, curso: additive ? [...new Set([...(current.curso ?? []), value])] : current.curso?.length === 1 && current.curso[0] === value ? null : [value] }))
       }} />}
       {view === 'renovacao' && <RenovacaoMatriculas embedded />}

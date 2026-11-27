@@ -7,6 +7,7 @@ import { formatNumberBR } from '../../lib/formatters'
 import { CampaignComparison } from './CampaignComparison'
 import { PaceForecastPanel } from './PaceForecastPanel'
 import { CampaignPlanningPanel } from './CampaignPlanningPanel'
+import type { CourseOffering } from '../../lib/courseOfferings'
 
 const calendarKey = 'unieuro.executivo.calendario.20271.v1'
 const defaultCalendar = { start: '2026-09-29', end: '2027-03-31', matriculaDate: 'enrollment' as const }
@@ -33,7 +34,7 @@ function ProjectionCard({ title, scenario, window }: { title: string; scenario: 
   </article>
 }
 
-export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSelectCourse }: { data: CampaignData[]; goalData?: CampaignData[]; currentPeriod: string; asOf: string; onSelectCourse?: (course: string, additive: boolean) => void }) {
+export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSelectCourse, offerings }: { data: CampaignData[]; goalData?: CampaignData[]; currentPeriod: string; asOf: string; onSelectCourse?: (course: string, additive: boolean) => void; offerings?: CourseOffering[] }) {
   const [calendar, setCalendar] = useState(loadCalendar)
   const [references, setReferences] = useState<FilterSelection>(null)
   const history = useMemo(() => data.filter((item) => item.period < currentPeriod && item.period.endsWith(currentPeriod.slice(-2))).map((item) => item.period), [data, currentPeriod])
@@ -67,7 +68,7 @@ export function ForecastPanel({ data, goalData = data, currentPeriod, asOf, onSe
     {model.medicine.inScope && <section aria-label="Medicina na projeção" className="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"><strong>Medicina: {model.medicine.observed} já confirmadas.</strong> Capacidade de novas vagas: {model.medicine.capacity ?? 'não informada'}. {model.medicine.complete ? 'O cenário respeita a capacidade confirmada.' : 'Não multiplicamos o ritmo desse curso. Por enquanto, calouros e total são cenários parciais, sem presumir novas vagas de Medicina.'}</section>}
     <section aria-label="Base histórica utilizada" className="space-y-3 border-y border-slate-200 py-4"><h3 className="text-lg font-semibold text-slate-950">Conferência da base histórica</h3><p className="text-xs text-slate-500">CPF único no PS inteiro, antes do recorte de datas. Calouros e veteranos usam contrato ativo. Medicina já está dentro de calouros, não é somada novamente.</p><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="text-xs text-slate-500"><tr><th className="p-2">PS</th><th className="p-2 text-right">Inscritos</th><th className="p-2 text-right">Calouros</th><th className="p-2 text-right">Dos quais Medicina</th><th className="p-2 text-right">Veteranos</th><th className="p-2 text-right">Base ativa total</th></tr></thead><tbody className="divide-y divide-slate-100">{model.historicalTotals.map((row) => <tr key={row.period}><th className="p-2 font-medium">{row.period}</th><td className="p-2 text-right">{show(row.inscritos)}</td><td className="p-2 text-right">{show(row.calouros)}</td><td className="p-2 text-right">{show(row.medicina)}</td><td className="p-2 text-right">{show(row.veteranos)}</td><td className="p-2 text-right font-semibold">{show(row.calouros + row.veteranos)}</td></tr>)}</tbody></table></div></section>
     <CampaignComparison data={data} config={config} periods={history} audit={{ inscritos: model.inscritos.audit, calouros: model.calouros.audit }} />
-    <CampaignPlanningPanel data={data} goalData={goalData} config={config} />
+    <CampaignPlanningPanel data={data} goalData={goalData} config={config} offerings={offerings} />
     <details className="border-y border-slate-200 py-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">Comparações e auditoria dos cenários</summary><div className="mt-5 space-y-6">
     <PaceForecastPanel data={data} config={config} seasonal={{ inscritos: model.inscritos.scenario.method === 'linear' ? null : model.inscritos.scenario.reference, calouros: model.calouros.scenario.method === 'linear' || model.calouros.scenario.reference === null ? null : model.calouros.scenario.reference - model.medicine.reference }} onSelectCourse={onSelectCourse} />
     <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5">

@@ -8,6 +8,7 @@ import { normalizeCampus, normalizeIngresso, titleize, type GenericRow } from '.
 import { profileField } from '../../lib/studentProfile'
 import { formatNumberBR } from '../../lib/formatters'
 import { CampaignInactivityPanel } from './CampaignInactivityPanel'
+import { courseOfferingsForPeriod, offeringCourseLabel, offeringRow, type CourseOffering } from '../../lib/courseOfferings'
 
 const control = 'h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800'
 const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
@@ -15,13 +16,13 @@ const percent = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFracti
 const show = (value: number | null) => value === null ? '-' : formatNumberBR(value)
 const date = (day: number | null) => day === null ? '-' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(day * 86400000))
 function labelFor(row: GenericRow, enrollment: boolean, dimension: PlanningDimension) {
-  const course = titleize(profileField(row, 'curso'))
+  const course = titleize(offeringCourseLabel(profileField(row, 'curso')))
   const campus = normalizeCampus(profileField(row, ...(enrollment ? ['filial', 'campus'] : ['campus', 'filial'])))
   return dimension === 'geral' ? 'GERAL' : dimension === 'curso' ? course : dimension === 'campus' ? campus : dimension === 'curso_campus' ? `${course} / ${campus}`
     : normalizeIngresso(profileField(row, ...(enrollment ? ['tipo_de_ingresso'] : ['forma_de_ingresso', 'tipo_de_ingresso'])))
 }
 
-export function CampaignPlanningPanel({ data, goalData, config }: { data: CampaignData[]; goalData: CampaignData[]; config: ForecastConfig }) {
+export function CampaignPlanningPanel({ data, goalData, config, offerings }: { data: CampaignData[]; goalData: CampaignData[]; config: ForecastConfig; offerings?: CourseOffering[] }) {
   const [dimension, setDimension] = useState<PlanningDimension>('curso_campus')
   const [metric, setMetric] = useState<PlanningMetric>('matriculas')
   const [grain, setGrain] = useState<PlanningGrain>('week')
@@ -30,7 +31,11 @@ export function CampaignPlanningPanel({ data, goalData, config }: { data: Campai
   const [highlighted, setHighlighted] = useState<string[] | null>(null)
   const panelRef = useRef<HTMLElement>(null)
   const [tier, setTier] = useState(0)
-  const model = useMemo(() => buildCampaignPlanning(data, config, dimension, metric, labelFor), [data, config, dimension, metric])
+  const model = useMemo(() => {
+    const catalog = offerings ?? courseOfferingsForPeriod(config.currentPeriod)
+    const labels = catalog?.map(offer => labelFor(offeringRow(offer), false, dimension))
+    return buildCampaignPlanning(data, config, dimension, metric, labelFor, true, labels ? { values: labels } : undefined)
+  }, [data, config, dimension, metric, offerings])
   const general = useMemo(() => buildCampaignPlanning(data, config, 'geral', metric, labelFor), [data, config, metric])
   const month = useMemo(() => monthlyPolicyProgress(goalData, config, tier), [goalData, config, tier])
   const selectedGroup = model?.groups.find((group) => group.label === selected)
@@ -90,7 +95,7 @@ export function CampaignPlanningPanel({ data, goalData, config }: { data: Campai
           return <text x={Number(props.x) + 4} y={Number(props.y) + (key === 'linear' ? 15 : -7)} fontSize={11} fill={color} fontWeight={700}>{decimal.format(Number(value))}</text>
         }} /></Line>)}</LineChart>}</ResponsiveContainer>
     </div></div>
-    <CampaignInactivityPanel data={data} config={config} resolveLabel={labelFor} onFocusGroup={(nextDimension, label) => { setDimension(nextDimension); setSelected(label); panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} />
+    <CampaignInactivityPanel data={data} config={config} resolveLabel={labelFor} offerings={offerings} onFocusGroup={(nextDimension, label) => { setDimension(nextDimension); setSelected(label); panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} />
     {config.currentPeriod === campaignPolicy20271.period && <section aria-label="Metas mensais oficiais" className="space-y-3 border-t border-slate-200 pt-5">
       <div className="flex flex-wrap items-end justify-between gap-3"><h4 className="flex items-center gap-2 font-semibold text-slate-950"><Target size={18} />Metas mensais regulares · sem Medicina e sem PROUNI</h4><label className="flex flex-col gap-1 text-xs text-slate-600">Faixa<select aria-label="Faixa da meta mensal" className={control} value={tier} onChange={(event) => setTier(Number(event.target.value))}>{[0, 1, 2, 3].map((value) => <option key={value} value={value}>Meta 0{value + 1}</option>)}</select></label></div>
       <div className="overflow-x-auto"><table className="w-full min-w-[610px] text-left text-sm"><thead className="text-xs text-slate-500"><tr><th className="p-2">Mês</th><th className="p-2 text-right">Meta mensal</th><th className="p-2 text-right">Realizado até o corte</th><th className="p-2 text-right">Guia linear até o corte</th><th className="p-2 text-right">Faltam no mês</th></tr></thead><tbody className="divide-y divide-slate-100">{month.rows.map((row) => <tr key={row.month}><th className="p-2 font-medium">{row.label}{row.partial ? ' · parcial' : ''}</th><td className="p-2 text-right">{row.target}</td><td className="p-2 text-right">{show(row.observed)}</td><td className="p-2 text-right">{decimal.format(row.guide)}</td><td className="p-2 text-right">{show(row.gap)}</td></tr>)}</tbody></table></div>

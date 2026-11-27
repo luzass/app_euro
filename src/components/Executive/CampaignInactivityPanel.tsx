@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, GraduationCap, Search, UsersRound } from 'lucide-react'
-import { buildCampaignPlanning, type PlanningDimension } from '../../lib/campaignPlanning'
+import { type PlanningDimension } from '../../lib/campaignPlanning'
+import { buildCampaignInactivity } from '../../lib/campaignInactivity'
+import type { CourseOffering } from '../../lib/courseOfferings'
 import type { CampaignData, ForecastConfig } from '../../lib/campaignForecast'
 import type { GenericRow } from '../../lib/dashboardHelpers'
 import { normalizedText } from '../../lib/studentProfile'
@@ -12,16 +14,17 @@ type Props = {
   config: ForecastConfig
   resolveLabel: (row: GenericRow, enrollment: boolean, dimension: PlanningDimension) => string
   onFocusGroup: (dimension: Dimension, label: string) => void
+  offerings?: CourseOffering[]
 }
 const control = 'h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800'
 const lastDate = (day: number | null) => day === null ? 'Nenhum no recorte' : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(day * 86400000))
 
-export function CampaignInactivityPanel({ data, config, resolveLabel, onFocusGroup }: Props) {
+export function CampaignInactivityPanel({ data, config, resolveLabel, onFocusGroup, offerings }: Props) {
   const [dimension, setDimension] = useState<Dimension>('curso_campus')
   const [query, setQuery] = useState('')
   const [threshold, setThreshold] = useState(7)
   const [pages, setPages] = useState({ registrations: 0, enrollments: 0 })
-  const model = useMemo(() => buildCampaignPlanning(data, config, dimension, 'matriculas', resolveLabel, false), [data, config, dimension, resolveLabel])
+  const { model, outside, offers } = useMemo(() => buildCampaignInactivity(data, config, dimension, resolveLabel, offerings), [data, config, dimension, resolveLabel, offerings])
   if (!model) return null
   const groups = model.groups.filter((group) => normalizedText(group.label).includes(normalizedText(query)))
   const blocks = [
@@ -29,7 +32,7 @@ export function CampaignInactivityPanel({ data, config, resolveLabel, onFocusGro
     { key: 'enrollments' as const, title: 'Sem novas matrículas', countLabel: 'Calouros', Icon: GraduationCap },
   ]
   return <section aria-label="Acompanhamento de inatividade" className="space-y-4 border-y border-slate-200 py-5">
-    <header><h3 className="text-lg font-semibold text-slate-950">Onde o movimento parou?</h3><p className="mt-1 text-sm text-slate-500">Inscrições e matrículas por curso e campus · processo {config.currentPeriod}</p></header>
+    <header><h3 className="text-lg font-semibold text-slate-950">Onde o movimento parou?</h3><p className="mt-1 text-sm text-slate-500">Inscrições e matrículas por curso e campus · processo {config.currentPeriod}{offers !== null ? ` · ${offers} ofertas no recorte` : ''}</p></header>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_240px_160px]">
       <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Buscar curso ou campus<span className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3"><Search size={15} /><input aria-label="Buscar curso ou campus na inatividade" value={query} onChange={(event) => { setQuery(event.target.value); setPages({ registrations: 0, enrollments: 0 }) }} className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></span></label>
       <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">Agrupar acompanhamento<select aria-label="Agrupar acompanhamento de inatividade" value={dimension} onChange={(event) => { setDimension(event.target.value as Dimension); setPages({ registrations: 0, enrollments: 0 }) }} className={control}><option value="curso_campus">Curso e campus</option><option value="curso">Curso</option><option value="campus">Campus</option></select></label>
@@ -50,6 +53,7 @@ export function CampaignInactivityPanel({ data, config, resolveLabel, onFocusGro
         <footer className="mt-3 flex items-center justify-between text-xs text-slate-500"><span>{sorted.length} grupos · {page + 1}/{pageCount}</span><div className="flex gap-2"><button type="button" aria-label={'Página anterior: ' + title} title="Página anterior" disabled={!page} onClick={() => setPages((current) => ({ ...current, [key]: page - 1 }))} className="rounded border border-slate-200 p-2 disabled:opacity-40"><ChevronLeft size={15} /></button><button type="button" aria-label={'Próxima página: ' + title} title="Próxima página" disabled={page >= pageCount - 1} onClick={() => setPages((current) => ({ ...current, [key]: page + 1 }))} className="rounded border border-slate-200 p-2 disabled:opacity-40"><ChevronRight size={15} /></button></div></footer>
       </article>
     })}</div>
-    <p className="text-xs leading-5 text-slate-500">Dias corridos desde o último evento até o corte. Sem registro na janela, contamos desde o início da campanha. Pendências de CPF/data não geram alerta automático. Este acompanhamento mantém seu próprio agrupamento; escolher “Geral” na projeção não o reduz a uma linha.</p>
+    {offers !== null && (outside.registrations > 0 || outside.enrollments > 0) && <p role="status" className="border-l-4 border-amber-500 px-3 py-2 text-xs leading-5 text-amber-900">Fora da oferta confirmada ou com curso/campus/turno/modalidade sem correspondência: {outside.registrations} registros de inscrição e {outside.enrollments} de calouros. Não entram nestes alertas; os dados e totais gerais são preservados.</p>}
+    <p className="text-xs leading-5 text-slate-500">Dias corridos desde o último evento até o corte. Sem registro na janela, contamos desde o início da campanha. Pendências de CPF/data não geram alerta automático.{offers !== null ? ' Referência: oferta confirmada de 2027.1, incluindo ofertas sem registros. Noturno Semi corresponde a Noturno / Semipresencial.' : ''} Este acompanhamento mantém seu próprio agrupamento; escolher “Geral” na projeção não o reduz a uma linha.</p>
   </section>
 }
